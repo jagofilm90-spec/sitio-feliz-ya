@@ -99,42 +99,31 @@ export default function Usuarios() {
         return;
       }
 
-      // Crear usuario en Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: newUser.email,
-        password: newUser.password,
-        options: {
-          data: {
-            full_name: newUser.full_name,
-          },
+      // Obtener el token de sesión actual
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "No hay sesión activa",
+        });
+        return;
+      }
+
+      // Llamar al edge function para crear usuario sin perder la sesión
+      const { data, error } = await supabase.functions.invoke('create-user', {
+        body: {
+          email: newUser.email,
+          password: newUser.password,
+          full_name: newUser.full_name,
+          phone: newUser.phone || null,
+          role: newUser.role,
         },
       });
 
-      if (authError) throw authError;
-
-      if (!authData.user) {
-        throw new Error("No se pudo crear el usuario");
-      }
-
-      // Actualizar teléfono en el profile si se proporcionó
-      if (newUser.phone) {
-        const { error: profileError } = await supabase
-          .from("profiles")
-          .update({ phone: newUser.phone })
-          .eq("id", authData.user.id);
-
-        if (profileError) throw profileError;
-      }
-
-      // Asignar rol
-      const { error: roleError } = await supabase
-        .from("user_roles")
-        .insert([{
-          user_id: authData.user.id,
-          role: newUser.role as any,
-        }]);
-
-      if (roleError) throw roleError;
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
 
       toast({
         title: "Usuario creado",

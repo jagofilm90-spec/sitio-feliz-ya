@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { UserPlus, Shield, Mail, User, Pencil } from "lucide-react";
+import { UserPlus, Shield, Mail, User, Pencil, Trash2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 interface Profile {
   id: string;
@@ -37,6 +38,7 @@ export default function Usuarios() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserWithRoles | null>(null);
+  const [userToDelete, setUserToDelete] = useState<UserWithRoles | null>(null);
   const [newUser, setNewUser] = useState({
     email: "",
     password: "",
@@ -205,6 +207,36 @@ export default function Usuarios() {
     }
   };
 
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+
+    try {
+      const { data, error } = await supabase.functions.invoke('delete-user', {
+        body: {
+          userId: userToDelete.id,
+        },
+      });
+
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+
+      toast({
+        title: "Usuario eliminado",
+        description: `${userToDelete.full_name} ha sido eliminado del sistema`,
+      });
+
+      setUserToDelete(null);
+      loadUsers();
+    } catch (error: any) {
+      console.error("Error deleting user:", error);
+      toast({
+        variant: "destructive",
+        title: "Error al eliminar usuario",
+        description: error.message,
+      });
+    }
+  };
+
   const getRoleBadge = (role: string) => {
     const roleConfig = ROLES.find((r) => r.value === role);
     return (
@@ -352,16 +384,25 @@ export default function Usuarios() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setEditingUser(user);
-                          setIsEditDialogOpen(true);
-                        }}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setEditingUser(user);
+                            setIsEditDialogOpen(true);
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setUserToDelete(user)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -432,6 +473,24 @@ export default function Usuarios() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Dialog de confirmación para eliminar */}
+        <AlertDialog open={!!userToDelete} onOpenChange={() => setUserToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Eliminar usuario?</AlertDialogTitle>
+              <AlertDialogDescription>
+                ¿Estás seguro de que deseas eliminar a <strong>{userToDelete?.full_name}</strong>? Esta acción no se puede deshacer.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteUser} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Eliminar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </Layout>
   );

@@ -92,7 +92,7 @@ const Layout = ({ children }: LayoutProps) => {
             >
               {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </Button>
-            <h1 className="text-xl font-bold">ERP Comercializadora</h1>
+            <h1 className="text-xl font-bold">Abarrotes La Manita</h1>
           </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-muted-foreground hidden md:inline">

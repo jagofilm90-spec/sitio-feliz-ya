@@ -24,20 +24,40 @@ const Auth = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session) {
-        navigate("/dashboard");
+        await checkUserRoleAndRedirect(session.user.id);
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_IN" && session) {
-        navigate("/dashboard");
+        await checkUserRoleAndRedirect(session.user.id);
       }
     });
 
     return () => subscription.unsubscribe();
   }, [navigate]);
+
+  const checkUserRoleAndRedirect = async (userId: string) => {
+    try {
+      // Verificar si el usuario es un cliente
+      const { data: cliente } = await supabase
+        .from("clientes")
+        .select("id")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (cliente) {
+        navigate("/portal-cliente");
+      } else {
+        navigate("/dashboard");
+      }
+    } catch (error) {
+      console.error("Error checking user role:", error);
+      navigate("/dashboard");
+    }
+  };
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,7 +134,12 @@ const Auth = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
-      <Card className="w-full max-w-md">
+      <div className="w-full max-w-md space-y-4">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-primary mb-2">Abarrotes La Manita</h1>
+          <p className="text-muted-foreground">Sistema de Gestión Empresarial</p>
+        </div>
+        <Card className="w-full">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">
             {isLogin ? "Iniciar Sesión" : "Crear Cuenta"}
@@ -177,6 +202,7 @@ const Auth = () => {
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 };

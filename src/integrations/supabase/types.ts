@@ -30,6 +30,7 @@ export type Database = {
           telefono: string | null
           termino_credito: Database["public"]["Enums"]["credit_term"]
           updated_at: string
+          user_id: string | null
           vendedor_asignado: string | null
         }
         Insert: {
@@ -47,6 +48,7 @@ export type Database = {
           telefono?: string | null
           termino_credito?: Database["public"]["Enums"]["credit_term"]
           updated_at?: string
+          user_id?: string | null
           vendedor_asignado?: string | null
         }
         Update: {
@@ -64,6 +66,7 @@ export type Database = {
           telefono?: string | null
           termino_credito?: Database["public"]["Enums"]["credit_term"]
           updated_at?: string
+          user_id?: string | null
           vendedor_asignado?: string | null
         }
         Relationships: [
@@ -521,6 +524,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_cliente_id_for_user: { Args: { user_uuid: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -530,7 +534,13 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "vendedor" | "chofer" | "almacen" | "secretaria"
+      app_role:
+        | "admin"
+        | "vendedor"
+        | "chofer"
+        | "almacen"
+        | "secretaria"
+        | "cliente"
       credit_term: "contado" | "8_dias" | "15_dias" | "30_dias"
       order_status: "pendiente" | "en_ruta" | "entregado" | "cancelado"
       unit_type: "kg" | "pieza" | "caja" | "bulto" | "costal" | "litro"
@@ -661,7 +671,14 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "vendedor", "chofer", "almacen", "secretaria"],
+      app_role: [
+        "admin",
+        "vendedor",
+        "chofer",
+        "almacen",
+        "secretaria",
+        "cliente",
+      ],
       credit_term: ["contado", "8_dias", "15_dias", "30_dias"],
       order_status: ["pendiente", "en_ruta", "entregado", "cancelado"],
       unit_type: ["kg", "pieza", "caja", "bulto", "costal", "litro"],

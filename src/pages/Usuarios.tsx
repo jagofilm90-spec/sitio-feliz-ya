@@ -161,10 +161,13 @@ export default function Usuarios() {
     if (!editingUser) return;
 
     try {
-      // Actualizar teléfono en profiles
+      // Actualizar nombre completo y teléfono en profiles
       const { error: profileError } = await supabase
         .from("profiles")
-        .update({ phone: editingUser.phone })
+        .update({ 
+          full_name: editingUser.full_name,
+          phone: editingUser.phone 
+        })
         .eq("id", editingUser.id);
 
       if (profileError) throw profileError;
@@ -423,8 +426,12 @@ export default function Usuarios() {
             {editingUser && (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Nombre</Label>
-                  <Input value={editingUser.full_name} disabled />
+                  <Label htmlFor="edit_full_name">Nombre Completo</Label>
+                  <Input 
+                    id="edit_full_name"
+                    value={editingUser.full_name}
+                    onChange={(e) => setEditingUser({ ...editingUser, full_name: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Correo</Label>

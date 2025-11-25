@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { UserPlus, Shield, Mail, User, Pencil, Trash2 } from "lucide-react";
+import { UserPlus, Shield, Mail, User, Pencil, Trash2, Eye, EyeOff, KeyRound } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 interface Profile {
@@ -39,6 +39,10 @@ export default function Usuarios() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserWithRoles | null>(null);
   const [userToDelete, setUserToDelete] = useState<UserWithRoles | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [resetPasswordUser, setResetPasswordUser] = useState<UserWithRoles | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [newUser, setNewUser] = useState({
     email: "",
     password: "",
@@ -240,6 +244,47 @@ export default function Usuarios() {
     }
   };
 
+  const handleResetPassword = async () => {
+    if (!resetPasswordUser || !newPassword) return;
+
+    try {
+      if (newPassword.length < 6) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "La contraseña debe tener al menos 6 caracteres",
+        });
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('reset-user-password', {
+        body: {
+          userId: resetPasswordUser.id,
+          newPassword: newPassword,
+        },
+      });
+
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+
+      toast({
+        title: "Contraseña actualizada",
+        description: `La contraseña de ${resetPasswordUser.full_name} ha sido actualizada`,
+      });
+
+      setResetPasswordUser(null);
+      setNewPassword("");
+      setShowNewPassword(false);
+    } catch (error: any) {
+      console.error("Error resetting password:", error);
+      toast({
+        variant: "destructive",
+        title: "Error al cambiar contraseña",
+        description: error.message,
+      });
+    }
+  };
+
   const getRoleBadge = (role: string) => {
     const roleConfig = ROLES.find((r) => r.value === role);
     return (
@@ -293,13 +338,28 @@ export default function Usuarios() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="password">Contraseña *</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="Mínimo 6 caracteres"
-                    value={newUser.password}
-                    onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Mínimo 6 caracteres"
+                      value={newUser.password}
+                      onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phone">Teléfono</Label>
@@ -470,6 +530,19 @@ export default function Usuarios() {
                     ))}
                   </div>
                 </div>
+                <div className="pt-4 border-t">
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      setResetPasswordUser(editingUser);
+                      setIsEditDialogOpen(false);
+                    }}
+                  >
+                    <KeyRound className="mr-2 h-4 w-4" />
+                    Cambiar Contraseña
+                  </Button>
+                </div>
               </div>
             )}
             <DialogFooter>
@@ -498,6 +571,59 @@ export default function Usuarios() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Dialog para resetear contraseña */}
+        <Dialog open={!!resetPasswordUser} onOpenChange={() => {
+          setResetPasswordUser(null);
+          setNewPassword("");
+          setShowNewPassword(false);
+        }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Cambiar Contraseña</DialogTitle>
+              <DialogDescription>
+                Establece una nueva contraseña para {resetPasswordUser?.full_name}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="new_password">Nueva Contraseña *</Label>
+                <div className="relative">
+                  <Input
+                    id="new_password"
+                    type={showNewPassword ? "text" : "password"}
+                    placeholder="Mínimo 6 caracteres"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                  >
+                    {showNewPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => {
+                setResetPasswordUser(null);
+                setNewPassword("");
+                setShowNewPassword(false);
+              }}>
+                Cancelar
+              </Button>
+              <Button onClick={handleResetPassword}>Cambiar Contraseña</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );

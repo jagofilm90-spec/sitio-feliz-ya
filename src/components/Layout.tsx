@@ -14,6 +14,7 @@ import {
   Menu,
   X,
   Home,
+  Shield,
 } from "lucide-react";
 
 interface LayoutProps {
@@ -65,6 +66,7 @@ const Layout = ({ children }: LayoutProps) => {
     { icon: Warehouse, label: "Inventario", path: "/inventario" },
     { icon: Truck, label: "Rutas y Entregas", path: "/rutas" },
     { icon: FileText, label: "Facturación", path: "/facturas" },
+    { icon: Shield, label: "Usuarios", path: "/usuarios" },
   ];
 
   if (loading) {

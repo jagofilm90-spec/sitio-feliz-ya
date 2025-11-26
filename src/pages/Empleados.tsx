@@ -159,6 +159,12 @@ const Empleados = () => {
     motivo_baja: "",
   });
 
+  const [crearUsuario, setCrearUsuario] = useState(false);
+  const [usuarioFormData, setUsuarioFormData] = useState({
+    password: "",
+    role: "",
+  });
+
   const [docFormData, setDocFormData] = useState<{
     tipo_documento: EmpleadoDocumento["tipo_documento"] | "";
     file: File | null;
@@ -350,13 +356,89 @@ const Empleados = () => {
           description: "El empleado se actualizó correctamente",
         });
       } else {
-        const { error } = await supabase.from("empleados").insert([payload]);
+        // Crear usuario del sistema si está marcada la opción
+        let nuevoUserId = null;
+        if (crearUsuario && !formData.email) {
+          toast({
+            title: "Error",
+            description: "Debes proporcionar un email para crear el usuario del sistema",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (crearUsuario && !usuarioFormData.password) {
+          toast({
+            title: "Error",
+            description: "Debes proporcionar una contraseña para el usuario del sistema",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (crearUsuario && !usuarioFormData.role) {
+          toast({
+            title: "Error",
+            description: "Debes seleccionar un rol para el usuario del sistema",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (crearUsuario) {
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            
+            const response = await supabase.functions.invoke('create-user', {
+              body: {
+                email: formData.email,
+                password: usuarioFormData.password,
+                full_name: formData.nombre_completo,
+                phone: formData.telefono || null,
+                role: usuarioFormData.role,
+              },
+              headers: {
+                Authorization: `Bearer ${session?.access_token}`,
+              },
+            });
+
+            if (response.error) throw new Error(response.error.message);
+            if (response.data?.error) throw new Error(response.data.error);
+
+            nuevoUserId = response.data?.user?.id;
+            
+            if (!nuevoUserId) {
+              throw new Error("No se pudo obtener el ID del usuario creado");
+            }
+
+            toast({
+              title: "Usuario creado",
+              description: "El usuario del sistema se creó correctamente",
+            });
+          } catch (error: any) {
+            toast({
+              title: "Error al crear usuario",
+              description: error.message,
+              variant: "destructive",
+            });
+            return;
+          }
+        }
+
+        const empleadoPayload = {
+          ...payload,
+          user_id: nuevoUserId || payload.user_id,
+        };
+
+        const { error } = await supabase.from("empleados").insert([empleadoPayload]);
 
         if (error) throw error;
 
         toast({
           title: "Empleado creado",
-          description: "El empleado se creó correctamente",
+          description: crearUsuario 
+            ? "El empleado y su usuario del sistema se crearon correctamente"
+            : "El empleado se creó correctamente",
         });
       }
 
@@ -700,6 +782,11 @@ const Empleados = () => {
       fecha_baja: "",
       motivo_baja: "",
     });
+    setCrearUsuario(false);
+    setUsuarioFormData({
+      password: "",
+      role: "",
+    });
     setTerminationFiles({ carta: null, finiquito: null });
     setEditingEmpleado(null);
   };
@@ -846,6 +933,7 @@ const Empleados = () => {
                   <Label htmlFor="user_id">Usuario del Sistema (opcional)</Label>
                   <Select
                     value={formData.user_id || undefined}
+                    disabled={editingEmpleado !== null || crearUsuario}
                     onValueChange={(value) => {
                       const usuario = usuarios.find((u) => u.id === value);
                       if (usuario) {
@@ -882,6 +970,71 @@ const Empleados = () => {
                     Si seleccionas un usuario, se autorellenarán nombre y correo
                   </p>
                 </div>
+
+                {/* Opción para crear nuevo usuario del sistema */}
+                {!editingEmpleado && (
+                  <div className="border rounded-lg p-4 bg-muted/30">
+                    <div className="flex items-center space-x-2 mb-3">
+                      <input
+                        type="checkbox"
+                        id="crear_usuario"
+                        checked={crearUsuario}
+                        disabled={!!formData.user_id}
+                        onChange={(e) => {
+                          setCrearUsuario(e.target.checked);
+                          if (!e.target.checked) {
+                            setUsuarioFormData({ password: "", role: "" });
+                          }
+                        }}
+                        className="h-4 w-4"
+                      />
+                      <Label htmlFor="crear_usuario" className="font-medium">
+                        Crear usuario del sistema para este empleado
+                      </Label>
+                    </div>
+
+                    {crearUsuario && (
+                      <div className="space-y-3 pl-6 border-l-2">
+                        <div>
+                          <Label htmlFor="usuario_role">Rol del Usuario *</Label>
+                          <Select
+                            value={usuarioFormData.role}
+                            onValueChange={(value) =>
+                              setUsuarioFormData({ ...usuarioFormData, role: value })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar rol" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="admin">Administrador</SelectItem>
+                              <SelectItem value="secretaria">Secretaria</SelectItem>
+                              <SelectItem value="vendedor">Vendedor</SelectItem>
+                              <SelectItem value="almacen">Almacén</SelectItem>
+                              <SelectItem value="chofer">Chofer</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="usuario_password">Contraseña *</Label>
+                          <Input
+                            id="usuario_password"
+                            type="password"
+                            value={usuarioFormData.password}
+                            onChange={(e) =>
+                              setUsuarioFormData({ ...usuarioFormData, password: e.target.value })
+                            }
+                            placeholder="Mínimo 6 caracteres"
+                            minLength={6}
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            El email del usuario será el que ingreses abajo
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div>
                   <Label htmlFor="nombre_completo">Nombre Completo *</Label>

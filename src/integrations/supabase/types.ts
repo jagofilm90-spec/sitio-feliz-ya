@@ -582,6 +582,116 @@ export type Database = {
           },
         ]
       }
+      ordenes_compra: {
+        Row: {
+          creado_por: string
+          created_at: string
+          fecha_entrega_programada: string | null
+          fecha_entrega_real: string | null
+          fecha_orden: string
+          folio: string
+          id: string
+          impuestos: number
+          motivo_devolucion: string | null
+          notas: string | null
+          proveedor_id: string
+          status: string
+          subtotal: number
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          creado_por: string
+          created_at?: string
+          fecha_entrega_programada?: string | null
+          fecha_entrega_real?: string | null
+          fecha_orden?: string
+          folio: string
+          id?: string
+          impuestos?: number
+          motivo_devolucion?: string | null
+          notas?: string | null
+          proveedor_id: string
+          status?: string
+          subtotal?: number
+          total?: number
+          updated_at?: string
+        }
+        Update: {
+          creado_por?: string
+          created_at?: string
+          fecha_entrega_programada?: string | null
+          fecha_entrega_real?: string | null
+          fecha_orden?: string
+          folio?: string
+          id?: string
+          impuestos?: number
+          motivo_devolucion?: string | null
+          notas?: string | null
+          proveedor_id?: string
+          status?: string
+          subtotal?: number
+          total?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ordenes_compra_proveedor_id_fkey"
+            columns: ["proveedor_id"]
+            isOneToOne: false
+            referencedRelation: "proveedores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ordenes_compra_detalles: {
+        Row: {
+          cantidad_ordenada: number
+          cantidad_recibida: number
+          created_at: string
+          id: string
+          orden_compra_id: string
+          precio_unitario_compra: number
+          producto_id: string
+          subtotal: number
+        }
+        Insert: {
+          cantidad_ordenada: number
+          cantidad_recibida?: number
+          created_at?: string
+          id?: string
+          orden_compra_id: string
+          precio_unitario_compra: number
+          producto_id: string
+          subtotal: number
+        }
+        Update: {
+          cantidad_ordenada?: number
+          cantidad_recibida?: number
+          created_at?: string
+          id?: string
+          orden_compra_id?: string
+          precio_unitario_compra?: number
+          producto_id?: string
+          subtotal?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ordenes_compra_detalles_orden_compra_id_fkey"
+            columns: ["orden_compra_id"]
+            isOneToOne: false
+            referencedRelation: "ordenes_compra"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ordenes_compra_detalles_producto_id_fkey"
+            columns: ["producto_id"]
+            isOneToOne: false
+            referencedRelation: "productos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pedidos: {
         Row: {
           cliente_id: string
@@ -696,6 +806,7 @@ export type Database = {
           codigo: string
           created_at: string
           descripcion: string | null
+          fecha_ultima_compra: string | null
           id: string
           maneja_caducidad: boolean | null
           nombre: string
@@ -703,6 +814,7 @@ export type Database = {
           precio_venta: number
           stock_actual: number
           stock_minimo: number
+          ultimo_costo_compra: number | null
           unidad: Database["public"]["Enums"]["unit_type"]
           updated_at: string
         }
@@ -711,6 +823,7 @@ export type Database = {
           codigo: string
           created_at?: string
           descripcion?: string | null
+          fecha_ultima_compra?: string | null
           id?: string
           maneja_caducidad?: boolean | null
           nombre: string
@@ -718,6 +831,7 @@ export type Database = {
           precio_venta?: number
           stock_actual?: number
           stock_minimo?: number
+          ultimo_costo_compra?: number | null
           unidad?: Database["public"]["Enums"]["unit_type"]
           updated_at?: string
         }
@@ -726,6 +840,7 @@ export type Database = {
           codigo?: string
           created_at?: string
           descripcion?: string | null
+          fecha_ultima_compra?: string | null
           id?: string
           maneja_caducidad?: boolean | null
           nombre?: string
@@ -733,6 +848,7 @@ export type Database = {
           precio_venta?: number
           stock_actual?: number
           stock_minimo?: number
+          ultimo_costo_compra?: number | null
           unidad?: Database["public"]["Enums"]["unit_type"]
           updated_at?: string
         }
@@ -761,6 +877,51 @@ export type Database = {
           full_name?: string
           id?: string
           phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      proveedores: {
+        Row: {
+          activo: boolean
+          created_at: string
+          direccion: string | null
+          email: string | null
+          id: string
+          nombre: string
+          nombre_contacto: string | null
+          notas: string | null
+          pais: string
+          rfc: string | null
+          telefono: string | null
+          updated_at: string
+        }
+        Insert: {
+          activo?: boolean
+          created_at?: string
+          direccion?: string | null
+          email?: string | null
+          id?: string
+          nombre: string
+          nombre_contacto?: string | null
+          notas?: string | null
+          pais?: string
+          rfc?: string | null
+          telefono?: string | null
+          updated_at?: string
+        }
+        Update: {
+          activo?: boolean
+          created_at?: string
+          direccion?: string | null
+          email?: string | null
+          id?: string
+          nombre?: string
+          nombre_contacto?: string | null
+          notas?: string | null
+          pais?: string
+          rfc?: string | null
+          telefono?: string | null
           updated_at?: string
         }
         Relationships: []

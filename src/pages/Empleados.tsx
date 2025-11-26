@@ -159,9 +159,12 @@ const Empleados = () => {
     motivo_baja: "",
   });
 
-  const [docFormData, setDocFormData] = useState({
-    tipo_documento: "contrato_laboral" as EmpleadoDocumento["tipo_documento"],
-    file: null as File | null,
+  const [docFormData, setDocFormData] = useState<{
+    tipo_documento: EmpleadoDocumento["tipo_documento"] | "";
+    file: File | null;
+  }>({
+    tipo_documento: "",
+    file: null,
   });
 
   const [pendingDocFormData, setPendingDocFormData] = useState({
@@ -174,6 +177,13 @@ const Empleados = () => {
     loadUsuarios();
     loadNotificaciones();
   }, []);
+
+  // Resetear el formulario de documento cuando se abre el diálogo
+  useEffect(() => {
+    if (isDocDialogOpen) {
+      setDocFormData({ tipo_documento: "", file: null });
+    }
+  }, [isDocDialogOpen]);
 
   const loadEmpleados = async () => {
     try {
@@ -393,7 +403,7 @@ const Empleados = () => {
 
   const handleUploadDocument = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!docFormData.file || !selectedEmpleado) return;
+    if (!docFormData.file || !selectedEmpleado || !docFormData.tipo_documento) return;
 
     setUploading(true);
     try {
@@ -467,7 +477,7 @@ const Empleados = () => {
       });
 
       setIsDocDialogOpen(false);
-      setDocFormData({ tipo_documento: "contrato_laboral", file: null });
+      setDocFormData({ tipo_documento: "", file: null });
       loadEmpleados();
     } catch (error: any) {
       toast({
@@ -1043,8 +1053,8 @@ const Empleados = () => {
               </TabsTrigger>
             </TabsList>
 
-            {/* Tabs para Todos, Secretaria, Vendedor, Almacenista */}
-            {['todos', 'secretaria', 'vendedor', 'almacenista'].map((tab) => (
+            {/* Tabs para Todos, Secretaria, Almacenista (sin columna de licencia) */}
+            {['todos', 'secretaria', 'almacenista'].map((tab) => (
               <TabsContent key={tab} value={tab} className="space-y-4">
                 <div className="flex gap-2">
                   <Select value={filtroActivo} onValueChange={(value: any) => setFiltroActivo(value)}>
@@ -1163,6 +1173,166 @@ const Empleados = () => {
                 </div>
               </TabsContent>
             ))}
+
+            {/* Tab especial para Vendedor con columna de vencimiento de licencia */}
+            <TabsContent value="vendedor" className="space-y-4">
+              <div className="flex gap-2">
+                <Select value={filtroActivo} onValueChange={(value: any) => setFiltroActivo(value)}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Filtrar por estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    <SelectItem value="activos">Activos</SelectItem>
+                    <SelectItem value="inactivos">Inactivos</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Contacto</TableHead>
+                      <TableHead>Vencimiento Licencia</TableHead>
+                      <TableHead>Fecha Ingreso</TableHead>
+                      <TableHead>Usuario Sistema</TableHead>
+                      <TableHead>Documentos</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredEmpleados.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center text-muted-foreground">
+                          No se encontraron vendedores
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredEmpleados.map((empleado) => {
+                        const licenciaDoc = documentos[empleado.id]?.find(
+                          doc => doc.tipo_documento === 'licencia_conducir'
+                        );
+                        const diasRestantes = licenciaDoc?.fecha_vencimiento 
+                          ? Math.ceil((new Date(licenciaDoc.fecha_vencimiento).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+                          : null;
+
+                        return (
+                          <TableRow key={empleado.id}>
+                            <TableCell className="font-medium">
+                              {empleado.nombre_completo}
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-sm">
+                                {empleado.telefono && <div>{empleado.telefono}</div>}
+                                {empleado.email && (
+                                  <div className="text-muted-foreground">{empleado.email}</div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {licenciaDoc?.fecha_vencimiento ? (
+                                (() => {
+                                  const esPermanente = licenciaDoc.fecha_vencimiento === "2099-12-31";
+                                  if (esPermanente) {
+                                    return (
+                                      <Badge variant="secondary" className="bg-green-500/10 text-green-700 border-green-500/20">
+                                        PERMANENTE
+                                      </Badge>
+                                    );
+                                  }
+                                  return (
+                                    <Badge 
+                                      variant={
+                                        diasRestantes !== null && diasRestantes < 0 
+                                          ? "destructive" 
+                                          : diasRestantes !== null && diasRestantes <= 30 
+                                          ? "destructive" 
+                                          : "secondary"
+                                      }
+                                    >
+                                      {new Date(licenciaDoc.fecha_vencimiento).toLocaleDateString('es-MX')}
+                                      {diasRestantes !== null && diasRestantes < 0 && " (Vencida)"}
+                                      {diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 30 && ` (${diasRestantes}d)`}
+                                    </Badge>
+                                  );
+                                })()
+                              ) : (
+                                <Badge variant="outline" className="text-muted-foreground">
+                                  Sin licencia
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {new Date(empleado.fecha_ingreso).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-sm text-muted-foreground">
+                                {getUsuarioNombre(empleado.user_id)}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-1">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedEmpleado(empleado.id);
+                                    setIsDocDialogOpen(true);
+                                  }}
+                                >
+                                  <Upload className="h-4 w-4 mr-2" />
+                                  Docs ({documentos[empleado.id]?.length || 0})
+                                </Button>
+                                {documentosPendientes[empleado.id]?.length > 0 && (
+                                  <Badge variant="destructive" className="ml-1">
+                                    {documentosPendientes[empleado.id].length} faltantes
+                                  </Badge>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="space-y-1">
+                                <Badge variant={empleado.activo ? "default" : "secondary"}>
+                                  {empleado.activo ? "Activo" : "Inactivo"}
+                                </Badge>
+                                {!empleado.activo && empleado.motivo_baja && (
+                                  <div className="text-xs text-muted-foreground">
+                                    {empleado.motivo_baja === "renuncia" && "Renuncia"}
+                                    {empleado.motivo_baja === "despido" && "Despido"}
+                                    {empleado.motivo_baja === "abandono" && "Abandono"}
+                                  </div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex gap-2 justify-end">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleEdit(empleado)}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDelete(empleado)}
+                                  className="text-destructive hover:text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </TabsContent>
 
             {/* Tab especial para Chofer con columna de vencimiento de licencia */}
             <TabsContent value="chofer" className="space-y-4">
@@ -1401,22 +1571,44 @@ const Empleados = () => {
                       }
                     >
                       <SelectTrigger>
-                        <SelectValue />
+                        <SelectValue placeholder="Selecciona tipo de documento" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="contrato_laboral">Contrato Laboral</SelectItem>
-                        <SelectItem value="ine">INE / Identificación</SelectItem>
-                        <SelectItem value="licencia_conducir">Licencia de Conducir</SelectItem>
-                        <SelectItem value="carta_seguro_social">Carta del Seguro Social</SelectItem>
-                        <SelectItem value="constancia_situacion_fiscal">Constancia de Situación Fiscal</SelectItem>
-                        <SelectItem value="acta_nacimiento">Acta de Nacimiento</SelectItem>
-                        <SelectItem value="comprobante_domicilio">Comprobante de Domicilio</SelectItem>
-                        <SelectItem value="curp">CURP</SelectItem>
-                        <SelectItem value="rfc">RFC</SelectItem>
-                        <SelectItem value="carta_renuncia">Carta de Renuncia</SelectItem>
-                        <SelectItem value="carta_despido">Carta de Despido</SelectItem>
-                        <SelectItem value="comprobante_finiquito">Comprobante de Finiquito</SelectItem>
-                        <SelectItem value="otro">Otro</SelectItem>
+                        {/* Filtrar tipos de documento ya subidos */}
+                        {selectedEmpleado && (() => {
+                          const tiposSubidos = documentos[selectedEmpleado]?.map(doc => doc.tipo_documento) || [];
+                          const todosTipos: Array<{ value: EmpleadoDocumento["tipo_documento"], label: string }> = [
+                            { value: "contrato_laboral", label: "Contrato Laboral" },
+                            { value: "ine", label: "INE / Identificación" },
+                            { value: "licencia_conducir", label: "Licencia de Conducir" },
+                            { value: "carta_seguro_social", label: "Carta del Seguro Social" },
+                            { value: "constancia_situacion_fiscal", label: "Constancia de Situación Fiscal" },
+                            { value: "acta_nacimiento", label: "Acta de Nacimiento" },
+                            { value: "comprobante_domicilio", label: "Comprobante de Domicilio" },
+                            { value: "curp", label: "CURP" },
+                            { value: "rfc", label: "RFC" },
+                            { value: "carta_renuncia", label: "Carta de Renuncia" },
+                            { value: "carta_despido", label: "Carta de Despido" },
+                            { value: "comprobante_finiquito", label: "Comprobante de Finiquito" },
+                            { value: "otro", label: "Otro" },
+                          ];
+                          
+                          const tiposDisponibles = todosTipos.filter(tipo => !tiposSubidos.includes(tipo.value));
+                          
+                          if (tiposDisponibles.length === 0) {
+                            return (
+                              <SelectItem value="no-disponibles" disabled>
+                                Todos los documentos han sido subidos
+                              </SelectItem>
+                            );
+                          }
+                          
+                          return tiposDisponibles.map(tipo => (
+                            <SelectItem key={tipo.value} value={tipo.value}>
+                              {tipo.label}
+                            </SelectItem>
+                          ));
+                        })()}
                       </SelectContent>
                     </Select>
                   </div>

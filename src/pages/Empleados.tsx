@@ -1223,19 +1223,31 @@ const Empleados = () => {
                             </TableCell>
                             <TableCell>
                               {licenciaDoc?.fecha_vencimiento ? (
-                                <Badge 
-                                  variant={
-                                    diasRestantes !== null && diasRestantes < 0 
-                                      ? "destructive" 
-                                      : diasRestantes !== null && diasRestantes <= 30 
-                                      ? "destructive" 
-                                      : "secondary"
+                                (() => {
+                                  const esPermanente = licenciaDoc.fecha_vencimiento === "2099-12-31";
+                                  if (esPermanente) {
+                                    return (
+                                      <Badge variant="secondary" className="bg-green-500/10 text-green-700 border-green-500/20">
+                                        PERMANENTE
+                                      </Badge>
+                                    );
                                   }
-                                >
-                                  {new Date(licenciaDoc.fecha_vencimiento).toLocaleDateString('es-MX')}
-                                  {diasRestantes !== null && diasRestantes < 0 && " (Vencida)"}
-                                  {diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 30 && ` (${diasRestantes}d)`}
-                                </Badge>
+                                  return (
+                                    <Badge 
+                                      variant={
+                                        diasRestantes !== null && diasRestantes < 0 
+                                          ? "destructive" 
+                                          : diasRestantes !== null && diasRestantes <= 30 
+                                          ? "destructive" 
+                                          : "secondary"
+                                      }
+                                    >
+                                      {new Date(licenciaDoc.fecha_vencimiento).toLocaleDateString('es-MX')}
+                                      {diasRestantes !== null && diasRestantes < 0 && " (Vencida)"}
+                                      {diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 30 && ` (${diasRestantes}d)`}
+                                    </Badge>
+                                  );
+                                })()
                               ) : (
                                 <Badge variant="outline" className="text-muted-foreground">
                                   Sin licencia

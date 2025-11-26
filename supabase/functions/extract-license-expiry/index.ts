@@ -69,14 +69,14 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: "Eres un asistente que extrae información de licencias de conducir mexicanas. Tu tarea es encontrar la fecha de vencimiento. Responde SOLO con la fecha en formato YYYY-MM-DD. Si no encuentras la fecha, responde 'NO_ENCONTRADA'."
+            content: "Eres un asistente que extrae información de licencias de conducir mexicanas. Tu tarea es encontrar la fecha de vencimiento. Si la licencia dice PERMANENTE o no tiene fecha de vencimiento, responde 'PERMANENTE'. Si encuentras una fecha, responde SOLO con la fecha en formato YYYY-MM-DD. Si no encuentras ni fecha ni la palabra PERMANENTE, responde 'NO_ENCONTRADA'."
           },
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: "¿Cuál es la fecha de vencimiento de esta licencia de conducir? Responde SOLO con la fecha en formato YYYY-MM-DD."
+                text: "¿Cuál es la fecha de vencimiento de esta licencia de conducir? Si es permanente, responde 'PERMANENTE'. Si tiene fecha, responde en formato YYYY-MM-DD."
               },
               {
                 type: "image_url",
@@ -110,10 +110,18 @@ serve(async (req) => {
     let fechaVencimiento = null;
     
     if (extractedDate !== "NO_ENCONTRADA") {
-      // Validar que la fecha esté en formato correcto
-      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-      if (dateRegex.test(extractedDate)) {
-        fechaVencimiento = extractedDate;
+      // Si la licencia es permanente, usar una fecha lejana
+      if (extractedDate.toUpperCase().includes("PERMANENTE")) {
+        fechaVencimiento = "2099-12-31"; // Fecha permanente
+      } else {
+        // Validar que la fecha esté en formato correcto
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (dateRegex.test(extractedDate)) {
+          fechaVencimiento = extractedDate;
+        }
+      }
+      
+      if (fechaVencimiento) {
         
         // Actualizar el documento con la fecha de vencimiento
         const { error: updateError } = await supabase
@@ -127,31 +135,35 @@ serve(async (req) => {
         }
 
         // Verificar si la licencia vence en los próximos 30 días
-        const fechaVenc = new Date(fechaVencimiento);
-        const hoy = new Date();
-        const diasRestantes = Math.ceil((fechaVenc.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
+        // (no crear alerta para licencias permanentes)
+        const esPermanente = fechaVencimiento === "2099-12-31";
+        if (!esPermanente) {
+          const fechaVenc = new Date(fechaVencimiento);
+          const hoy = new Date();
+          const diasRestantes = Math.ceil((fechaVenc.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
 
-        if (diasRestantes <= 30 && diasRestantes >= 0) {
-          // Obtener información del empleado y documento
-          const { data: documento } = await supabase
-            .from("empleados_documentos")
-            .select(`
-              empleado_id,
-              empleados (nombre_completo)
-            `)
-            .eq("id", documentoId)
-            .single();
+          if (diasRestantes <= 30 && diasRestantes >= 0) {
+            // Obtener información del empleado y documento
+            const { data: documento } = await supabase
+              .from("empleados_documentos")
+              .select(`
+                empleado_id,
+                empleados (nombre_completo)
+              `)
+              .eq("id", documentoId)
+              .single();
 
-          if (documento) {
-            // Crear notificación
-            await supabase.from("notificaciones").insert({
-              tipo: "vencimiento_licencia",
-              titulo: "Licencia próxima a vencer",
-              descripcion: `La licencia de ${documento.empleados.nombre_completo} vence en ${diasRestantes} días (${fechaVencimiento})`,
-              empleado_id: documento.empleado_id,
-              documento_id: documentoId,
-              fecha_vencimiento: fechaVencimiento,
-            });
+            if (documento) {
+              // Crear notificación
+              await supabase.from("notificaciones").insert({
+                tipo: "vencimiento_licencia",
+                titulo: "Licencia próxima a vencer",
+                descripcion: `La licencia de ${documento.empleados.nombre_completo} vence en ${diasRestantes} días (${fechaVencimiento})`,
+                empleado_id: documento.empleado_id,
+                documento_id: documentoId,
+                fecha_vencimiento: fechaVencimiento,
+              });
+            }
           }
         }
       }

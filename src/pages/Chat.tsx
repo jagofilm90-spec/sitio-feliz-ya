@@ -72,6 +72,7 @@ const Chat = () => {
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [usuariosEnLinea, setUsuariosEnLinea] = useState<Set<string>>(new Set());
+  const [ultimoMensajeLeidoOtroUsuario, setUltimoMensajeLeidoOtroUsuario] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -134,7 +135,7 @@ const Chat = () => {
       marcarComoLeido(conversacionActiva.id);
 
       // Suscribirse a nuevos mensajes en tiempo real para la conversación activa
-      const channel = supabase
+      const mensajesChannel = supabase
         .channel('mensajes-realtime')
         .on(
           'postgres_changes',
@@ -156,15 +157,41 @@ const Chat = () => {
 
             setMensajes((prev) => [...prev, { ...nuevoMensaje, remitente }]);
             marcarComoLeido(conversacionActiva.id);
+            
+            // Si es chat individual, actualizar el estado de visto del otro usuario
+            if (conversacionActiva.tipo === 'individual' && nuevoMensaje.remitente_id !== currentUserId) {
+              setUltimoMensajeLeidoOtroUsuario(nuevoMensaje.id);
+            }
+          }
+        )
+        .subscribe();
+
+      // Suscribirse a cambios en conversacion_participantes para actualizar el estado "visto"
+      const participantesChannel = supabase
+        .channel('participantes-realtime')
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'conversacion_participantes',
+            filter: `conversacion_id=eq.${conversacionActiva.id}`,
+          },
+          async (payload) => {
+            // Si el otro usuario actualizó su último mensaje leído, actualizar nuestro estado
+            if (conversacionActiva.tipo === 'individual' && payload.new.user_id !== currentUserId) {
+              setUltimoMensajeLeidoOtroUsuario(payload.new.ultimo_mensaje_leido_id);
+            }
           }
         )
         .subscribe();
 
       return () => {
-        supabase.removeChannel(channel);
+        supabase.removeChannel(mensajesChannel);
+        supabase.removeChannel(participantesChannel);
       };
     }
-  }, [conversacionActiva]);
+  }, [conversacionActiva, currentUserId]);
 
   // Notificaciones en tiempo real para conversaciones inactivas
   useEffect(() => {
@@ -343,8 +370,25 @@ const Chat = () => {
         }));
 
         setMensajes(mensajesConRemitente);
+        
+        // Para chats individuales, cargar el último mensaje leído del otro usuario
+        if (conversacionActiva?.tipo === 'individual') {
+          const otroUsuarioId = conversacionActiva.participantes?.find(p => p.id !== currentUserId)?.id;
+          
+          if (otroUsuarioId) {
+            const { data: participanteData } = await supabase
+              .from('conversacion_participantes')
+              .select('ultimo_mensaje_leido_id')
+              .eq('conversacion_id', conversacionId)
+              .eq('user_id', otroUsuarioId)
+              .single();
+
+            setUltimoMensajeLeidoOtroUsuario(participanteData?.ultimo_mensaje_leido_id || null);
+          }
+        }
       } else {
         setMensajes([]);
+        setUltimoMensajeLeidoOtroUsuario(null);
       }
     } catch (error: any) {
       toast({
@@ -371,6 +415,11 @@ const Chat = () => {
           .update({ ultimo_mensaje_leido_id: ultimoMensaje.id })
           .eq('conversacion_id', conversacionId)
           .eq('user_id', currentUserId);
+        
+        // Actualizar el último mensaje leído localmente si es chat individual
+        if (conversacionActiva?.tipo === 'individual') {
+          setUltimoMensajeLeidoOtroUsuario(ultimoMensaje.id);
+        }
       }
 
       loadConversaciones();
@@ -528,6 +577,21 @@ const Chat = () => {
     // Buscar el usuario del chat individual (el que no es el usuario actual)
     const otroUsuarioId = conv.participantes?.find(p => p.id !== currentUserId)?.id;
     return otroUsuarioId ? usuariosEnLinea.has(otroUsuarioId) : false;
+  };
+
+  const esMensajeVisto = (mensaje: Message): boolean => {
+    // Solo aplica para mensajes propios en chats individuales
+    if (conversacionActiva?.tipo !== 'individual' || mensaje.remitente_id !== currentUserId) {
+      return false;
+    }
+    
+    if (!ultimoMensajeLeidoOtroUsuario) return false;
+    
+    // Verificar si este mensaje fue leído comparando con el último mensaje leído del otro usuario
+    const indiceMensajeActual = mensajes.findIndex(m => m.id === mensaje.id);
+    const indiceUltimoLeido = mensajes.findIndex(m => m.id === ultimoMensajeLeidoOtroUsuario);
+    
+    return indiceUltimoLeido >= indiceMensajeActual && indiceUltimoLeido !== -1;
   };
 
   const filteredConversaciones = conversaciones.filter((conv) =>
@@ -770,9 +834,16 @@ const Chat = () => {
                             }`}
                           >
                             <p>{mensaje.contenido}</p>
-                            <p className={`text-xs mt-1 ${esMio ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                              {format(new Date(mensaje.created_at), 'HH:mm')}
-                            </p>
+                            <div className="flex items-center justify-between gap-2 mt-1">
+                              <p className={`text-xs ${esMio ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                                {format(new Date(mensaje.created_at), 'HH:mm')}
+                              </p>
+                              {esMio && conversacionActiva?.tipo === 'individual' && (
+                                <span className={`text-xs ${esMio ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                                  {esMensajeVisto(mensaje) ? '✓✓' : '✓'}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>

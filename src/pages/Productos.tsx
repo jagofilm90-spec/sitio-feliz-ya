@@ -51,6 +51,8 @@ const Productos = () => {
     precio_compra: string;
     stock_minimo: string;
     maneja_caducidad: boolean;
+    aplica_iva: boolean;
+    aplica_ieps: boolean;
   }>({
     codigo: "",
     nombre: "",
@@ -62,6 +64,8 @@ const Productos = () => {
     precio_compra: "",
     stock_minimo: "",
     maneja_caducidad: false,
+    aplica_iva: false,
+    aplica_ieps: false,
   });
 
   useEffect(() => {
@@ -110,6 +114,8 @@ const Productos = () => {
         precio_compra: parseFloat(formData.precio_compra) || 0,
         stock_minimo: parseInt(formData.stock_minimo),
         maneja_caducidad: formData.maneja_caducidad,
+        aplica_iva: formData.aplica_iva,
+        aplica_ieps: formData.aplica_ieps,
       };
 
       if (editingProduct) {
@@ -154,6 +160,8 @@ const Productos = () => {
       precio_compra: product.precio_compra.toString(),
       stock_minimo: product.stock_minimo.toString(),
       maneja_caducidad: product.maneja_caducidad,
+      aplica_iva: product.aplica_iva || false,
+      aplica_ieps: product.aplica_ieps || false,
     });
     setDialogOpen(true);
   };
@@ -192,6 +200,8 @@ const Productos = () => {
       precio_compra: "",
       stock_minimo: "",
       maneja_caducidad: false,
+      aplica_iva: false,
+      aplica_ieps: false,
     });
   };
 
@@ -369,6 +379,28 @@ const Productos = () => {
                     className="rounded"
                   />
                   <Label htmlFor="maneja_caducidad">Maneja fecha de caducidad</Label>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="aplica_iva"
+                      checked={formData.aplica_iva}
+                      onChange={(e) => setFormData({ ...formData, aplica_iva: e.target.checked })}
+                      className="rounded"
+                    />
+                    <Label htmlFor="aplica_iva">Aplica IVA (16%)</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="aplica_ieps"
+                      checked={formData.aplica_ieps}
+                      onChange={(e) => setFormData({ ...formData, aplica_ieps: e.target.checked })}
+                      className="rounded"
+                    />
+                    <Label htmlFor="aplica_ieps">Aplica IEPS (8%)</Label>
+                  </div>
                 </div>
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>

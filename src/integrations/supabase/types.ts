@@ -803,6 +803,8 @@ export type Database = {
       productos: {
         Row: {
           activo: boolean | null
+          aplica_ieps: boolean
+          aplica_iva: boolean
           categoria: string | null
           codigo: string
           created_at: string
@@ -825,6 +827,8 @@ export type Database = {
         }
         Insert: {
           activo?: boolean | null
+          aplica_ieps?: boolean
+          aplica_iva?: boolean
           categoria?: string | null
           codigo: string
           created_at?: string
@@ -847,6 +851,8 @@ export type Database = {
         }
         Update: {
           activo?: boolean | null
+          aplica_ieps?: boolean
+          aplica_iva?: boolean
           categoria?: string | null
           codigo?: string
           created_at?: string

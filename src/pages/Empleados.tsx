@@ -59,6 +59,20 @@ interface Empleado {
   id: string;
   user_id: string | null;
   nombre_completo: string;
+  nombre: string | null;
+  primer_apellido: string | null;
+  segundo_apellido: string | null;
+  rfc: string | null;
+  curp: string | null;
+  fecha_nacimiento: string | null;
+  contacto_emergencia_nombre: string | null;
+  contacto_emergencia_telefono: string | null;
+  tipo_sangre: string | null;
+  estado_civil: string | null;
+  numero_dependientes: number | null;
+  nivel_estudios: string | null;
+  cuenta_bancaria: string | null;
+  clabe_interbancaria: string | null;
   telefono: string | null;
   email: string | null;
   direccion: string | null;
@@ -146,6 +160,20 @@ const Empleados = () => {
 
   const [formData, setFormData] = useState({
     nombre_completo: "",
+    nombre: "",
+    primer_apellido: "",
+    segundo_apellido: "",
+    rfc: "",
+    curp: "",
+    fecha_nacimiento: "",
+    contacto_emergencia_nombre: "",
+    contacto_emergencia_telefono: "",
+    tipo_sangre: "",
+    estado_civil: "",
+    numero_dependientes: "",
+    nivel_estudios: "",
+    cuenta_bancaria: "",
+    clabe_interbancaria: "",
     telefono: "",
     email: "",
     direccion: "",
@@ -340,11 +368,14 @@ const Empleados = () => {
     e.preventDefault();
 
     try {
+      // Construir nombre_completo a partir de los campos separados
+      const nombreCompleto = `${formData.nombre} ${formData.primer_apellido} ${formData.segundo_apellido}`.trim();
+      
       // Validar si ya existe un empleado con el mismo nombre completo
       const { data: existingEmpleados, error: checkError } = await supabase
         .from("empleados")
         .select("id, nombre_completo")
-        .ilike("nombre_completo", formData.nombre_completo.trim());
+        .ilike("nombre_completo", nombreCompleto);
 
       if (checkError) throw checkError;
 
@@ -356,7 +387,7 @@ const Empleados = () => {
       if (duplicado) {
         toast({
           title: "Empleado duplicado",
-          description: `Ya existe un empleado registrado con el nombre "${formData.nombre_completo}".`,
+          description: `Ya existe un empleado registrado con el nombre "${nombreCompleto}".`,
           variant: "destructive",
         });
         return;
@@ -364,11 +395,23 @@ const Empleados = () => {
 
       const payload = {
         ...formData,
+        nombre_completo: nombreCompleto,
         user_id: formData.user_id || null,
         sueldo_bruto: formData.sueldo_bruto ? parseFloat(formData.sueldo_bruto) : null,
         periodo_pago: formData.periodo_pago || null,
         fecha_baja: formData.fecha_baja || null,
         motivo_baja: formData.motivo_baja || null,
+        numero_dependientes: formData.numero_dependientes ? parseInt(formData.numero_dependientes) : null,
+        fecha_nacimiento: formData.fecha_nacimiento || null,
+        rfc: formData.rfc || null,
+        curp: formData.curp || null,
+        contacto_emergencia_nombre: formData.contacto_emergencia_nombre || null,
+        contacto_emergencia_telefono: formData.contacto_emergencia_telefono || null,
+        tipo_sangre: formData.tipo_sangre || null,
+        estado_civil: formData.estado_civil || null,
+        nivel_estudios: formData.nivel_estudios || null,
+        cuenta_bancaria: formData.cuenta_bancaria || null,
+        clabe_interbancaria: formData.clabe_interbancaria || null,
       };
 
       let empleadoId: string;
@@ -384,9 +427,10 @@ const Empleados = () => {
 
         // Si el empleado tiene usuario asociado, actualizar el nombre en profiles
         if (formData.user_id) {
+          const nombreCompleto = `${formData.nombre} ${formData.primer_apellido} ${formData.segundo_apellido}`.trim();
           const { error: profileError } = await supabase
             .from("profiles")
-            .update({ full_name: formData.nombre_completo })
+            .update({ full_name: nombreCompleto })
             .eq("id", formData.user_id);
 
           if (profileError) {
@@ -470,11 +514,13 @@ const Empleados = () => {
           try {
             const { data: { session } } = await supabase.auth.getSession();
             
+            const nombreCompleto = `${formData.nombre} ${formData.primer_apellido} ${formData.segundo_apellido}`.trim();
+            
             const response = await supabase.functions.invoke('create-user', {
               body: {
                 email: formData.email,
                 password: usuarioFormData.password,
-                full_name: formData.nombre_completo,
+                full_name: nombreCompleto,
                 phone: formData.telefono || null,
                 role: usuarioFormData.role,
               },
@@ -574,6 +620,20 @@ const Empleados = () => {
     setEditingEmpleado(empleado);
     setFormData({
       nombre_completo: empleado.nombre_completo,
+      nombre: empleado.nombre || "",
+      primer_apellido: empleado.primer_apellido || "",
+      segundo_apellido: empleado.segundo_apellido || "",
+      rfc: empleado.rfc || "",
+      curp: empleado.curp || "",
+      fecha_nacimiento: empleado.fecha_nacimiento || "",
+      contacto_emergencia_nombre: empleado.contacto_emergencia_nombre || "",
+      contacto_emergencia_telefono: empleado.contacto_emergencia_telefono || "",
+      tipo_sangre: empleado.tipo_sangre || "",
+      estado_civil: empleado.estado_civil || "",
+      numero_dependientes: empleado.numero_dependientes?.toString() || "",
+      nivel_estudios: empleado.nivel_estudios || "",
+      cuenta_bancaria: empleado.cuenta_bancaria || "",
+      clabe_interbancaria: empleado.clabe_interbancaria || "",
       telefono: empleado.telefono || "",
       email: empleado.email || "",
       direccion: empleado.direccion || "",
@@ -588,10 +648,6 @@ const Empleados = () => {
       fecha_baja: empleado.fecha_baja || "",
       motivo_baja: empleado.motivo_baja || "",
     });
-    
-    // Reset termination files when opening edit
-    setTerminationFiles({ carta: null, finiquito: null });
-    
     setIsDialogOpen(true);
   };
 
@@ -877,6 +933,20 @@ const Empleados = () => {
   const resetForm = () => {
     setFormData({
       nombre_completo: "",
+      nombre: "",
+      primer_apellido: "",
+      segundo_apellido: "",
+      rfc: "",
+      curp: "",
+      fecha_nacimiento: "",
+      contacto_emergencia_nombre: "",
+      contacto_emergencia_telefono: "",
+      tipo_sangre: "",
+      estado_civil: "",
+      numero_dependientes: "",
+      nivel_estudios: "",
+      cuenta_bancaria: "",
+      clabe_interbancaria: "",
       telefono: "",
       email: "",
       direccion: "",
@@ -1102,10 +1172,18 @@ const Empleados = () => {
                     onValueChange={(value) => {
                       const usuario = usuarios.find((u) => u.id === value);
                       if (usuario) {
+                        // Separar el nombre completo en partes
+                        const nombrePartes = usuario.full_name.trim().split(/\s+/);
+                        const nombre = nombrePartes[0] || "";
+                        const primerApellido = nombrePartes[1] || "";
+                        const segundoApellido = nombrePartes.slice(2).join(" ") || "";
+                        
                         setFormData({
                           ...formData,
                           user_id: value,
-                          nombre_completo: usuario.full_name,
+                          nombre: nombre,
+                          primer_apellido: primerApellido,
+                          segundo_apellido: segundoApellido,
                           email: usuario.email,
                           telefono: usuario.phone || formData.telefono,
                         });
@@ -1202,15 +1280,109 @@ const Empleados = () => {
                 )}
 
                 <div>
-                  <Label htmlFor="nombre_completo">Nombre Completo *</Label>
+                  <Label htmlFor="nombre">Nombre *</Label>
                   <Input
-                    id="nombre_completo"
-                    value={formData.nombre_completo}
+                    id="nombre"
+                    value={formData.nombre}
                     onChange={(e) =>
-                      setFormData({ ...formData, nombre_completo: e.target.value })
+                      setFormData({ ...formData, nombre: e.target.value })
                     }
                     required
+                    placeholder="Nombre(s)"
                   />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="primer_apellido">Primer Apellido *</Label>
+                    <Input
+                      id="primer_apellido"
+                      value={formData.primer_apellido}
+                      onChange={(e) =>
+                        setFormData({ ...formData, primer_apellido: e.target.value })
+                      }
+                      required
+                      placeholder="Primer apellido"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="segundo_apellido">Segundo Apellido</Label>
+                    <Input
+                      id="segundo_apellido"
+                      value={formData.segundo_apellido}
+                      onChange={(e) =>
+                        setFormData({ ...formData, segundo_apellido: e.target.value })
+                      }
+                      placeholder="Segundo apellido (opcional)"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="rfc">RFC</Label>
+                    <Input
+                      id="rfc"
+                      value={formData.rfc}
+                      onChange={(e) =>
+                        setFormData({ ...formData, rfc: e.target.value.toUpperCase() })
+                      }
+                      placeholder="XXXX000000XXX"
+                      maxLength={13}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="curp">CURP</Label>
+                    <Input
+                      id="curp"
+                      value={formData.curp}
+                      onChange={(e) =>
+                        setFormData({ ...formData, curp: e.target.value.toUpperCase() })
+                      }
+                      placeholder="XXXX000000XXXXXXXX00"
+                      maxLength={18}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="fecha_nacimiento">Fecha de Nacimiento</Label>
+                  <Input
+                    id="fecha_nacimiento"
+                    type="date"
+                    value={formData.fecha_nacimiento}
+                    onChange={(e) =>
+                      setFormData({ ...formData, fecha_nacimiento: e.target.value })
+                    }
+                  />
+                </div>
+
+                <div className="border-t pt-4">
+                  <h3 className="font-medium mb-3">Contacto de Emergencia</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="contacto_emergencia_nombre">Nombre del Contacto</Label>
+                      <Input
+                        id="contacto_emergencia_nombre"
+                        value={formData.contacto_emergencia_nombre}
+                        onChange={(e) =>
+                          setFormData({ ...formData, contacto_emergencia_nombre: e.target.value })
+                        }
+                        placeholder="Nombre completo"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="contacto_emergencia_telefono">Número de Teléfono</Label>
+                      <Input
+                        id="contacto_emergencia_telefono"
+                        value={formData.contacto_emergencia_telefono}
+                        onChange={(e) =>
+                          setFormData({ ...formData, contacto_emergencia_telefono: e.target.value })
+                        }
+                        placeholder="10 dígitos"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">

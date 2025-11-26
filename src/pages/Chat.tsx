@@ -38,6 +38,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { MessageCircle, Send, Users, Plus, Search, Trash2 } from "lucide-react";
 import { format } from "date-fns";
+import { playNotificationSound } from "@/utils/notificationSound";
 
 interface Conversation {
   id: string;
@@ -238,6 +239,9 @@ const Chat = () => {
           const titulo = conv
             ? `Nuevo mensaje en ${getNombreConversacion(conv)}`
             : 'Nuevo mensaje';
+
+          // Reproducir sonido de notificación
+          playNotificationSound();
 
           toast({
             title: titulo,
@@ -613,25 +617,15 @@ const Chat = () => {
     
     // Para chat individual, mostrar el nombre del otro usuario
     if (conv.tipo === 'individual') {
-      console.log('Conversación individual:', {
-        convId: conv.id,
-        currentUserId,
-        participantes: conv.participantes,
-        numParticipantes: conv.participantes?.length
-      });
-      
       if (!currentUserId) {
-        console.log('No hay currentUserId todavía');
         return 'Cargando...';
       }
       
       if (!conv.participantes || conv.participantes.length === 0) {
-        console.log('No hay participantes cargados');
         return 'Chat individual';
       }
 
       const otroUsuario = conv.participantes.find(p => p.id !== currentUserId);
-      console.log('Otro usuario encontrado:', otroUsuario);
       
       if (otroUsuario) {
         return otroUsuario.full_name;

@@ -79,6 +79,86 @@ export type Database = {
           },
         ]
       }
+      empleados: {
+        Row: {
+          activo: boolean | null
+          created_at: string
+          direccion: string | null
+          email: string | null
+          fecha_ingreso: string
+          id: string
+          nombre_completo: string
+          notas: string | null
+          puesto: string
+          telefono: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          activo?: boolean | null
+          created_at?: string
+          direccion?: string | null
+          email?: string | null
+          fecha_ingreso?: string
+          id?: string
+          nombre_completo: string
+          notas?: string | null
+          puesto: string
+          telefono?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          activo?: boolean | null
+          created_at?: string
+          direccion?: string | null
+          email?: string | null
+          fecha_ingreso?: string
+          id?: string
+          nombre_completo?: string
+          notas?: string | null
+          puesto?: string
+          telefono?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      empleados_documentos: {
+        Row: {
+          created_at: string
+          empleado_id: string
+          id: string
+          nombre_archivo: string
+          ruta_storage: string
+          tipo_documento: string
+        }
+        Insert: {
+          created_at?: string
+          empleado_id: string
+          id?: string
+          nombre_archivo: string
+          ruta_storage: string
+          tipo_documento: string
+        }
+        Update: {
+          created_at?: string
+          empleado_id?: string
+          id?: string
+          nombre_archivo?: string
+          ruta_storage?: string
+          tipo_documento?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "empleados_documentos_empleado_id_fkey"
+            columns: ["empleado_id"]
+            isOneToOne: false
+            referencedRelation: "empleados"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       entregas: {
         Row: {
           created_at: string

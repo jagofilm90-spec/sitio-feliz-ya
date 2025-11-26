@@ -61,7 +61,16 @@ interface Empleado {
 interface EmpleadoDocumento {
   id: string;
   empleado_id: string;
-  tipo_documento: "identificacion" | "contrato" | "otro";
+  tipo_documento: 
+    | "contrato_laboral"
+    | "ine"
+    | "carta_seguro_social"
+    | "constancia_situacion_fiscal"
+    | "acta_nacimiento"
+    | "comprobante_domicilio"
+    | "curp"
+    | "rfc"
+    | "otro";
   nombre_archivo: string;
   ruta_storage: string;
   created_at: string;
@@ -99,7 +108,7 @@ const Empleados = () => {
   });
 
   const [docFormData, setDocFormData] = useState({
-    tipo_documento: "identificacion" as "identificacion" | "contrato" | "otro",
+    tipo_documento: "contrato_laboral" as EmpleadoDocumento["tipo_documento"],
     file: null as File | null,
   });
 
@@ -252,7 +261,7 @@ const Empleados = () => {
       });
 
       setIsDocDialogOpen(false);
-      setDocFormData({ tipo_documento: "identificacion", file: null });
+      setDocFormData({ tipo_documento: "contrato_laboral", file: null });
       loadEmpleados();
     } catch (error: any) {
       toast({
@@ -353,6 +362,21 @@ const Empleados = () => {
     if (!userId) return "-";
     const usuario = usuarios.find((u) => u.id === userId);
     return usuario ? usuario.full_name : "-";
+  };
+
+  const getTipoDocumentoLabel = (tipo: EmpleadoDocumento["tipo_documento"]) => {
+    const labels: Record<EmpleadoDocumento["tipo_documento"], string> = {
+      contrato_laboral: "Contrato Laboral",
+      ine: "INE",
+      carta_seguro_social: "Carta Seguro Social",
+      constancia_situacion_fiscal: "Constancia Situación Fiscal",
+      acta_nacimiento: "Acta de Nacimiento",
+      comprobante_domicilio: "Comprobante de Domicilio",
+      curp: "CURP",
+      rfc: "RFC",
+      otro: "Otro",
+    };
+    return labels[tipo];
   };
 
   return (
@@ -601,15 +625,15 @@ const Empleados = () => {
                           </TableCell>
                           <TableCell>
                             <Button
-                              variant="ghost"
+                              variant="outline"
                               size="sm"
                               onClick={() => {
                                 setSelectedEmpleado(empleado.id);
                                 setIsDocDialogOpen(true);
                               }}
                             >
-                              <FileText className="h-4 w-4 mr-1" />
-                              {documentos[empleado.id]?.length || 0}
+                              <Upload className="h-4 w-4 mr-2" />
+                              Docs ({documentos[empleado.id]?.length || 0})
                             </Button>
                           </TableCell>
                           <TableCell>
@@ -662,8 +686,14 @@ const Empleados = () => {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="identificacion">Identificación</SelectItem>
-                        <SelectItem value="contrato">Contrato</SelectItem>
+                        <SelectItem value="contrato_laboral">Contrato Laboral</SelectItem>
+                        <SelectItem value="ine">INE / Identificación</SelectItem>
+                        <SelectItem value="carta_seguro_social">Carta del Seguro Social</SelectItem>
+                        <SelectItem value="constancia_situacion_fiscal">Constancia de Situación Fiscal</SelectItem>
+                        <SelectItem value="acta_nacimiento">Acta de Nacimiento</SelectItem>
+                        <SelectItem value="comprobante_domicilio">Comprobante de Domicilio</SelectItem>
+                        <SelectItem value="curp">CURP</SelectItem>
+                        <SelectItem value="rfc">RFC</SelectItem>
                         <SelectItem value="otro">Otro</SelectItem>
                       </SelectContent>
                     </Select>
@@ -705,17 +735,17 @@ const Empleados = () => {
                       >
                         <div className="flex items-center gap-3">
                           <FileText className="h-5 w-5 text-muted-foreground" />
-                          <div>
-                            <p className="font-medium text-sm">{doc.nombre_archivo}</p>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <Badge variant="outline" className="text-xs">
-                                {doc.tipo_documento}
-                              </Badge>
-                              <span>
-                                {new Date(doc.created_at).toLocaleDateString()}
-                              </span>
+                            <div>
+                              <p className="font-medium text-sm">{doc.nombre_archivo}</p>
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Badge variant="outline" className="text-xs">
+                                  {getTipoDocumentoLabel(doc.tipo_documento)}
+                                </Badge>
+                                <span>
+                                  {new Date(doc.created_at).toLocaleDateString()}
+                                </span>
+                              </div>
                             </div>
-                          </div>
                         </div>
                         <div className="flex gap-1">
                           <Button

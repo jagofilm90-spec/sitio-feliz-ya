@@ -56,6 +56,11 @@ export default function Usuarios() {
     primer_apellido: "",
     segundo_apellido: "",
   });
+  const [newUserFields, setNewUserFields] = useState({
+    nombre: "",
+    primer_apellido: "",
+    segundo_apellido: "",
+  });
   const [userToDelete, setUserToDelete] = useState<UserWithRoles | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [resetPasswordUser, setResetPasswordUser] = useState<UserWithRoles | null>(null);
@@ -135,6 +140,13 @@ export default function Usuarios() {
     setSelectedEmpleadoId(empleadoId);
     const empleado = empleados.find(e => e.id === empleadoId);
     if (empleado) {
+      // Auto-rellenar campos separados
+      setNewUserFields({
+        nombre: empleado.nombre || "",
+        primer_apellido: empleado.primer_apellido || "",
+        segundo_apellido: empleado.segundo_apellido || "",
+      });
+      
       const fullName = `${empleado.nombre || ''} ${empleado.primer_apellido || ''} ${empleado.segundo_apellido || ''}`.trim();
       setNewUser({
         ...newUser,
@@ -147,7 +159,10 @@ export default function Usuarios() {
 
   const handleCreateUser = async () => {
     try {
-      if (!newUser.email || !newUser.password || !newUser.full_name) {
+      // Construir nombre completo desde los campos separados
+      const fullName = `${newUserFields.nombre} ${newUserFields.primer_apellido} ${newUserFields.segundo_apellido}`.trim();
+      
+      if (!newUser.email || !newUser.password || !fullName) {
         toast({
           variant: "destructive",
           title: "Error",
@@ -173,7 +188,7 @@ export default function Usuarios() {
         body: {
           email: newUser.email,
           password: newUser.password,
-          full_name: newUser.full_name,
+          full_name: fullName,
           phone: newUser.phone || null,
           role: newUser.role,
         },
@@ -184,7 +199,7 @@ export default function Usuarios() {
 
       toast({
         title: "Usuario creado",
-        description: `${newUser.full_name} ha sido agregado al sistema`,
+        description: `${fullName} ha sido agregado al sistema`,
       });
 
       setIsDialogOpen(false);
@@ -194,6 +209,11 @@ export default function Usuarios() {
         full_name: "",
         phone: "",
         role: "vendedor",
+      });
+      setNewUserFields({
+        nombre: "",
+        primer_apellido: "",
+        segundo_apellido: "",
       });
       setSelectedEmpleadoId("");
       loadUsers();
@@ -427,12 +447,42 @@ export default function Usuarios() {
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="full_name">Nombre Completo *</Label>
+                  <Label htmlFor="nombre">Nombre *</Label>
                   <Input
-                    id="full_name"
-                    placeholder="Juan Pérez"
-                    value={newUser.full_name}
-                    onChange={(e) => setNewUser({ ...newUser, full_name: e.target.value })}
+                    id="nombre"
+                    placeholder="Juan"
+                    value={newUserFields.nombre}
+                    onChange={(e) => {
+                      setNewUserFields({ ...newUserFields, nombre: e.target.value });
+                      const fullName = `${e.target.value} ${newUserFields.primer_apellido} ${newUserFields.segundo_apellido}`.trim();
+                      setNewUser({ ...newUser, full_name: fullName });
+                    }}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="primer_apellido">Primer Apellido *</Label>
+                  <Input
+                    id="primer_apellido"
+                    placeholder="Pérez"
+                    value={newUserFields.primer_apellido}
+                    onChange={(e) => {
+                      setNewUserFields({ ...newUserFields, primer_apellido: e.target.value });
+                      const fullName = `${newUserFields.nombre} ${e.target.value} ${newUserFields.segundo_apellido}`.trim();
+                      setNewUser({ ...newUser, full_name: fullName });
+                    }}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="segundo_apellido">Segundo Apellido *</Label>
+                  <Input
+                    id="segundo_apellido"
+                    placeholder="García"
+                    value={newUserFields.segundo_apellido}
+                    onChange={(e) => {
+                      setNewUserFields({ ...newUserFields, segundo_apellido: e.target.value });
+                      const fullName = `${newUserFields.nombre} ${newUserFields.primer_apellido} ${e.target.value}`.trim();
+                      setNewUser({ ...newUser, full_name: fullName });
+                    }}
                   />
                 </div>
                 <div className="space-y-2">

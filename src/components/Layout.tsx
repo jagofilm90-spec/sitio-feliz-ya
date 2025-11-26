@@ -16,6 +16,7 @@ import {
   Home,
   Shield,
   UserCog,
+  MessageCircle,
 } from "lucide-react";
 
 interface LayoutProps {
@@ -69,6 +70,7 @@ const Layout = ({ children }: LayoutProps) => {
     { icon: FileText, label: "Facturación", path: "/facturas" },
     { icon: UserCog, label: "Empleados", path: "/empleados" },
     { icon: Shield, label: "Usuarios", path: "/usuarios" },
+    { icon: MessageCircle, label: "Chat", path: "/chat" },
   ];
 
   if (loading) {

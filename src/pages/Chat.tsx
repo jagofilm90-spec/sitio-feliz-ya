@@ -71,13 +71,62 @@ const Chat = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [usuariosEnLinea, setUsuariosEnLinea] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   useEffect(() => {
     loadCurrentUser();
     loadUsuarios();
     loadConversaciones();
+    setupPresence();
   }, []);
+
+  const setupPresence = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const channel = supabase.channel('online-users', {
+      config: {
+        presence: {
+          key: user.id,
+        },
+      },
+    });
+
+    channel
+      .on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState();
+        const onlineUsers = new Set<string>();
+        
+        Object.keys(state).forEach((userId) => {
+          onlineUsers.add(userId);
+        });
+        
+        setUsuariosEnLinea(onlineUsers);
+      })
+      .on('presence', { event: 'join' }, ({ key }) => {
+        setUsuariosEnLinea((prev) => new Set([...prev, key]));
+      })
+      .on('presence', { event: 'leave' }, ({ key }) => {
+        setUsuariosEnLinea((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await channel.track({
+            user_id: user.id,
+            online_at: new Date().toISOString(),
+          });
+        }
+      });
+
+    return () => {
+      channel.unsubscribe();
+    };
+  };
 
   useEffect(() => {
     if (conversacionActiva) {
@@ -183,10 +232,30 @@ const Chat = () => {
             mensajesNoLeidos = count || 0;
           }
 
+          // Cargar participantes para chats individuales
+          let participantes: UserProfile[] = [];
+          if (conv.tipo === 'individual') {
+            const { data: participantesData } = await supabase
+              .from('conversacion_participantes')
+              .select('user_id')
+              .eq('conversacion_id', conv.id);
+
+            if (participantesData) {
+              const userIds = participantesData.map(p => p.user_id);
+              const { data: profiles } = await supabase
+                .from('profiles')
+                .select('id, full_name, email')
+                .in('id', userIds);
+              
+              participantes = profiles || [];
+            }
+          }
+
           return {
             ...conv,
             ultimo_mensaje: ultimoMensaje,
             mensajes_no_leidos: mensajesNoLeidos,
+            participantes,
           };
         })
       );
@@ -397,6 +466,14 @@ const Chat = () => {
     return 'Chat individual';
   };
 
+  const getUsuarioEnLineaDeConversacion = (conv: Conversation): boolean => {
+    if (conv.tipo !== 'individual') return false;
+    
+    // Buscar el usuario del chat individual (el que no es el usuario actual)
+    const otroUsuarioId = conv.participantes?.find(p => p.id !== currentUserId)?.id;
+    return otroUsuarioId ? usuariosEnLinea.has(otroUsuarioId) : false;
+  };
+
   const filteredConversaciones = conversaciones.filter((conv) =>
     getNombreConversacion(conv).toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -498,6 +575,25 @@ const Chat = () => {
                       </div>
                     )}
 
+                    {(tipoGrupo === 'individual' || tipoGrupo === 'grupo_personalizado') && (
+                      <div className="bg-muted p-3 rounded-md mb-3">
+                        <p className="text-sm font-medium mb-2">Usuarios en línea:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {usuarios
+                            .filter(u => usuariosEnLinea.has(u.id))
+                            .map(u => (
+                              <Badge key={u.id} variant="secondary" className="flex items-center gap-1">
+                                <div className="w-2 h-2 bg-green-500 rounded-full" />
+                                {u.full_name}
+                              </Badge>
+                            ))}
+                          {usuarios.filter(u => usuariosEnLinea.has(u.id)).length === 0 && (
+                            <p className="text-sm text-muted-foreground">Ningún usuario en línea</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     {tipoGrupo === 'broadcast' && (
                       <div className="bg-muted p-3 rounded-md">
                         <p className="text-sm text-muted-foreground">
@@ -536,11 +632,16 @@ const Chat = () => {
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-start space-x-3 flex-1">
-                    <Avatar>
-                      <AvatarFallback>
-                        {conv.tipo === 'individual' ? <MessageCircle className="h-5 w-5" /> : <Users className="h-5 w-5" />}
-                      </AvatarFallback>
-                    </Avatar>
+                    <div className="relative">
+                      <Avatar>
+                        <AvatarFallback>
+                          {conv.tipo === 'individual' ? <MessageCircle className="h-5 w-5" /> : <Users className="h-5 w-5" />}
+                        </AvatarFallback>
+                      </Avatar>
+                      {getUsuarioEnLineaDeConversacion(conv) && (
+                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-background rounded-full" />
+                      )}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
                         <p className="font-medium truncate">{getNombreConversacion(conv)}</p>

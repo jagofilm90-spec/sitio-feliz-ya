@@ -320,6 +320,18 @@ const Empleados = () => {
         if (error) throw error;
         empleadoId = editingEmpleado.id;
 
+        // Si el empleado tiene usuario asociado, actualizar el nombre en profiles
+        if (formData.user_id) {
+          const { error: profileError } = await supabase
+            .from("profiles")
+            .update({ full_name: formData.nombre_completo })
+            .eq("id", formData.user_id);
+
+          if (profileError) {
+            console.error("Error actualizando perfil:", profileError);
+          }
+        }
+
         // Subir archivos de terminación si están presentes
         if (!formData.activo && formData.motivo_baja) {
           if (formData.motivo_baja === "renuncia" && terminationFiles.carta) {

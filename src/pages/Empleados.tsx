@@ -1449,16 +1449,22 @@ const Empleados = () => {
                                       </Badge>
                                     );
                                   }
+                                  
+                                  // Determinar color según estado
+                                  let badgeClass = "";
+                                  if (diasRestantes !== null && diasRestantes < 0) {
+                                    // Vencida - Rojo
+                                    badgeClass = "bg-red-500/10 text-red-700 border-red-500/20";
+                                  } else if (diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 30) {
+                                    // Próxima a vencer - Amarillo
+                                    badgeClass = "bg-yellow-500/10 text-yellow-700 border-yellow-500/20";
+                                  } else {
+                                    // Vigente - Verde
+                                    badgeClass = "bg-green-500/10 text-green-700 border-green-500/20";
+                                  }
+                                  
                                   return (
-                                    <Badge 
-                                      variant={
-                                        diasRestantes !== null && diasRestantes < 0 
-                                          ? "destructive" 
-                                          : diasRestantes !== null && diasRestantes <= 30 
-                                          ? "destructive" 
-                                          : "secondary"
-                                      }
-                                    >
+                                    <Badge variant="secondary" className={badgeClass}>
                                       {new Date(licenciaDoc.fecha_vencimiento).toLocaleDateString('es-MX')}
                                       {diasRestantes !== null && diasRestantes < 0 && " (Vencida)"}
                                       {diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 30 && ` (${diasRestantes}d)`}
@@ -1609,16 +1615,22 @@ const Empleados = () => {
                                       </Badge>
                                     );
                                   }
+                                  
+                                  // Determinar color según estado
+                                  let badgeClass = "";
+                                  if (diasRestantes !== null && diasRestantes < 0) {
+                                    // Vencida - Rojo
+                                    badgeClass = "bg-red-500/10 text-red-700 border-red-500/20";
+                                  } else if (diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 30) {
+                                    // Próxima a vencer - Amarillo
+                                    badgeClass = "bg-yellow-500/10 text-yellow-700 border-yellow-500/20";
+                                  } else {
+                                    // Vigente - Verde
+                                    badgeClass = "bg-green-500/10 text-green-700 border-green-500/20";
+                                  }
+                                  
                                   return (
-                                    <Badge 
-                                      variant={
-                                        diasRestantes !== null && diasRestantes < 0 
-                                          ? "destructive" 
-                                          : diasRestantes !== null && diasRestantes <= 30 
-                                          ? "destructive" 
-                                          : "secondary"
-                                      }
-                                    >
+                                    <Badge variant="secondary" className={badgeClass}>
                                       {new Date(licenciaDoc.fecha_vencimiento).toLocaleDateString('es-MX')}
                                       {diasRestantes !== null && diasRestantes < 0 && " (Vencida)"}
                                       {diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 30 && ` (${diasRestantes}d)`}

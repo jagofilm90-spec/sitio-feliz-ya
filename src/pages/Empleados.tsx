@@ -80,6 +80,7 @@ interface UserProfile {
   id: string;
   email: string;
   full_name: string;
+  phone: string | null;
 }
 
 const Empleados = () => {
@@ -155,7 +156,7 @@ const Empleados = () => {
     try {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, email, full_name")
+        .select("id, email, full_name, phone")
         .order("full_name");
 
       if (error) throw error;
@@ -419,7 +420,7 @@ const Empleados = () => {
                           user_id: value,
                           nombre_completo: usuario.full_name,
                           email: usuario.email,
-                          telefono: formData.telefono, // Mantener teléfono si ya existe
+                          telefono: usuario.phone || formData.telefono,
                         });
                       } else {
                         setFormData({ ...formData, user_id: value });

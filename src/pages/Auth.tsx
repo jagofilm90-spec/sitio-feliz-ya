@@ -32,7 +32,10 @@ const Auth = () => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_IN" && session) {
-        await checkUserRoleAndRedirect(session.user.id);
+        // Pequeño delay para asegurar que el componente está listo
+        setTimeout(async () => {
+          await checkUserRoleAndRedirect(session.user.id);
+        }, 100);
       }
     });
 
@@ -42,20 +45,26 @@ const Auth = () => {
   const checkUserRoleAndRedirect = async (userId: string) => {
     try {
       // Verificar si el usuario es un cliente
-      const { data: cliente } = await supabase
+      const { data: cliente, error } = await supabase
         .from("clientes")
         .select("id")
         .eq("user_id", userId)
         .maybeSingle();
 
-      if (cliente) {
-        navigate("/portal-cliente");
-      } else {
+      if (error) {
+        console.error("Error checking user role:", error);
         navigate("/dashboard");
+        return;
+      }
+
+      if (cliente) {
+        navigate("/portal-cliente", { replace: true });
+      } else {
+        navigate("/dashboard", { replace: true });
       }
     } catch (error) {
       console.error("Error checking user role:", error);
-      navigate("/dashboard");
+      navigate("/dashboard", { replace: true });
     }
   };
 

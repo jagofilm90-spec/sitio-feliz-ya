@@ -928,6 +928,27 @@ const Empleados = () => {
     return docsActivos.length;
   };
 
+  // Función helper para contar campos de información personal completados
+  const getInformacionCompleta = (empleado: Empleado): { completos: number; total: number } => {
+    const camposRequeridos = [
+      empleado.nombre,
+      empleado.primer_apellido,
+      empleado.rfc,
+      empleado.curp,
+      empleado.fecha_nacimiento,
+      empleado.contacto_emergencia_nombre,
+      empleado.contacto_emergencia_telefono,
+      empleado.telefono,
+      empleado.email,
+    ];
+    
+    const camposCompletos = camposRequeridos.filter(campo => campo && campo.trim() !== "");
+    return {
+      completos: camposCompletos.length,
+      total: 9
+    };
+  };
+
   const resetForm = () => {
     setFormData({
       nombre_completo: "",
@@ -1764,6 +1785,7 @@ const Empleados = () => {
                         <TableHead>Contacto</TableHead>
                         <TableHead>Fecha Ingreso</TableHead>
                         <TableHead>Usuario Sistema</TableHead>
+                        <TableHead>Información</TableHead>
                         <TableHead>Documentos</TableHead>
                         <TableHead>Estado</TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
@@ -1772,7 +1794,7 @@ const Empleados = () => {
                     <TableBody>
                       {filteredEmpleados.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={tab === 'todos' ? 8 : 7} className="text-center text-muted-foreground">
+                          <TableCell colSpan={tab === 'todos' ? 9 : 8} className="text-center text-muted-foreground">
                             No se encontraron empleados
                           </TableCell>
                         </TableRow>
@@ -1798,6 +1820,17 @@ const Empleados = () => {
                               <span className="text-sm text-muted-foreground">
                                 {getUsuarioNombre(empleado.user_id)}
                               </span>
+                            </TableCell>
+                            <TableCell>
+                              {(() => {
+                                const info = getInformacionCompleta(empleado);
+                                const todoCompleto = info.completos === info.total;
+                                return (
+                                  <Badge variant={todoCompleto ? "default" : "secondary"}>
+                                    {info.completos}/{info.total}
+                                  </Badge>
+                                );
+                              })()}
                             </TableCell>
                             <TableCell>
                               <div className="flex flex-col gap-1">
@@ -1884,6 +1917,7 @@ const Empleados = () => {
                       <TableHead>Vencimiento Licencia</TableHead>
                       <TableHead>Fecha Ingreso</TableHead>
                       <TableHead>Usuario Sistema</TableHead>
+                      <TableHead>Información</TableHead>
                       <TableHead>Documentos</TableHead>
                       <TableHead>Estado</TableHead>
                       <TableHead className="text-right">Acciones</TableHead>
@@ -1892,7 +1926,7 @@ const Empleados = () => {
                   <TableBody>
                     {filteredEmpleados.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center text-muted-foreground">
+                        <TableCell colSpan={9} className="text-center text-muted-foreground">
                           No se encontraron vendedores
                         </TableCell>
                       </TableRow>
@@ -1976,6 +2010,17 @@ const Empleados = () => {
                               <span className="text-sm text-muted-foreground">
                                 {getUsuarioNombre(empleado.user_id)}
                               </span>
+                            </TableCell>
+                            <TableCell>
+                              {(() => {
+                                const info = getInformacionCompleta(empleado);
+                                const todoCompleto = info.completos === info.total;
+                                return (
+                                  <Badge variant={todoCompleto ? "default" : "secondary"}>
+                                    {info.completos}/{info.total}
+                                  </Badge>
+                                );
+                              })()}
                             </TableCell>
                             <TableCell>
                               <div className="flex flex-col gap-1">
@@ -2062,6 +2107,7 @@ const Empleados = () => {
                       <TableHead>Vencimiento Licencia</TableHead>
                       <TableHead>Fecha Ingreso</TableHead>
                       <TableHead>Usuario Sistema</TableHead>
+                      <TableHead>Información</TableHead>
                       <TableHead>Documentos</TableHead>
                       <TableHead>Estado</TableHead>
                       <TableHead className="text-right">Acciones</TableHead>
@@ -2070,7 +2116,7 @@ const Empleados = () => {
                   <TableBody>
                     {filteredEmpleados.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center text-muted-foreground">
+                        <TableCell colSpan={9} className="text-center text-muted-foreground">
                           No se encontraron choferes
                         </TableCell>
                       </TableRow>
@@ -2154,6 +2200,17 @@ const Empleados = () => {
                               <span className="text-sm text-muted-foreground">
                                 {getUsuarioNombre(empleado.user_id)}
                               </span>
+                            </TableCell>
+                            <TableCell>
+                              {(() => {
+                                const info = getInformacionCompleta(empleado);
+                                const todoCompleto = info.completos === info.total;
+                                return (
+                                  <Badge variant={todoCompleto ? "default" : "secondary"}>
+                                    {info.completos}/{info.total}
+                                  </Badge>
+                                );
+                              })()}
                             </TableCell>
                             <TableCell>
                               <div className="flex flex-col gap-1">

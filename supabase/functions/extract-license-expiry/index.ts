@@ -69,14 +69,14 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: "Eres un asistente que extrae información de licencias de conducir mexicanas. Tu tarea es encontrar la fecha de vencimiento. Si la licencia dice PERMANENTE o no tiene fecha de vencimiento, responde 'PERMANENTE'. Si encuentras una fecha, responde SOLO con la fecha en formato YYYY-MM-DD. Si no encuentras ni fecha ni la palabra PERMANENTE, responde 'NO_ENCONTRADA'."
+            content: "Eres un asistente que extrae información de licencias de conducir mexicanas. Tu tarea es encontrar la fecha de vencimiento. IMPORTANTE: Las licencias mexicanas usan el formato DD-MM-YYYY (día-mes-año). Si la licencia dice PERMANENTE o no tiene fecha de vencimiento, responde 'PERMANENTE'. Si encuentras una fecha, debes convertirla correctamente de formato mexicano DD-MM-YYYY a formato YYYY-MM-DD. Por ejemplo: si ves '09-08-2026' significa 9 de agosto de 2026, y debes responder '2026-08-09'. Si no encuentras ni fecha ni la palabra PERMANENTE, responde 'NO_ENCONTRADA'."
           },
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: "¿Cuál es la fecha de vencimiento de esta licencia de conducir? Si es permanente, responde 'PERMANENTE'. Si tiene fecha, responde en formato YYYY-MM-DD."
+                text: "¿Cuál es la fecha de vencimiento de esta licencia de conducir? Recuerda que las fechas en México están en formato DD-MM-YYYY (día-mes-año). Si es permanente, responde 'PERMANENTE'. Si tiene fecha, conviértela correctamente a formato YYYY-MM-DD."
               },
               {
                 type: "image_url",

@@ -51,6 +51,11 @@ export default function Usuarios() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserWithRoles | null>(null);
+  const [editUserFields, setEditUserFields] = useState({
+    nombre: "",
+    primer_apellido: "",
+    segundo_apellido: "",
+  });
   const [userToDelete, setUserToDelete] = useState<UserWithRoles | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [resetPasswordUser, setResetPasswordUser] = useState<UserWithRoles | null>(null);
@@ -207,16 +212,42 @@ export default function Usuarios() {
     if (!editingUser) return;
 
     try {
+      // Construir nombre completo desde los campos separados
+      const fullName = `${editUserFields.nombre} ${editUserFields.primer_apellido} ${editUserFields.segundo_apellido}`.trim();
+
       // Actualizar nombre completo y teléfono en profiles
       const { error: profileError } = await supabase
         .from("profiles")
         .update({ 
-          full_name: editingUser.full_name,
+          full_name: fullName,
           phone: editingUser.phone 
         })
         .eq("id", editingUser.id);
 
       if (profileError) throw profileError;
+
+      // Actualizar empleado vinculado si existe
+      const { data: empleadoVinculado } = await supabase
+        .from("empleados")
+        .select("id")
+        .eq("user_id", editingUser.id)
+        .maybeSingle();
+
+      if (empleadoVinculado) {
+        const { error: empleadoError } = await supabase
+          .from("empleados")
+          .update({
+            nombre: editUserFields.nombre,
+            primer_apellido: editUserFields.primer_apellido,
+            segundo_apellido: editUserFields.segundo_apellido,
+            nombre_completo: fullName,
+          })
+          .eq("id", empleadoVinculado.id);
+
+        if (empleadoError) {
+          console.error("Error actualizando empleado:", empleadoError);
+        }
+      }
 
       // Eliminar roles actuales
       const { error: deleteError } = await supabase
@@ -240,11 +271,12 @@ export default function Usuarios() {
 
       toast({
         title: "Usuario actualizado",
-        description: `${editingUser.full_name} ha sido actualizado correctamente`,
+        description: `${fullName} ha sido actualizado correctamente`,
       });
 
       setIsEditDialogOpen(false);
       setEditingUser(null);
+      setEditUserFields({ nombre: "", primer_apellido: "", segundo_apellido: "" });
       loadUsers();
     } catch (error: any) {
       console.error("Error updating user:", error);
@@ -544,7 +576,17 @@ export default function Usuarios() {
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => {
+                                    const nombrePartes = user.full_name.trim().split(/\s+/);
+                                    const nombre = nombrePartes[0] || "";
+                                    const primerApellido = nombrePartes[1] || "";
+                                    const segundoApellido = nombrePartes.slice(2).join(" ") || "";
+                                    
                                     setEditingUser(user);
+                                    setEditUserFields({
+                                      nombre,
+                                      primer_apellido: primerApellido,
+                                      segundo_apellido: segundoApellido,
+                                    });
                                     setIsEditDialogOpen(true);
                                   }}
                                 >
@@ -576,18 +618,41 @@ export default function Usuarios() {
             <DialogHeader>
               <DialogTitle>Editar Usuario</DialogTitle>
               <DialogDescription>
-                Modifica el teléfono y roles de {editingUser?.full_name}
+                Modifica los datos y roles del usuario
               </DialogDescription>
             </DialogHeader>
             {editingUser && (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="edit_full_name">Nombre Completo</Label>
+                  <Label htmlFor="edit_nombre">Nombre *</Label>
                   <Input 
-                    id="edit_full_name"
-                    value={editingUser.full_name}
-                    onChange={(e) => setEditingUser({ ...editingUser, full_name: e.target.value })}
+                    id="edit_nombre"
+                    value={editUserFields.nombre}
+                    onChange={(e) => setEditUserFields({ ...editUserFields, nombre: e.target.value })}
+                    required
+                    placeholder="Nombre(s)"
                   />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_primer_apellido">Primer Apellido *</Label>
+                    <Input 
+                      id="edit_primer_apellido"
+                      value={editUserFields.primer_apellido}
+                      onChange={(e) => setEditUserFields({ ...editUserFields, primer_apellido: e.target.value })}
+                      required
+                      placeholder="Primer apellido"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_segundo_apellido">Segundo Apellido</Label>
+                    <Input 
+                      id="edit_segundo_apellido"
+                      value={editUserFields.segundo_apellido}
+                      onChange={(e) => setEditUserFields({ ...editUserFields, segundo_apellido: e.target.value })}
+                      placeholder="Segundo apellido (opcional)"
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label>Correo</Label>

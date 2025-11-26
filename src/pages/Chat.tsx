@@ -280,23 +280,21 @@ const Chat = () => {
             mensajesNoLeidos = count || 0;
           }
 
-          // Cargar participantes para chats individuales
+          // Cargar participantes para todas las conversaciones
           let participantes: UserProfile[] = [];
-          if (conv.tipo === 'individual') {
-            const { data: participantesData } = await supabase
-              .from('conversacion_participantes')
-              .select('user_id')
-              .eq('conversacion_id', conv.id);
+          const { data: participantesData } = await supabase
+            .from('conversacion_participantes')
+            .select('user_id')
+            .eq('conversacion_id', conv.id);
 
-            if (participantesData) {
-              const userIds = participantesData.map(p => p.user_id);
-              const { data: profiles } = await supabase
-                .from('profiles')
-                .select('id, full_name, email')
-                .in('id', userIds);
-              
-              participantes = profiles || [];
-            }
+          if (participantesData) {
+            const userIds = participantesData.map(p => p.user_id);
+            const { data: profiles } = await supabase
+              .from('profiles')
+              .select('id, full_name, email')
+              .in('id', userIds);
+            
+            participantes = profiles || [];
           }
 
           return {
@@ -385,8 +383,6 @@ const Chat = () => {
     try {
       // Verificar sesión y autenticación
       const { data: { session } } = await supabase.auth.getSession();
-      console.log('🔐 Session al crear conversación:', session?.user?.id);
-      console.log('🔐 Current user ID:', currentUserId);
 
       if (!session || !currentUserId) {
         toast({
@@ -415,28 +411,19 @@ const Chat = () => {
         return;
       }
 
-      const dataToInsert = {
-        tipo: tipoGrupo,
-        nombre: null,
-        puesto: tipoGrupo === 'grupo_puesto' ? puestoGrupo : null,
-        creado_por: currentUserId,
-      };
-
-      console.log('📝 Datos a insertar:', dataToInsert);
-
       // Crear conversación
       const { data: nuevaConv, error: convError } = await supabase
         .from('conversaciones')
-        .insert(dataToInsert)
+        .insert({
+          tipo: tipoGrupo,
+          nombre: null,
+          puesto: tipoGrupo === 'grupo_puesto' ? puestoGrupo : null,
+          creado_por: currentUserId,
+        })
         .select()
         .single();
 
-      console.log('✅ Respuesta insert:', { nuevaConv, convError });
-
-      if (convError) {
-        console.error('❌ Error completo:', convError);
-        throw convError;
-      }
+      if (convError) throw convError;
 
       // Agregar participantes
       let participantesIds = [...usuariosSeleccionados];
@@ -525,6 +512,13 @@ const Chat = () => {
     if (conv.nombre) return conv.nombre;
     if (conv.tipo === 'grupo_puesto') return `Grupo: ${conv.puesto}`;
     if (conv.tipo === 'broadcast') return 'Todos los usuarios';
+    
+    // Para chat individual, mostrar el nombre del otro usuario
+    if (conv.tipo === 'individual' && conv.participantes) {
+      const otroUsuario = conv.participantes.find(p => p.id !== currentUserId);
+      return otroUsuario ? otroUsuario.full_name : 'Chat individual';
+    }
+    
     return 'Chat individual';
   };
 
@@ -725,11 +719,31 @@ const Chat = () => {
               {/* Header del chat */}
               <div className="p-4 border-b">
                 <h3 className="font-bold">{getNombreConversacion(conversacionActiva)}</h3>
-                <p className="text-sm text-muted-foreground">
-                  {conversacionActiva.tipo === 'broadcast' && 'Mensaje para todos los usuarios'}
-                  {conversacionActiva.tipo === 'grupo_puesto' && `Grupo de ${conversacionActiva.puesto}`}
-                  {conversacionActiva.tipo === 'individual' && 'Chat individual'}
-                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="text-sm text-muted-foreground">
+                    {conversacionActiva.tipo === 'broadcast' && 'Mensaje para todos los usuarios'}
+                    {conversacionActiva.tipo === 'grupo_puesto' && `Grupo de ${conversacionActiva.puesto}`}
+                    {conversacionActiva.tipo === 'individual' && 'Chat individual'}
+                  </p>
+                  
+                  {/* Mostrar usuarios en línea para grupos */}
+                  {(conversacionActiva.tipo === 'grupo_puesto' || conversacionActiva.tipo === 'broadcast') && (
+                    <div className="flex items-center gap-1 ml-auto">
+                      <div className="w-2 h-2 bg-green-500 rounded-full" />
+                      <span className="text-xs text-muted-foreground">
+                        {conversacionActiva.participantes?.filter(p => usuariosEnLinea.has(p.id)).length || 0} en línea
+                      </span>
+                    </div>
+                  )}
+                  
+                  {/* Indicador en línea para chat individual */}
+                  {conversacionActiva.tipo === 'individual' && getUsuarioEnLineaDeConversacion(conversacionActiva) && (
+                    <div className="flex items-center gap-1 ml-auto">
+                      <div className="w-2 h-2 bg-green-500 rounded-full" />
+                      <span className="text-xs text-green-600">En línea</span>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Mensajes */}

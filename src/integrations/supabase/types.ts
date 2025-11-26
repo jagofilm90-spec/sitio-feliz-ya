@@ -85,8 +85,10 @@ export type Database = {
           created_at: string
           direccion: string | null
           email: string | null
+          fecha_baja: string | null
           fecha_ingreso: string
           id: string
+          motivo_baja: string | null
           nombre_completo: string
           notas: string | null
           numero_seguro_social: string | null
@@ -102,8 +104,10 @@ export type Database = {
           created_at?: string
           direccion?: string | null
           email?: string | null
+          fecha_baja?: string | null
           fecha_ingreso?: string
           id?: string
+          motivo_baja?: string | null
           nombre_completo: string
           notas?: string | null
           numero_seguro_social?: string | null
@@ -119,8 +123,10 @@ export type Database = {
           created_at?: string
           direccion?: string | null
           email?: string | null
+          fecha_baja?: string | null
           fecha_ingreso?: string
           id?: string
+          motivo_baja?: string | null
           nombre_completo?: string
           notas?: string | null
           numero_seguro_social?: string | null

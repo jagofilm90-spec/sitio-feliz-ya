@@ -57,6 +57,8 @@ interface Empleado {
   numero_seguro_social: string | null;
   sueldo_bruto: number | null;
   periodo_pago: "semanal" | "quincenal" | null;
+  fecha_baja: string | null;
+  motivo_baja: "renuncia" | "despido" | "abandono" | null;
   created_at: string;
   updated_at: string;
 }
@@ -73,6 +75,9 @@ interface EmpleadoDocumento {
     | "comprobante_domicilio"
     | "curp"
     | "rfc"
+    | "carta_renuncia"
+    | "carta_despido"
+    | "comprobante_finiquito"
     | "otro";
   nombre_archivo: string;
   ruta_storage: string;
@@ -112,6 +117,8 @@ const Empleados = () => {
     numero_seguro_social: "",
     sueldo_bruto: "",
     periodo_pago: "",
+    fecha_baja: "",
+    motivo_baja: "",
   });
 
   const [docFormData, setDocFormData] = useState({
@@ -185,6 +192,8 @@ const Empleados = () => {
         user_id: formData.user_id || null,
         sueldo_bruto: formData.sueldo_bruto ? parseFloat(formData.sueldo_bruto) : null,
         periodo_pago: formData.periodo_pago || null,
+        fecha_baja: formData.fecha_baja || null,
+        motivo_baja: formData.motivo_baja || null,
       };
 
       if (editingEmpleado) {
@@ -237,6 +246,8 @@ const Empleados = () => {
       numero_seguro_social: empleado.numero_seguro_social || "",
       sueldo_bruto: empleado.sueldo_bruto ? empleado.sueldo_bruto.toString() : "",
       periodo_pago: empleado.periodo_pago || "",
+      fecha_baja: empleado.fecha_baja || "",
+      motivo_baja: empleado.motivo_baja || "",
     });
     setIsDialogOpen(true);
   };
@@ -355,6 +366,8 @@ const Empleados = () => {
       numero_seguro_social: "",
       sueldo_bruto: "",
       periodo_pago: "",
+      fecha_baja: "",
+      motivo_baja: "",
     });
     setEditingEmpleado(null);
   };
@@ -389,6 +402,9 @@ const Empleados = () => {
       comprobante_domicilio: "Comprobante de Domicilio",
       curp: "CURP",
       rfc: "RFC",
+      carta_renuncia: "Carta de Renuncia",
+      carta_despido: "Carta de Despido",
+      comprobante_finiquito: "Comprobante de Finiquito",
       otro: "Otro",
     };
     return labels[tipo];
@@ -616,6 +632,51 @@ const Empleados = () => {
                   <Label htmlFor="activo">Empleado activo</Label>
                 </div>
 
+                {!formData.activo && (
+                  <div className="border-t pt-4 bg-muted/30 p-4 rounded-lg">
+                    <h3 className="font-medium mb-3 text-destructive">
+                      Información de Baja
+                    </h3>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="fecha_baja">Fecha de Baja</Label>
+                          <Input
+                            id="fecha_baja"
+                            type="date"
+                            value={formData.fecha_baja}
+                            onChange={(e) =>
+                              setFormData({ ...formData, fecha_baja: e.target.value })
+                            }
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="motivo_baja">Motivo de Baja</Label>
+                          <Select
+                            value={formData.motivo_baja || undefined}
+                            onValueChange={(value) =>
+                              setFormData({ ...formData, motivo_baja: value })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar motivo" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="renuncia">Renuncia</SelectItem>
+                              <SelectItem value="despido">Despido</SelectItem>
+                              <SelectItem value="abandono">Abandono (No regresó)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Puedes subir la carta de renuncia/despido y el comprobante de
+                        finiquito en la sección de documentos después de guardar
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex justify-end gap-2">
                   <Button
                     type="button"
@@ -723,9 +784,18 @@ const Empleados = () => {
                             </Button>
                           </TableCell>
                           <TableCell>
-                            <Badge variant={empleado.activo ? "default" : "secondary"}>
-                              {empleado.activo ? "Activo" : "Inactivo"}
-                            </Badge>
+                            <div className="space-y-1">
+                              <Badge variant={empleado.activo ? "default" : "secondary"}>
+                                {empleado.activo ? "Activo" : "Inactivo"}
+                              </Badge>
+                              {!empleado.activo && empleado.motivo_baja && (
+                                <div className="text-xs text-muted-foreground">
+                                  {empleado.motivo_baja === "renuncia" && "Renuncia"}
+                                  {empleado.motivo_baja === "despido" && "Despido"}
+                                  {empleado.motivo_baja === "abandono" && "Abandono"}
+                                </div>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="text-right">
                             <Button
@@ -780,6 +850,9 @@ const Empleados = () => {
                         <SelectItem value="comprobante_domicilio">Comprobante de Domicilio</SelectItem>
                         <SelectItem value="curp">CURP</SelectItem>
                         <SelectItem value="rfc">RFC</SelectItem>
+                        <SelectItem value="carta_renuncia">Carta de Renuncia</SelectItem>
+                        <SelectItem value="carta_despido">Carta de Despido</SelectItem>
+                        <SelectItem value="comprobante_finiquito">Comprobante de Finiquito</SelectItem>
                         <SelectItem value="otro">Otro</SelectItem>
                       </SelectContent>
                     </Select>

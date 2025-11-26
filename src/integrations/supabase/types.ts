@@ -89,7 +89,10 @@ export type Database = {
           id: string
           nombre_completo: string
           notas: string | null
+          numero_seguro_social: string | null
+          periodo_pago: string | null
           puesto: string
+          sueldo_bruto: number | null
           telefono: string | null
           updated_at: string
           user_id: string | null
@@ -103,7 +106,10 @@ export type Database = {
           id?: string
           nombre_completo: string
           notas?: string | null
+          numero_seguro_social?: string | null
+          periodo_pago?: string | null
           puesto: string
+          sueldo_bruto?: number | null
           telefono?: string | null
           updated_at?: string
           user_id?: string | null
@@ -117,7 +123,10 @@ export type Database = {
           id?: string
           nombre_completo?: string
           notas?: string | null
+          numero_seguro_social?: string | null
+          periodo_pago?: string | null
           puesto?: string
+          sueldo_bruto?: number | null
           telefono?: string | null
           updated_at?: string
           user_id?: string | null

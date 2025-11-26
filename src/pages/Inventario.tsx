@@ -30,6 +30,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { NotificacionesCaducidad } from "@/components/NotificacionesCaducidad";
 
 const Inventario = () => {
   const [movimientos, setMovimientos] = useState<any[]>([]);
@@ -37,6 +38,7 @@ const Inventario = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -67,7 +69,7 @@ const Inventario = () => {
           .limit(100),
         supabase
           .from("productos")
-          .select("id, codigo, nombre, stock_actual")
+          .select("id, codigo, nombre, stock_actual, maneja_caducidad")
           .eq("activo", true)
           .order("nombre"),
       ]);
@@ -90,6 +92,16 @@ const Inventario = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validar fecha de caducidad si el producto la requiere
+    if (selectedProduct?.maneja_caducidad && !formData.fecha_caducidad) {
+      toast({
+        title: "Error",
+        description: "Este producto requiere fecha de caducidad",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
       const { data: session } = await supabase.auth.getSession();
@@ -126,6 +138,7 @@ const Inventario = () => {
   };
 
   const resetForm = () => {
+    setSelectedProduct(null);
     setFormData({
       producto_id: "",
       tipo_movimiento: "entrada",
@@ -135,6 +148,12 @@ const Inventario = () => {
       referencia: "",
       notas: "",
     });
+  };
+
+  const handleProductChange = (productoId: string) => {
+    const producto = productos.find(p => p.id === productoId);
+    setSelectedProduct(producto);
+    setFormData({ ...formData, producto_id: productoId });
   };
 
   const filteredMovimientos = movimientos.filter(
@@ -161,6 +180,8 @@ const Inventario = () => {
   return (
     <Layout>
       <div className="space-y-6">
+        <NotificacionesCaducidad />
+        
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold">Inventario</h1>
@@ -186,7 +207,7 @@ const Inventario = () => {
                     <Label htmlFor="producto_id">Producto *</Label>
                     <Select
                       value={formData.producto_id}
-                      onValueChange={(value) => setFormData({ ...formData, producto_id: value })}
+                      onValueChange={handleProductChange}
                       required
                     >
                       <SelectTrigger>
@@ -196,6 +217,7 @@ const Inventario = () => {
                         {productos.map((producto) => (
                           <SelectItem key={producto.id} value={producto.id}>
                             {producto.codigo} - {producto.nombre} (Stock: {producto.stock_actual})
+                            {producto.maneja_caducidad && " 📅"}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -230,13 +252,21 @@ const Inventario = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="fecha_caducidad">Fecha de Caducidad</Label>
+                    <Label htmlFor="fecha_caducidad">
+                      Fecha de Caducidad {selectedProduct?.maneja_caducidad && "*"}
+                    </Label>
                     <Input
                       id="fecha_caducidad"
                       type="date"
                       value={formData.fecha_caducidad}
                       onChange={(e) => setFormData({ ...formData, fecha_caducidad: e.target.value })}
+                      required={selectedProduct?.maneja_caducidad}
                     />
+                    {selectedProduct?.maneja_caducidad && (
+                      <p className="text-xs text-muted-foreground">
+                        Este producto requiere fecha de caducidad
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">

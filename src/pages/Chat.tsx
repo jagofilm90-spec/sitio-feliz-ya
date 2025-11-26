@@ -612,11 +612,27 @@ const Chat = () => {
     if (conv.tipo === 'broadcast') return 'Todos los usuarios';
     
     // Para chat individual, mostrar el nombre del otro usuario
-    if (conv.tipo === 'individual' && conv.participantes && conv.participantes.length > 0) {
-      // Si todavía no sabemos quién soy yo, no intentamos adivinar el otro usuario
-      if (!currentUserId) return 'Chat individual';
+    if (conv.tipo === 'individual') {
+      console.log('Conversación individual:', {
+        convId: conv.id,
+        currentUserId,
+        participantes: conv.participantes,
+        numParticipantes: conv.participantes?.length
+      });
+      
+      if (!currentUserId) {
+        console.log('No hay currentUserId todavía');
+        return 'Cargando...';
+      }
+      
+      if (!conv.participantes || conv.participantes.length === 0) {
+        console.log('No hay participantes cargados');
+        return 'Chat individual';
+      }
 
       const otroUsuario = conv.participantes.find(p => p.id !== currentUserId);
+      console.log('Otro usuario encontrado:', otroUsuario);
+      
       if (otroUsuario) {
         return otroUsuario.full_name;
       }

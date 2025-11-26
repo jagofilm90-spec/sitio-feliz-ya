@@ -386,6 +386,31 @@ const Empleados = () => {
         }
 
         if (crearUsuario) {
+          // Verificar si el email ya está registrado
+          const { data: existingUser, error: emailCheckError } = await supabase
+            .from("profiles")
+            .select("id, email, full_name")
+            .eq("email", formData.email)
+            .maybeSingle();
+
+          if (emailCheckError) {
+            toast({
+              title: "Error",
+              description: "Error al verificar el email",
+              variant: "destructive",
+            });
+            return;
+          }
+
+          if (existingUser) {
+            toast({
+              title: "Email ya registrado",
+              description: `El email ${formData.email} ya está registrado con el usuario "${existingUser.full_name}". Por favor, selecciona ese usuario en lugar de crear uno nuevo.`,
+              variant: "destructive",
+            });
+            return;
+          }
+
           try {
             const { data: { session } } = await supabase.auth.getSession();
             

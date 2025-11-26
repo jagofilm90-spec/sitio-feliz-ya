@@ -176,7 +176,6 @@ const Empleados = () => {
     clabe_interbancaria: "",
     telefono: "",
     email: "",
-    direccion: "",
     fecha_ingreso: new Date().toISOString().split("T")[0],
     puesto: "",
     user_id: "",
@@ -636,7 +635,6 @@ const Empleados = () => {
       clabe_interbancaria: empleado.clabe_interbancaria || "",
       telefono: empleado.telefono || "",
       email: empleado.email || "",
-      direccion: empleado.direccion || "",
       fecha_ingreso: empleado.fecha_ingreso,
       puesto: empleado.puesto,
       user_id: empleado.user_id || "",
@@ -949,7 +947,6 @@ const Empleados = () => {
       clabe_interbancaria: "",
       telefono: "",
       email: "",
-      direccion: "",
       fecha_ingreso: new Date().toISOString().split("T")[0],
       puesto: "",
       user_id: "",
@@ -1339,18 +1336,6 @@ const Empleados = () => {
                   </div>
                 </div>
 
-                <div>
-                  <Label htmlFor="direccion">Dirección</Label>
-                  <Input
-                    id="direccion"
-                    value={formData.direccion}
-                    onChange={(e) =>
-                      setFormData({ ...formData, direccion: e.target.value })
-                    }
-                    autoComplete="off"
-                  />
-                </div>
-
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="fecha_ingreso">Fecha de Ingreso *</Label>
@@ -1410,6 +1395,48 @@ const Empleados = () => {
                   <p className="text-xs text-muted-foreground mt-1">
                     Vincula este empleado con su cuenta de usuario del sistema
                   </p>
+                </div>
+
+                {/* Indicador de completitud de datos personales */}
+                <div className="border-t pt-4">
+                  {(() => {
+                    const camposRequeridos = [
+                      { valor: formData.nombre, label: "Nombre" },
+                      { valor: formData.primer_apellido, label: "Primer Apellido" },
+                      { valor: formData.rfc, label: "RFC" },
+                      { valor: formData.curp, label: "CURP" },
+                      { valor: formData.fecha_nacimiento, label: "Fecha de Nacimiento" },
+                      { valor: formData.contacto_emergencia_nombre, label: "Contacto de Emergencia (Nombre)" },
+                      { valor: formData.contacto_emergencia_telefono, label: "Contacto de Emergencia (Teléfono)" },
+                      { valor: formData.telefono, label: "Teléfono" },
+                      { valor: formData.email, label: "Email" },
+                    ];
+                    
+                    const camposCompletos = camposRequeridos.filter(c => c.valor && c.valor.trim() !== "");
+                    const camposFaltantes = camposRequeridos.filter(c => !c.valor || c.valor.trim() === "");
+                    const todoCompleto = camposFaltantes.length === 0;
+
+                    return (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-medium">Datos Personales</h4>
+                          <Badge variant={todoCompleto ? "default" : "secondary"}>
+                            {camposCompletos.length} de {camposRequeridos.length} campos completos
+                          </Badge>
+                        </div>
+                        {!todoCompleto && (
+                          <div className="bg-muted/50 p-3 rounded-lg">
+                            <p className="text-xs text-muted-foreground mb-2">Campos faltantes:</p>
+                            <ul className="text-xs text-muted-foreground space-y-1">
+                              {camposFaltantes.map((campo, idx) => (
+                                <li key={idx}>• {campo.label}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div>

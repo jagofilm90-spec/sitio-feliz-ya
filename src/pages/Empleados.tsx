@@ -861,14 +861,15 @@ const Empleados = () => {
     return documentosBase; // 8 documentos
   };
 
-  // Función helper para contar documentos subidos (excluyendo terminación)
+  // Función helper para contar documentos subidos (excluyendo terminación y "otro")
   const getDocumentosSubidos = (empleadoId: string): number => {
     const docs = documentos[empleadoId] || [];
-    // Excluir documentos de terminación del conteo
+    // Excluir documentos de terminación y "otro" del conteo
     const docsActivos = docs.filter(doc => 
       doc.tipo_documento !== "carta_renuncia" && 
       doc.tipo_documento !== "carta_despido" && 
-      doc.tipo_documento !== "comprobante_finiquito"
+      doc.tipo_documento !== "comprobante_finiquito" &&
+      doc.tipo_documento !== "otro"
     );
     return docsActivos.length;
   };

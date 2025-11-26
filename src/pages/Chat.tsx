@@ -1070,8 +1070,7 @@ const Chat = () => {
                                 {mensaje.archivo_tipo?.startsWith('image/') ? (
                                   <a 
                                     href={mensaje.archivo_url} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
+                                    download={mensaje.archivo_nombre}
                                     className="block"
                                   >
                                     <img 
@@ -1083,8 +1082,7 @@ const Chat = () => {
                                 ) : (
                                   <a
                                     href={mensaje.archivo_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                    download={mensaje.archivo_nombre}
                                     className={`flex items-center gap-2 p-2 rounded border ${
                                       esMio 
                                         ? 'border-primary-foreground/20 hover:bg-primary-foreground/10' 

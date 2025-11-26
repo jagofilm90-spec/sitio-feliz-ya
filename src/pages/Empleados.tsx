@@ -408,6 +408,41 @@ const Empleados = () => {
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
+                  <Label htmlFor="user_id">Usuario del Sistema (opcional)</Label>
+                  <Select
+                    value={formData.user_id || undefined}
+                    onValueChange={(value) => {
+                      const usuario = usuarios.find((u) => u.id === value);
+                      if (usuario) {
+                        setFormData({
+                          ...formData,
+                          user_id: value,
+                          nombre_completo: usuario.full_name,
+                          email: usuario.email,
+                          telefono: formData.telefono, // Mantener teléfono si ya existe
+                        });
+                      } else {
+                        setFormData({ ...formData, user_id: value });
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar usuario existente" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {usuarios.map((usuario) => (
+                        <SelectItem key={usuario.id} value={usuario.id}>
+                          {usuario.full_name} ({usuario.email})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Si seleccionas un usuario, se autorellenarán nombre y correo
+                  </p>
+                </div>
+
+                <div>
                   <Label htmlFor="nombre_completo">Nombre Completo *</Label>
                   <Input
                     id="nombre_completo"
@@ -489,29 +524,6 @@ const Empleados = () => {
                   </div>
                 </div>
 
-                <div>
-                  <Label htmlFor="user_id">Usuario del Sistema (opcional)</Label>
-                  <Select
-                    value={formData.user_id || undefined}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, user_id: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sin usuario asignado" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {usuarios.map((usuario) => (
-                        <SelectItem key={usuario.id} value={usuario.id}>
-                          {usuario.full_name} ({usuario.email})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Vincula este empleado con un usuario que tenga acceso al sistema
-                  </p>
-                </div>
 
                 <div>
                   <Label htmlFor="notas">Notas</Label>

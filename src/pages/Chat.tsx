@@ -344,14 +344,6 @@ const Chat = () => {
         return;
       }
 
-      if (tipoGrupo === 'grupo_personalizado' && (!nombreGrupo || usuariosSeleccionados.length < 2)) {
-        toast({
-          title: "Error",
-          description: "Proporciona un nombre y selecciona al menos 2 usuarios",
-          variant: "destructive",
-        });
-        return;
-      }
 
       if (tipoGrupo === 'grupo_puesto' && !puestoGrupo) {
         toast({
@@ -367,7 +359,7 @@ const Chat = () => {
         .from('conversaciones')
         .insert({
           tipo: tipoGrupo,
-          nombre: tipoGrupo === 'grupo_personalizado' ? nombreGrupo : null,
+          nombre: null,
           puesto: tipoGrupo === 'grupo_puesto' ? puestoGrupo : null,
           creado_por: currentUserId,
         })
@@ -494,10 +486,10 @@ const Chat = () => {
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-2xl">
-                  <DialogHeader>
+                   <DialogHeader>
                     <DialogTitle>Nueva Conversación</DialogTitle>
                     <DialogDescription>
-                      Crea un chat individual, grupo personalizado, grupo por puesto o mensaje broadcast
+                      Crea un chat individual, grupo por puesto o mensaje para todos
                     </DialogDescription>
                   </DialogHeader>
                   
@@ -510,23 +502,12 @@ const Chat = () => {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="individual">Chat Individual</SelectItem>
-                          <SelectItem value="grupo_personalizado">Grupo Personalizado</SelectItem>
                           <SelectItem value="grupo_puesto">Grupo por Puesto</SelectItem>
                           <SelectItem value="broadcast">Mensaje a Todos</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
-                    {tipoGrupo === 'grupo_personalizado' && (
-                      <div>
-                        <Label>Nombre del grupo</Label>
-                        <Input
-                          value={nombreGrupo}
-                          onChange={(e) => setNombreGrupo(e.target.value)}
-                          placeholder="ej: Equipo de Ventas"
-                        />
-                      </div>
-                    )}
 
                     {tipoGrupo === 'grupo_puesto' && (
                       <div>
@@ -536,16 +517,14 @@ const Chat = () => {
                             <SelectValue placeholder="Seleccionar puesto" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="Chofer">Choferes</SelectItem>
-                            <SelectItem value="Vendedor">Vendedores</SelectItem>
-                            <SelectItem value="Almacenista">Almacenistas</SelectItem>
                             <SelectItem value="Secretaria">Secretarias</SelectItem>
+                            <SelectItem value="Vendedor">Vendedores</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                     )}
 
-                    {(tipoGrupo === 'individual' || tipoGrupo === 'grupo_personalizado') && (
+                    {tipoGrupo === 'individual' && (
                       <div>
                         <Label>Selecciona usuarios</Label>
                         <ScrollArea className="h-64 border rounded-md p-3">
@@ -575,7 +554,7 @@ const Chat = () => {
                       </div>
                     )}
 
-                    {(tipoGrupo === 'individual' || tipoGrupo === 'grupo_personalizado') && (
+                    {tipoGrupo === 'individual' && (
                       <div className="bg-muted p-3 rounded-md mb-3">
                         <p className="text-sm font-medium mb-2">Usuarios en línea:</p>
                         <div className="flex flex-wrap gap-2">
@@ -679,7 +658,6 @@ const Chat = () => {
                 <p className="text-sm text-muted-foreground">
                   {conversacionActiva.tipo === 'broadcast' && 'Mensaje para todos los usuarios'}
                   {conversacionActiva.tipo === 'grupo_puesto' && `Grupo de ${conversacionActiva.puesto}`}
-                  {conversacionActiva.tipo === 'grupo_personalizado' && 'Grupo personalizado'}
                   {conversacionActiva.tipo === 'individual' && 'Chat individual'}
                 </p>
               </div>

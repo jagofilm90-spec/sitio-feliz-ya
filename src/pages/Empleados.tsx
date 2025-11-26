@@ -51,6 +51,8 @@ import {
   Download,
   Trash2,
   Users,
+  Bell,
+  AlertTriangle,
 } from "lucide-react";
 
 interface Empleado {
@@ -88,9 +90,11 @@ interface EmpleadoDocumento {
     | "carta_renuncia"
     | "carta_despido"
     | "comprobante_finiquito"
+    | "licencia_conducir"
     | "otro";
   nombre_archivo: string;
   ruta_storage: string;
+  fecha_vencimiento: string | null;
   created_at: string;
 }
 
@@ -109,11 +113,24 @@ interface UserProfile {
   phone: string | null;
 }
 
+interface Notificacion {
+  id: string;
+  tipo: string;
+  titulo: string;
+  descripcion: string;
+  empleado_id: string | null;
+  documento_id: string | null;
+  fecha_vencimiento: string | null;
+  leida: boolean;
+  created_at: string;
+}
+
 const Empleados = () => {
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [usuarios, setUsuarios] = useState<UserProfile[]>([]);
   const [documentos, setDocumentos] = useState<Record<string, EmpleadoDocumento[]>>({});
   const [documentosPendientes, setDocumentosPendientes] = useState<Record<string, EmpleadoDocumentoPendiente[]>>({});
+  const [notificaciones, setNotificaciones] = useState<Notificacion[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDocDialogOpen, setIsDocDialogOpen] = useState(false);
@@ -154,6 +171,7 @@ const Empleados = () => {
   useEffect(() => {
     loadEmpleados();
     loadUsuarios();
+    loadNotificaciones();
   }, []);
 
   const loadEmpleados = async () => {
@@ -219,6 +237,21 @@ const Empleados = () => {
         description: error.message,
         variant: "destructive",
       });
+    }
+  };
+
+  const loadNotificaciones = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("notificaciones")
+        .select("*")
+        .eq("leida", false)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setNotificaciones(data || []);
+    } catch (error: any) {
+      console.error("Error loading notifications:", error);
     }
   };
 
@@ -372,16 +405,53 @@ const Empleados = () => {
 
       if (uploadError) throw uploadError;
 
-      const { error: dbError } = await supabase.from("empleados_documentos").insert([
+      const { data: insertData, error: dbError } = await supabase.from("empleados_documentos").insert([
         {
           empleado_id: selectedEmpleado,
           tipo_documento: docFormData.tipo_documento,
           nombre_archivo: docFormData.file.name,
           ruta_storage: fileName,
         },
-      ]);
+      ]).select();
 
       if (dbError) throw dbError;
+
+      // Si es licencia de conducir, llamar al edge function para extraer fecha
+      if (docFormData.tipo_documento === "licencia_conducir" && insertData?.[0]) {
+        toast({
+          title: "Procesando licencia",
+          description: "Extrayendo fecha de vencimiento automáticamente...",
+        });
+
+        const { data: aiData, error: aiError } = await supabase.functions.invoke(
+          "extract-license-expiry",
+          {
+            body: {
+              documentoId: insertData[0].id,
+              filePath: fileName,
+            },
+          }
+        );
+
+        if (aiError) {
+          console.error("Error extracting expiry date:", aiError);
+          toast({
+            title: "Advertencia",
+            description: "No se pudo extraer automáticamente la fecha de vencimiento. Puedes agregarla manualmente después.",
+            variant: "destructive",
+          });
+        } else if (aiData?.fecha_vencimiento) {
+          toast({
+            title: "Fecha extraída",
+            description: `Fecha de vencimiento detectada: ${aiData.fecha_vencimiento}`,
+          });
+        } else {
+          toast({
+            title: "No se detectó fecha",
+            description: "No se pudo detectar la fecha de vencimiento automáticamente.",
+          });
+        }
+      }
 
       // Eliminar de pendientes si existe
       await supabase
@@ -589,6 +659,7 @@ const Empleados = () => {
       carta_renuncia: "Carta de Renuncia",
       carta_despido: "Carta de Despido",
       comprobante_finiquito: "Comprobante de Finiquito",
+      licencia_conducir: "Licencia de Conducir",
       otro: "Otro",
     };
     return labels[tipo];
@@ -597,6 +668,48 @@ const Empleados = () => {
   return (
     <Layout>
       <div className="space-y-6">
+        {/* Widget de notificaciones */}
+        {notificaciones.length > 0 && (
+          <Card className="p-4 border-destructive/50 bg-destructive/5">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-destructive mt-0.5" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-destructive mb-2">
+                  {notificaciones.length} Notificación{notificaciones.length > 1 ? "es" : ""} Pendiente{notificaciones.length > 1 ? "s" : ""}
+                </h3>
+                <div className="space-y-2">
+                  {notificaciones.slice(0, 3).map((notif) => (
+                    <div key={notif.id} className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-medium">{notif.titulo}</p>
+                        <p className="text-xs text-muted-foreground">{notif.descripcion}</p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={async () => {
+                          await supabase
+                            .from("notificaciones")
+                            .update({ leida: true })
+                            .eq("id", notif.id);
+                          loadNotificaciones();
+                        }}
+                      >
+                        Marcar leída
+                      </Button>
+                    </div>
+                  ))}
+                  {notificaciones.length > 3 && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Y {notificaciones.length - 3} notificación{notificaciones.length - 3 > 1 ? "es" : ""} más...
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
+
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Empleados</h1>
@@ -1103,6 +1216,7 @@ const Empleados = () => {
                       <SelectContent>
                         <SelectItem value="contrato_laboral">Contrato Laboral</SelectItem>
                         <SelectItem value="ine">INE / Identificación</SelectItem>
+                        <SelectItem value="licencia_conducir">Licencia de Conducir</SelectItem>
                         <SelectItem value="carta_seguro_social">Carta del Seguro Social</SelectItem>
                         <SelectItem value="constancia_situacion_fiscal">Constancia de Situación Fiscal</SelectItem>
                         <SelectItem value="acta_nacimiento">Acta de Nacimiento</SelectItem>
@@ -1155,13 +1269,31 @@ const Empleados = () => {
                           <FileText className="h-5 w-5 text-muted-foreground" />
                             <div>
                               <p className="font-medium text-sm">{doc.nombre_archivo}</p>
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                                 <Badge variant="outline" className="text-xs">
                                   {getTipoDocumentoLabel(doc.tipo_documento)}
                                 </Badge>
                                 <span>
-                                  {new Date(doc.created_at).toLocaleDateString()}
+                                  Subido: {new Date(doc.created_at).toLocaleDateString()}
                                 </span>
+                                {doc.fecha_vencimiento && (
+                                  <>
+                                    <span className="text-muted-foreground">•</span>
+                                    <Badge 
+                                      variant={
+                                        (() => {
+                                          const diasRestantes = Math.ceil((new Date(doc.fecha_vencimiento).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                                          if (diasRestantes < 0) return "destructive";
+                                          if (diasRestantes <= 30) return "destructive";
+                                          return "secondary";
+                                        })()
+                                      }
+                                      className="text-xs"
+                                    >
+                                      Vence: {new Date(doc.fecha_vencimiento).toLocaleDateString()}
+                                    </Badge>
+                                  </>
+                                )}
                               </div>
                             </div>
                         </div>

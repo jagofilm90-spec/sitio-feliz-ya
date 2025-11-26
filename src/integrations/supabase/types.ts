@@ -143,6 +143,7 @@ export type Database = {
         Row: {
           created_at: string
           empleado_id: string
+          fecha_vencimiento: string | null
           id: string
           nombre_archivo: string
           ruta_storage: string
@@ -151,6 +152,7 @@ export type Database = {
         Insert: {
           created_at?: string
           empleado_id: string
+          fecha_vencimiento?: string | null
           id?: string
           nombre_archivo: string
           ruta_storage: string
@@ -159,6 +161,7 @@ export type Database = {
         Update: {
           created_at?: string
           empleado_id?: string
+          fecha_vencimiento?: string | null
           id?: string
           nombre_archivo?: string
           ruta_storage?: string
@@ -379,6 +382,57 @@ export type Database = {
             columns: ["usuario_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notificaciones: {
+        Row: {
+          created_at: string
+          descripcion: string
+          documento_id: string | null
+          empleado_id: string | null
+          fecha_vencimiento: string | null
+          id: string
+          leida: boolean | null
+          tipo: string
+          titulo: string
+        }
+        Insert: {
+          created_at?: string
+          descripcion: string
+          documento_id?: string | null
+          empleado_id?: string | null
+          fecha_vencimiento?: string | null
+          id?: string
+          leida?: boolean | null
+          tipo: string
+          titulo: string
+        }
+        Update: {
+          created_at?: string
+          descripcion?: string
+          documento_id?: string | null
+          empleado_id?: string | null
+          fecha_vencimiento?: string | null
+          id?: string
+          leida?: boolean | null
+          tipo?: string
+          titulo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notificaciones_documento_id_fkey"
+            columns: ["documento_id"]
+            isOneToOne: false
+            referencedRelation: "empleados_documentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notificaciones_empleado_id_fkey"
+            columns: ["empleado_id"]
+            isOneToOne: false
+            referencedRelation: "empleados"
             referencedColumns: ["id"]
           },
         ]

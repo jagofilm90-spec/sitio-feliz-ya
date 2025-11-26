@@ -180,6 +180,14 @@ const Empleados = () => {
     finiquito: null,
   });
 
+  const [terminationPreviewUrls, setTerminationPreviewUrls] = useState<{
+    carta: string | null;
+    finiquito: string | null;
+  }>({
+    carta: null,
+    finiquito: null,
+  });
+
   useEffect(() => {
     loadEmpleados();
     loadUsuarios();
@@ -680,7 +688,37 @@ const Empleados = () => {
       motivo_baja: "",
     });
     setTerminationFiles({ carta: null, finiquito: null });
+    
+    // Limpiar URLs de vista previa
+    if (terminationPreviewUrls.carta) URL.revokeObjectURL(terminationPreviewUrls.carta);
+    if (terminationPreviewUrls.finiquito) URL.revokeObjectURL(terminationPreviewUrls.finiquito);
+    setTerminationPreviewUrls({ carta: null, finiquito: null });
+    
     setEditingEmpleado(null);
+  };
+
+  const handleTerminationFileChange = (
+    type: "carta" | "finiquito",
+    file: File | null
+  ) => {
+    // Limpiar URL anterior si existe
+    if (type === "carta" && terminationPreviewUrls.carta) {
+      URL.revokeObjectURL(terminationPreviewUrls.carta);
+    }
+    if (type === "finiquito" && terminationPreviewUrls.finiquito) {
+      URL.revokeObjectURL(terminationPreviewUrls.finiquito);
+    }
+
+    // Actualizar archivo
+    setTerminationFiles({ ...terminationFiles, [type]: file });
+
+    // Crear nueva URL de vista previa si hay archivo
+    if (file) {
+      const previewUrl = URL.createObjectURL(file);
+      setTerminationPreviewUrls({ ...terminationPreviewUrls, [type]: previewUrl });
+    } else {
+      setTerminationPreviewUrls({ ...terminationPreviewUrls, [type]: null });
+    }
   };
 
   const filteredEmpleados = empleados.filter((emp) => {
@@ -1054,10 +1092,10 @@ const Empleados = () => {
 
                       {/* Documentos de terminación según el motivo */}
                       {formData.motivo_baja && (formData.motivo_baja === "renuncia" || formData.motivo_baja === "despido") && (
-                        <div className="border-t pt-4 space-y-3">
+                        <div className="border-t pt-4 space-y-4">
                           <p className="text-sm font-medium">Documentos de terminación:</p>
                           
-                          <div>
+                          <div className="space-y-2">
                             <Label htmlFor="carta_file">
                               {formData.motivo_baja === "renuncia" ? "Carta de Renuncia (PDF)" : "Carta de Despido (PDF)"}
                             </Label>
@@ -1066,36 +1104,48 @@ const Empleados = () => {
                               type="file"
                               accept=".pdf"
                               onChange={(e) =>
-                                setTerminationFiles({
-                                  ...terminationFiles,
-                                  carta: e.target.files?.[0] || null,
-                                })
+                                handleTerminationFileChange("carta", e.target.files?.[0] || null)
                               }
                             />
                             {terminationFiles.carta && (
-                              <p className="text-xs text-muted-foreground mt-1">
+                              <p className="text-xs text-muted-foreground">
                                 Archivo seleccionado: {terminationFiles.carta.name}
                               </p>
                             )}
+                            {terminationPreviewUrls.carta && (
+                              <div className="mt-2 border rounded-lg overflow-hidden">
+                                <iframe
+                                  src={terminationPreviewUrls.carta}
+                                  className="w-full h-[300px]"
+                                  title="Vista previa carta"
+                                />
+                              </div>
+                            )}
                           </div>
                           
-                          <div>
+                          <div className="space-y-2">
                             <Label htmlFor="finiquito_file">Comprobante de Finiquito (PDF)</Label>
                             <Input
                               id="finiquito_file"
                               type="file"
                               accept=".pdf"
                               onChange={(e) =>
-                                setTerminationFiles({
-                                  ...terminationFiles,
-                                  finiquito: e.target.files?.[0] || null,
-                                })
+                                handleTerminationFileChange("finiquito", e.target.files?.[0] || null)
                               }
                             />
                             {terminationFiles.finiquito && (
-                              <p className="text-xs text-muted-foreground mt-1">
+                              <p className="text-xs text-muted-foreground">
                                 Archivo seleccionado: {terminationFiles.finiquito.name}
                               </p>
+                            )}
+                            {terminationPreviewUrls.finiquito && (
+                              <div className="mt-2 border rounded-lg overflow-hidden">
+                                <iframe
+                                  src={terminationPreviewUrls.finiquito}
+                                  className="w-full h-[300px]"
+                                  title="Vista previa finiquito"
+                                />
+                              </div>
                             )}
                           </div>
                         </div>

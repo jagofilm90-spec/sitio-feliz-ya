@@ -216,6 +216,23 @@ const Empleados = () => {
     e.preventDefault();
 
     try {
+      // Validar si ya existe un empleado con el mismo nombre completo
+      const { data: existingEmpleado } = await supabase
+        .from("empleados")
+        .select("id, nombre_completo")
+        .ilike("nombre_completo", formData.nombre_completo.trim())
+        .single();
+
+      // Si existe y no es el mismo que estamos editando, mostrar error
+      if (existingEmpleado && (!editingEmpleado || existingEmpleado.id !== editingEmpleado.id)) {
+        toast({
+          title: "Empleado duplicado",
+          description: `Ya existe un empleado registrado con el nombre "${formData.nombre_completo}".`,
+          variant: "destructive",
+        });
+        return;
+      }
+
       const payload = {
         ...formData,
         user_id: formData.user_id || null,

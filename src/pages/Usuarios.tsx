@@ -74,6 +74,8 @@ export default function Usuarios() {
     phone: "",
     role: "vendedor",
   });
+  const [emailCheckResult, setEmailCheckResult] = useState<"available" | "taken" | null>(null);
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -136,6 +138,52 @@ export default function Usuarios() {
     }
   };
 
+  const handleCheckEmail = async () => {
+    if (!newUser.email || !newUser.email.includes("@")) {
+      toast({
+        variant: "destructive",
+        title: "Email inválido",
+        description: "Ingresa un email válido",
+      });
+      return;
+    }
+
+    setIsCheckingEmail(true);
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("email")
+        .eq("email", newUser.email)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (data) {
+        setEmailCheckResult("taken");
+        toast({
+          variant: "destructive",
+          title: "Email no disponible",
+          description: "Este email ya está registrado en el sistema",
+        });
+      } else {
+        setEmailCheckResult("available");
+        toast({
+          title: "Email disponible",
+          description: "Este email puede ser usado",
+        });
+      }
+    } catch (error: any) {
+      console.error("Error checking email:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo verificar el email",
+      });
+    } finally {
+      setIsCheckingEmail(false);
+    }
+  };
+
   const handleEmpleadoSelect = (empleadoId: string) => {
     setSelectedEmpleadoId(empleadoId);
     const empleado = empleados.find(e => e.id === empleadoId);
@@ -154,6 +202,7 @@ export default function Usuarios() {
         email: empleado.email || "",
         phone: empleado.telefono || "",
       });
+      setEmailCheckResult(null);
     }
   };
 
@@ -167,6 +216,15 @@ export default function Usuarios() {
           variant: "destructive",
           title: "Error",
           description: "Completa todos los campos obligatorios",
+        });
+        return;
+      }
+
+      if (emailCheckResult !== "available") {
+        toast({
+          variant: "destructive",
+          title: "Email no verificado",
+          description: "Verifica que el email esté disponible antes de crear el usuario",
         });
         return;
       }
@@ -216,14 +274,19 @@ export default function Usuarios() {
         segundo_apellido: "",
       });
       setSelectedEmpleadoId("");
+      setEmailCheckResult(null);
       loadUsers();
       loadEmpleados();
     } catch (error: any) {
       console.error("Error creating user:", error);
+      const errorMsg = error.message || "Error desconocido";
+      const friendlyMsg = errorMsg.includes("already been registered") 
+        ? "Este email ya está registrado en el sistema"
+        : errorMsg;
       toast({
         variant: "destructive",
         title: "Error al crear usuario",
-        description: error.message,
+        description: friendlyMsg,
       });
     }
   };
@@ -487,13 +550,32 @@ export default function Usuarios() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Correo Electrónico *</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="usuario@almasa.com.mx"
-                    value={newUser.email}
-                    onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="usuario@almasa.com.mx"
+                      value={newUser.email}
+                      onChange={(e) => {
+                        setNewUser({ ...newUser, email: e.target.value });
+                        setEmailCheckResult(null);
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleCheckEmail}
+                      disabled={isCheckingEmail || !newUser.email}
+                    >
+                      {isCheckingEmail ? "Verificando..." : "Verificar"}
+                    </Button>
+                  </div>
+                  {emailCheckResult === "available" && (
+                    <p className="text-sm text-green-600">✓ Email disponible</p>
+                  )}
+                  {emailCheckResult === "taken" && (
+                    <p className="text-sm text-destructive">✗ Email ya registrado</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="password">Contraseña *</Label>

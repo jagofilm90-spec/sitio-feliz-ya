@@ -236,19 +236,46 @@ const Chat = () => {
           }
 
           const conv = conversaciones.find((c) => c.id === nuevoMensaje.conversacion_id);
-          const titulo = conv
-            ? `Nuevo mensaje en ${getNombreConversacion(conv)}`
-            : 'Nuevo mensaje';
+          
+          // Obtener nombre del remitente para grupos
+          let nombreRemitente = 'Usuario';
+          if (nuevoMensaje.remitente_id) {
+            const { data: remitente } = await supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('id', nuevoMensaje.remitente_id)
+              .single();
+            
+            if (remitente) {
+              nombreRemitente = remitente.full_name;
+            }
+          }
+
+          let titulo = 'Nuevo mensaje';
+          let descripcion = nuevoMensaje.contenido.length > 80
+            ? `${nuevoMensaje.contenido.slice(0, 77)}...`
+            : nuevoMensaje.contenido;
+
+          if (conv) {
+            const nombreConv = getNombreConversacion(conv);
+            
+            if (conv.tipo === 'individual') {
+              titulo = `Mensaje de ${nombreConv}`;
+            } else if (conv.tipo === 'grupo_puesto') {
+              titulo = `💬 ${nombreConv}`;
+              descripcion = `${nombreRemitente}: ${descripcion}`;
+            } else if (conv.tipo === 'broadcast') {
+              titulo = `📢 Mensaje para todos`;
+              descripcion = `${nombreRemitente}: ${descripcion}`;
+            }
+          }
 
           // Reproducir sonido de notificación
           playNotificationSound();
 
           toast({
             title: titulo,
-            description:
-              nuevoMensaje.contenido.length > 80
-                ? `${nuevoMensaje.contenido.slice(0, 77)}...`
-                : nuevoMensaje.contenido,
+            description: descripcion,
           });
 
           // Refrescar lista de conversaciones para actualizar contadores

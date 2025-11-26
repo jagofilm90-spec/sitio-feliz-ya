@@ -1387,6 +1387,30 @@ const Empleados = () => {
                   </div>
                 </div>
 
+                <div>
+                  <Label htmlFor="user_id">Usuario en Sistema (opcional)</Label>
+                  <Select
+                    value={formData.user_id || "none"}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, user_id: value === "none" ? "" : value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sin usuario asignado" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin usuario asignado</SelectItem>
+                      {usuariosDisponibles.map((usuario) => (
+                        <SelectItem key={usuario.id} value={usuario.id}>
+                          {usuario.full_name} ({usuario.email})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Vincula este empleado con su cuenta de usuario del sistema
+                  </p>
+                </div>
 
                 <div>
                   <Label htmlFor="notas">Notas</Label>

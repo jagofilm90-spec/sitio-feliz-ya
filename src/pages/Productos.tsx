@@ -322,14 +322,13 @@ const Productos = () => {
                   <div className="space-y-2">
                     <Label htmlFor="proveedor_preferido">Proveedor Preferido</Label>
                     <Select
-                      value={formData.proveedor_preferido_id}
+                      value={formData.proveedor_preferido_id || undefined}
                       onValueChange={(value) => setFormData({ ...formData, proveedor_preferido_id: value })}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Seleccionar proveedor" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Sin proveedor</SelectItem>
                         {proveedores.map((proveedor) => (
                           <SelectItem key={proveedor.id} value={proveedor.id}>
                             {proveedor.nombre}

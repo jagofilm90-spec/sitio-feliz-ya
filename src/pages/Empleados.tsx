@@ -1075,6 +1075,16 @@ const Empleados = () => {
     return false;
   });
 
+  const formatCurrency = (amount: number | null | undefined) => {
+    if (!amount && amount !== 0) return "-";
+    return new Intl.NumberFormat('es-MX', {
+      style: 'currency',
+      currency: 'MXN',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  };
+
   const getTipoDocumentoLabel = (tipo: EmpleadoDocumento["tipo_documento"]) => {
     const labels: Record<EmpleadoDocumento["tipo_documento"], string> = {
       contrato_laboral: "Contrato Laboral",
@@ -1396,17 +1406,21 @@ const Empleados = () => {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="sueldo_bruto">Sueldo Bruto</Label>
-                        <Input
-                          id="sueldo_bruto"
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={formData.sueldo_bruto}
-                          onChange={(e) =>
-                            setFormData({ ...formData, sueldo_bruto: e.target.value })
-                          }
-                          placeholder="0.00"
-                        />
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                          <Input
+                            id="sueldo_bruto"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={formData.sueldo_bruto}
+                            onChange={(e) =>
+                              setFormData({ ...formData, sueldo_bruto: e.target.value })
+                            }
+                            placeholder="0.00"
+                            className="pl-7"
+                          />
+                        </div>
                       </div>
                       <div>
                         <Label htmlFor="periodo_pago">Periodo de Pago</Label>

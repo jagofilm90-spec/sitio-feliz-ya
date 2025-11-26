@@ -351,13 +351,35 @@ const Chat = () => {
 
           let mensajesNoLeidos = 0;
           if (participante) {
-            const { count } = await supabase
-              .from('mensajes')
-              .select('id', { count: 'exact', head: true })
-              .eq('conversacion_id', conv.id)
-              .gt('created_at', participante.ultimo_mensaje_leido_id || '1970-01-01');
-
-            mensajesNoLeidos = count || 0;
+            if (!participante.ultimo_mensaje_leido_id) {
+              // Si no hay último mensaje leído, contar todos los mensajes que no sean del usuario actual
+              const { count } = await supabase
+                .from('mensajes')
+                .select('id', { count: 'exact', head: true })
+                .eq('conversacion_id', conv.id)
+                .neq('remitente_id', currentUserId);
+              
+              mensajesNoLeidos = count || 0;
+            } else {
+              // Obtener la fecha del último mensaje leído
+              const { data: ultimoMensajeLeido } = await supabase
+                .from('mensajes')
+                .select('created_at')
+                .eq('id', participante.ultimo_mensaje_leido_id)
+                .single();
+              
+              if (ultimoMensajeLeido) {
+                // Contar mensajes después del último leído
+                const { count } = await supabase
+                  .from('mensajes')
+                  .select('id', { count: 'exact', head: true })
+                  .eq('conversacion_id', conv.id)
+                  .gt('created_at', ultimoMensajeLeido.created_at)
+                  .neq('remitente_id', currentUserId);
+                
+                mensajesNoLeidos = count || 0;
+              }
+            }
           }
 
           // Cargar participantes para todas las conversaciones

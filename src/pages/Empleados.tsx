@@ -13,6 +13,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -296,6 +306,55 @@ const Empleados = () => {
       motivo_baja: empleado.motivo_baja || "",
     });
     setIsDialogOpen(true);
+  };
+
+  const handleDelete = async (empleado: Empleado) => {
+    if (!confirm(`¿Estás seguro de eliminar a ${empleado.nombre_completo}? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+
+    try {
+      // Primero eliminar todos los documentos del empleado del storage
+      if (documentos[empleado.id]?.length > 0) {
+        const filePaths = documentos[empleado.id].map(
+          (doc) => `${empleado.id}/${doc.ruta_storage}`
+        );
+        await supabase.storage.from("empleados-documentos").remove(filePaths);
+      }
+
+      // Eliminar registros de documentos de la base de datos
+      await supabase
+        .from("empleados_documentos")
+        .delete()
+        .eq("empleado_id", empleado.id);
+
+      // Eliminar documentos pendientes
+      await supabase
+        .from("empleados_documentos_pendientes")
+        .delete()
+        .eq("empleado_id", empleado.id);
+
+      // Finalmente eliminar el empleado
+      const { error } = await supabase
+        .from("empleados")
+        .delete()
+        .eq("id", empleado.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Empleado eliminado",
+        description: "El empleado y sus documentos se eliminaron correctamente",
+      });
+
+      loadEmpleados();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
 
   const handleUploadDocument = async (e: React.FormEvent) => {
@@ -916,13 +975,23 @@ const Empleados = () => {
                             </div>
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEdit(empleado)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
+                            <div className="flex gap-2 justify-end">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEdit(empleado)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(empleado)}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))

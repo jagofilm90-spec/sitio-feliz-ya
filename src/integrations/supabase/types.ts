@@ -174,6 +174,38 @@ export type Database = {
           },
         ]
       }
+      empleados_documentos_pendientes: {
+        Row: {
+          created_at: string
+          empleado_id: string
+          id: string
+          notas: string | null
+          tipo_documento: string
+        }
+        Insert: {
+          created_at?: string
+          empleado_id: string
+          id?: string
+          notas?: string | null
+          tipo_documento: string
+        }
+        Update: {
+          created_at?: string
+          empleado_id?: string
+          id?: string
+          notas?: string | null
+          tipo_documento?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "empleados_documentos_pendientes_empleado_id_fkey"
+            columns: ["empleado_id"]
+            isOneToOne: false
+            referencedRelation: "empleados"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       entregas: {
         Row: {
           created_at: string

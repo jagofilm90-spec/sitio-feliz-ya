@@ -84,6 +84,14 @@ interface EmpleadoDocumento {
   created_at: string;
 }
 
+interface EmpleadoDocumentoPendiente {
+  id: string;
+  empleado_id: string;
+  tipo_documento: EmpleadoDocumento["tipo_documento"];
+  notas: string | null;
+  created_at: string;
+}
+
 interface UserProfile {
   id: string;
   email: string;
@@ -95,9 +103,11 @@ const Empleados = () => {
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [usuarios, setUsuarios] = useState<UserProfile[]>([]);
   const [documentos, setDocumentos] = useState<Record<string, EmpleadoDocumento[]>>({});
+  const [documentosPendientes, setDocumentosPendientes] = useState<Record<string, EmpleadoDocumentoPendiente[]>>({});
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDocDialogOpen, setIsDocDialogOpen] = useState(false);
+  const [isPendingDialogOpen, setIsPendingDialogOpen] = useState(false);
   const [editingEmpleado, setEditingEmpleado] = useState<Empleado | null>(null);
   const [selectedEmpleado, setSelectedEmpleado] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -126,6 +136,11 @@ const Empleados = () => {
     file: null as File | null,
   });
 
+  const [pendingDocFormData, setPendingDocFormData] = useState({
+    tipo_documento: "contrato_laboral" as EmpleadoDocumento["tipo_documento"],
+    notas: "",
+  });
+
   useEffect(() => {
     loadEmpleados();
     loadUsuarios();
@@ -149,12 +164,26 @@ const Empleados = () => {
             .select("*")
             .eq("empleado_id", emp.id)
         );
+        const pendingDocsPromises = data.map(emp =>
+          supabase
+            .from("empleados_documentos_pendientes")
+            .select("*")
+            .eq("empleado_id", emp.id)
+        );
+        
         const docsResults = await Promise.all(docsPromises);
+        const pendingDocsResults = await Promise.all(pendingDocsPromises);
+        
         const docsMap: Record<string, EmpleadoDocumento[]> = {};
+        const pendingDocsMap: Record<string, EmpleadoDocumentoPendiente[]> = {};
+        
         data.forEach((emp, idx) => {
           docsMap[emp.id] = (docsResults[idx].data || []) as EmpleadoDocumento[];
+          pendingDocsMap[emp.id] = (pendingDocsResults[idx].data || []) as EmpleadoDocumentoPendiente[];
         });
+        
         setDocumentos(docsMap);
+        setDocumentosPendientes(pendingDocsMap);
       }
     } catch (error: any) {
       toast({
@@ -278,6 +307,13 @@ const Empleados = () => {
 
       if (dbError) throw dbError;
 
+      // Eliminar de pendientes si existe
+      await supabase
+        .from("empleados_documentos_pendientes")
+        .delete()
+        .eq("empleado_id", selectedEmpleado)
+        .eq("tipo_documento", docFormData.tipo_documento);
+
       toast({
         title: "Documento subido",
         description: "El documento se subió correctamente",
@@ -340,6 +376,64 @@ const Empleados = () => {
       toast({
         title: "Documento eliminado",
         description: "El documento se eliminó correctamente",
+      });
+
+      loadEmpleados();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleAddPendingDocument = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEmpleado) return;
+
+    try {
+      const { error } = await supabase.from("empleados_documentos_pendientes").insert([
+        {
+          empleado_id: selectedEmpleado,
+          tipo_documento: pendingDocFormData.tipo_documento,
+          notas: pendingDocFormData.notas || null,
+        },
+      ]);
+
+      if (error) throw error;
+
+      toast({
+        title: "Documento marcado como pendiente",
+        description: "Se agregó a la lista de documentos faltantes",
+      });
+
+      setIsPendingDialogOpen(false);
+      setPendingDocFormData({ tipo_documento: "contrato_laboral", notas: "" });
+      loadEmpleados();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeletePendingDocument = async (pendingDoc: EmpleadoDocumentoPendiente) => {
+    if (!confirm("¿Eliminar de la lista de pendientes?")) return;
+
+    try {
+      const { error } = await supabase
+        .from("empleados_documentos_pendientes")
+        .delete()
+        .eq("id", pendingDoc.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Documento eliminado de pendientes",
+        description: "Ya no aparecerá como faltante",
       });
 
       loadEmpleados();
@@ -771,17 +865,24 @@ const Empleados = () => {
                             </span>
                           </TableCell>
                           <TableCell>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedEmpleado(empleado.id);
-                                setIsDocDialogOpen(true);
-                              }}
-                            >
-                              <Upload className="h-4 w-4 mr-2" />
-                              Docs ({documentos[empleado.id]?.length || 0})
-                            </Button>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedEmpleado(empleado.id);
+                                  setIsDocDialogOpen(true);
+                                }}
+                              >
+                                <Upload className="h-4 w-4 mr-2" />
+                                Docs ({documentos[empleado.id]?.length || 0})
+                              </Button>
+                              {documentosPendientes[empleado.id]?.length > 0 && (
+                                <Badge variant="destructive" className="ml-1">
+                                  {documentosPendientes[empleado.id].length} faltantes
+                                </Badge>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell>
                             <div className="space-y-1">
@@ -822,13 +923,65 @@ const Empleados = () => {
             <DialogHeader>
               <DialogTitle>Documentos del Empleado</DialogTitle>
               <DialogDescription>
-                Gestiona identificaciones, contratos y otros documentos
+                Gestiona documentos subidos y marca documentos faltantes
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-6">
+              {/* Documentos pendientes */}
+              {selectedEmpleado && documentosPendientes[selectedEmpleado]?.length > 0 && (
+                <div className="border border-destructive/50 rounded-lg p-4 bg-destructive/5">
+                  <h3 className="font-medium mb-3 text-destructive flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Documentos Faltantes ({documentosPendientes[selectedEmpleado].length})
+                  </h3>
+                  <div className="space-y-2">
+                    {documentosPendientes[selectedEmpleado].map((pendingDoc) => (
+                      <div
+                        key={pendingDoc.id}
+                        className="flex items-start justify-between p-3 bg-background rounded-lg border"
+                      >
+                        <div className="flex-1">
+                          <p className="font-medium text-sm">
+                            {getTipoDocumentoLabel(pendingDoc.tipo_documento)}
+                          </p>
+                          {pendingDoc.notas && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {pendingDoc.notas}
+                            </p>
+                          )}
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Marcado: {new Date(pendingDoc.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeletePendingDocument(pendingDoc)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Agregar documento pendiente */}
+              <div className="border-b pb-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsPendingDialogOpen(true)}
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Marcar Documento Faltante
+                </Button>
+              </div>
+
               {/* Upload form */}
               <form onSubmit={handleUploadDocument} className="space-y-4 border-b pb-4">
+                <h3 className="font-medium">Subir Documento</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="tipo_documento">Tipo de Documento</Label>
@@ -932,6 +1085,72 @@ const Empleados = () => {
                 )}
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog para marcar documento pendiente */}
+        <Dialog open={isPendingDialogOpen} onOpenChange={setIsPendingDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Marcar Documento Faltante</DialogTitle>
+              <DialogDescription>
+                Registra qué documento necesita entregar el empleado
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleAddPendingDocument} className="space-y-4">
+              <div>
+                <Label htmlFor="pending_tipo">Tipo de Documento *</Label>
+                <Select
+                  value={pendingDocFormData.tipo_documento}
+                  onValueChange={(value: any) =>
+                    setPendingDocFormData({ ...pendingDocFormData, tipo_documento: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="contrato_laboral">Contrato Laboral</SelectItem>
+                    <SelectItem value="ine">INE / Identificación</SelectItem>
+                    <SelectItem value="carta_seguro_social">Carta del Seguro Social</SelectItem>
+                    <SelectItem value="constancia_situacion_fiscal">Constancia de Situación Fiscal</SelectItem>
+                    <SelectItem value="acta_nacimiento">Acta de Nacimiento</SelectItem>
+                    <SelectItem value="comprobante_domicilio">Comprobante de Domicilio</SelectItem>
+                    <SelectItem value="curp">CURP</SelectItem>
+                    <SelectItem value="rfc">RFC</SelectItem>
+                    <SelectItem value="carta_renuncia">Carta de Renuncia</SelectItem>
+                    <SelectItem value="carta_despido">Carta de Despido</SelectItem>
+                    <SelectItem value="comprobante_finiquito">Comprobante de Finiquito</SelectItem>
+                    <SelectItem value="otro">Otro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="pending_notas">Notas (opcional)</Label>
+                <Textarea
+                  id="pending_notas"
+                  value={pendingDocFormData.notas}
+                  onChange={(e) =>
+                    setPendingDocFormData({ ...pendingDocFormData, notas: e.target.value })
+                  }
+                  placeholder="ej: Tráelo mañana"
+                  rows={2}
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setIsPendingDialogOpen(false);
+                    setPendingDocFormData({ tipo_documento: "contrato_laboral", notas: "" });
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit">Marcar como Faltante</Button>
+              </div>
+            </form>
           </DialogContent>
         </Dialog>
       </div>

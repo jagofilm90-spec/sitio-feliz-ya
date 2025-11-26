@@ -1243,10 +1243,13 @@ const Empleados = () => {
               <TabsTrigger value="almacenista">
                 Almacenista ({getEmpleadosPorPuesto('Almacenista').length})
               </TabsTrigger>
+              <TabsTrigger value="ayudante de chofer">
+                Ayudantes ({getEmpleadosPorPuesto('Ayudante de Chofer').length})
+              </TabsTrigger>
             </TabsList>
 
-            {/* Tabs para Todos, Secretaria, Almacenista (sin columna de licencia) */}
-            {['todos', 'secretaria', 'almacenista'].map((tab) => (
+            {/* Tabs para Todos, Secretaria, Almacenista, Ayudante de Chofer (sin columna de licencia) */}
+            {['todos', 'secretaria', 'almacenista', 'ayudante de chofer'].map((tab) => (
               <TabsContent key={tab} value={tab} className="space-y-4">
                 <div className="flex gap-2">
                   <Select value={filtroActivo} onValueChange={(value: any) => setFiltroActivo(value)}>

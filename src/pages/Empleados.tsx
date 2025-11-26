@@ -164,6 +164,8 @@ const Empleados = () => {
     password: "",
     role: "",
   });
+  const [emailCheckStatus, setEmailCheckStatus] = useState<"idle" | "checking" | "available" | "unavailable">("idle");
+  const [emailCheckMessage, setEmailCheckMessage] = useState("");
 
   const [docFormData, setDocFormData] = useState<{
     tipo_documento: EmpleadoDocumento["tipo_documento"] | "";
@@ -277,6 +279,53 @@ const Empleados = () => {
       setNotificaciones(data || []);
     } catch (error: any) {
       console.error("Error loading notifications:", error);
+    }
+  };
+
+  const handleCheckEmailAvailability = async () => {
+    if (!formData.email) {
+      toast({
+        title: "Email requerido",
+        description: "Por favor ingresa un email para verificar",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setEmailCheckStatus("checking");
+    setEmailCheckMessage("");
+
+    try {
+      const { data: existingUser, error } = await supabase
+        .from("profiles")
+        .select("id, email, full_name")
+        .eq("email", formData.email)
+        .maybeSingle();
+
+      if (error) {
+        setEmailCheckStatus("idle");
+        toast({
+          title: "Error",
+          description: "Error al verificar el email",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (existingUser) {
+        setEmailCheckStatus("unavailable");
+        setEmailCheckMessage(`Email ya registrado con "${existingUser.full_name}"`);
+      } else {
+        setEmailCheckStatus("available");
+        setEmailCheckMessage("Email disponible");
+      }
+    } catch (error) {
+      setEmailCheckStatus("idle");
+      toast({
+        title: "Error",
+        description: "Error al verificar el email",
+        variant: "destructive",
+      });
     }
   };
 
@@ -812,6 +861,8 @@ const Empleados = () => {
       password: "",
       role: "",
     });
+    setEmailCheckStatus("idle");
+    setEmailCheckMessage("");
     setTerminationFiles({ carta: null, finiquito: null });
     setEditingEmpleado(null);
   };
@@ -1086,14 +1137,39 @@ const Empleados = () => {
                   </div>
                   <div>
                     <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) =>
-                        setFormData({ ...formData, email: e.target.value })
-                      }
-                    />
+                    <div className="flex gap-2">
+                      <Input
+                        id="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => {
+                          setFormData({ ...formData, email: e.target.value });
+                          setEmailCheckStatus("idle");
+                          setEmailCheckMessage("");
+                        }}
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCheckEmailAvailability}
+                        disabled={!formData.email || emailCheckStatus === "checking"}
+                      >
+                        {emailCheckStatus === "checking" ? "Verificando..." : "Verificar"}
+                      </Button>
+                    </div>
+                    {emailCheckStatus !== "idle" && (
+                      <p className={`text-sm mt-1 ${
+                        emailCheckStatus === "available" 
+                          ? "text-green-600" 
+                          : emailCheckStatus === "unavailable"
+                          ? "text-destructive"
+                          : "text-muted-foreground"
+                      }`}>
+                        {emailCheckMessage}
+                      </p>
+                    )}
                   </div>
                 </div>
 

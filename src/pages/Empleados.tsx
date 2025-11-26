@@ -138,7 +138,8 @@ const Empleados = () => {
   const [editingEmpleado, setEditingEmpleado] = useState<Empleado | null>(null);
   const [selectedEmpleado, setSelectedEmpleado] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [filtroActivo, setFiltroActivo] = useState<"todos" | "activos" | "inactivos">("activos");
+  const [filtroPuesto, setFiltroPuesto] = useState<"todos" | "secretaria" | "vendedor" | "chofer" | "almacenista">("todos");
+  const [filtroActivo, setFiltroActivo] = useState<"todos" | "activos" | "inactivos">("todos");
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -618,13 +619,21 @@ const Empleados = () => {
       emp.puesto.toLowerCase().includes(searchTerm.toLowerCase()) ||
       emp.email?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesFilter =
+    const matchesActivo =
       filtroActivo === "todos" ||
       (filtroActivo === "activos" && emp.activo) ||
       (filtroActivo === "inactivos" && !emp.activo);
 
-    return matchesSearch && matchesFilter;
+    const matchesPuesto = 
+      filtroPuesto === "todos" ||
+      emp.puesto.toLowerCase() === filtroPuesto;
+
+    return matchesSearch && matchesActivo && matchesPuesto;
   });
+
+  const getEmpleadosPorPuesto = (puesto: string) => {
+    return empleados.filter(emp => emp.puesto.toLowerCase() === puesto.toLowerCase());
+  };
 
   const getUsuarioNombre = (userId: string | null) => {
     if (!userId) return "-";
@@ -1015,27 +1024,167 @@ const Empleados = () => {
             </div>
           </div>
 
-          <Tabs defaultValue="activos" className="space-y-4" onValueChange={(v) => setFiltroActivo(v as any)}>
+          <Tabs defaultValue="todos" className="space-y-4" onValueChange={(v) => setFiltroPuesto(v as any)}>
             <TabsList>
-              <TabsTrigger value="activos">
-                Activos ({empleados.filter(e => e.activo).length})
-              </TabsTrigger>
-              <TabsTrigger value="inactivos">
-                Inactivos ({empleados.filter(e => !e.activo).length})
-              </TabsTrigger>
               <TabsTrigger value="todos">
                 Todos ({empleados.length})
               </TabsTrigger>
+              <TabsTrigger value="secretaria">
+                Secretaria ({getEmpleadosPorPuesto('Secretaria').length})
+              </TabsTrigger>
+              <TabsTrigger value="vendedor">
+                Vendedor ({getEmpleadosPorPuesto('Vendedor').length})
+              </TabsTrigger>
+              <TabsTrigger value="chofer">
+                Chofer ({getEmpleadosPorPuesto('Chofer').length})
+              </TabsTrigger>
+              <TabsTrigger value="almacenista">
+                Almacenista ({getEmpleadosPorPuesto('Almacenista').length})
+              </TabsTrigger>
             </TabsList>
 
-            <TabsContent value={filtroActivo} className="space-y-4">
+            {/* Tabs para Todos, Secretaria, Vendedor, Almacenista */}
+            {['todos', 'secretaria', 'vendedor', 'almacenista'].map((tab) => (
+              <TabsContent key={tab} value={tab} className="space-y-4">
+                <div className="flex gap-2">
+                  <Select value={filtroActivo} onValueChange={(value: any) => setFiltroActivo(value)}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Filtrar por estado" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos</SelectItem>
+                      <SelectItem value="activos">Activos</SelectItem>
+                      <SelectItem value="inactivos">Inactivos</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Nombre</TableHead>
+                        {tab === 'todos' && <TableHead>Puesto</TableHead>}
+                        <TableHead>Contacto</TableHead>
+                        <TableHead>Fecha Ingreso</TableHead>
+                        <TableHead>Usuario Sistema</TableHead>
+                        <TableHead>Documentos</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead className="text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredEmpleados.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={tab === 'todos' ? 8 : 7} className="text-center text-muted-foreground">
+                            No se encontraron empleados
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredEmpleados.map((empleado) => (
+                          <TableRow key={empleado.id}>
+                            <TableCell className="font-medium">
+                              {empleado.nombre_completo}
+                            </TableCell>
+                            {tab === 'todos' && <TableCell>{empleado.puesto}</TableCell>}
+                            <TableCell>
+                              <div className="text-sm">
+                                {empleado.telefono && <div>{empleado.telefono}</div>}
+                                {empleado.email && (
+                                  <div className="text-muted-foreground">{empleado.email}</div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {new Date(empleado.fecha_ingreso).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-sm text-muted-foreground">
+                                {getUsuarioNombre(empleado.user_id)}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-1">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedEmpleado(empleado.id);
+                                    setIsDocDialogOpen(true);
+                                  }}
+                                >
+                                  <Upload className="h-4 w-4 mr-2" />
+                                  Docs ({documentos[empleado.id]?.length || 0})
+                                </Button>
+                                {documentosPendientes[empleado.id]?.length > 0 && (
+                                  <Badge variant="destructive" className="ml-1">
+                                    {documentosPendientes[empleado.id].length} faltantes
+                                  </Badge>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="space-y-1">
+                                <Badge variant={empleado.activo ? "default" : "secondary"}>
+                                  {empleado.activo ? "Activo" : "Inactivo"}
+                                </Badge>
+                                {!empleado.activo && empleado.motivo_baja && (
+                                  <div className="text-xs text-muted-foreground">
+                                    {empleado.motivo_baja === "renuncia" && "Renuncia"}
+                                    {empleado.motivo_baja === "despido" && "Despido"}
+                                    {empleado.motivo_baja === "abandono" && "Abandono"}
+                                  </div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex gap-2 justify-end">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleEdit(empleado)}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDelete(empleado)}
+                                  className="text-destructive hover:text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </TabsContent>
+            ))}
+
+            {/* Tab especial para Chofer con columna de vencimiento de licencia */}
+            <TabsContent value="chofer" className="space-y-4">
+              <div className="flex gap-2">
+                <Select value={filtroActivo} onValueChange={(value: any) => setFiltroActivo(value)}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Filtrar por estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    <SelectItem value="activos">Activos</SelectItem>
+                    <SelectItem value="inactivos">Inactivos</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Nombre</TableHead>
-                      <TableHead>Puesto</TableHead>
                       <TableHead>Contacto</TableHead>
+                      <TableHead>Vencimiento Licencia</TableHead>
                       <TableHead>Fecha Ingreso</TableHead>
                       <TableHead>Usuario Sistema</TableHead>
                       <TableHead>Documentos</TableHead>
@@ -1047,87 +1196,116 @@ const Empleados = () => {
                     {filteredEmpleados.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={8} className="text-center text-muted-foreground">
-                          No se encontraron empleados
+                          No se encontraron choferes
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredEmpleados.map((empleado) => (
-                        <TableRow key={empleado.id}>
-                          <TableCell className="font-medium">
-                            {empleado.nombre_completo}
-                          </TableCell>
-                          <TableCell>{empleado.puesto}</TableCell>
-                          <TableCell>
-                            <div className="text-sm">
-                              {empleado.telefono && <div>{empleado.telefono}</div>}
-                              {empleado.email && (
-                                <div className="text-muted-foreground">{empleado.email}</div>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {new Date(empleado.fecha_ingreso).toLocaleDateString()}
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-sm text-muted-foreground">
-                              {getUsuarioNombre(empleado.user_id)}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-1">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedEmpleado(empleado.id);
-                                  setIsDocDialogOpen(true);
-                                }}
-                              >
-                                <Upload className="h-4 w-4 mr-2" />
-                                Docs ({documentos[empleado.id]?.length || 0})
-                              </Button>
-                              {documentosPendientes[empleado.id]?.length > 0 && (
-                                <Badge variant="destructive" className="ml-1">
-                                  {documentosPendientes[empleado.id].length} faltantes
+                      filteredEmpleados.map((empleado) => {
+                        const licenciaDoc = documentos[empleado.id]?.find(
+                          doc => doc.tipo_documento === 'licencia_conducir'
+                        );
+                        const diasRestantes = licenciaDoc?.fecha_vencimiento 
+                          ? Math.ceil((new Date(licenciaDoc.fecha_vencimiento).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+                          : null;
+
+                        return (
+                          <TableRow key={empleado.id}>
+                            <TableCell className="font-medium">
+                              {empleado.nombre_completo}
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-sm">
+                                {empleado.telefono && <div>{empleado.telefono}</div>}
+                                {empleado.email && (
+                                  <div className="text-muted-foreground">{empleado.email}</div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {licenciaDoc?.fecha_vencimiento ? (
+                                <Badge 
+                                  variant={
+                                    diasRestantes !== null && diasRestantes < 0 
+                                      ? "destructive" 
+                                      : diasRestantes !== null && diasRestantes <= 30 
+                                      ? "destructive" 
+                                      : "secondary"
+                                  }
+                                >
+                                  {new Date(licenciaDoc.fecha_vencimiento).toLocaleDateString('es-MX')}
+                                  {diasRestantes !== null && diasRestantes < 0 && " (Vencida)"}
+                                  {diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 30 && ` (${diasRestantes}d)`}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-muted-foreground">
+                                  Sin licencia
                                 </Badge>
                               )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="space-y-1">
-                              <Badge variant={empleado.activo ? "default" : "secondary"}>
-                                {empleado.activo ? "Activo" : "Inactivo"}
-                              </Badge>
-                              {!empleado.activo && empleado.motivo_baja && (
-                                <div className="text-xs text-muted-foreground">
-                                  {empleado.motivo_baja === "renuncia" && "Renuncia"}
-                                  {empleado.motivo_baja === "despido" && "Despido"}
-                                  {empleado.motivo_baja === "abandono" && "Abandono"}
-                                </div>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex gap-2 justify-end">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEdit(empleado)}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDelete(empleado)}
-                                className="text-destructive hover:text-destructive"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
+                            </TableCell>
+                            <TableCell>
+                              {new Date(empleado.fecha_ingreso).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-sm text-muted-foreground">
+                                {getUsuarioNombre(empleado.user_id)}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-1">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedEmpleado(empleado.id);
+                                    setIsDocDialogOpen(true);
+                                  }}
+                                >
+                                  <Upload className="h-4 w-4 mr-2" />
+                                  Docs ({documentos[empleado.id]?.length || 0})
+                                </Button>
+                                {documentosPendientes[empleado.id]?.length > 0 && (
+                                  <Badge variant="destructive" className="ml-1">
+                                    {documentosPendientes[empleado.id].length} faltantes
+                                  </Badge>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="space-y-1">
+                                <Badge variant={empleado.activo ? "default" : "secondary"}>
+                                  {empleado.activo ? "Activo" : "Inactivo"}
+                                </Badge>
+                                {!empleado.activo && empleado.motivo_baja && (
+                                  <div className="text-xs text-muted-foreground">
+                                    {empleado.motivo_baja === "renuncia" && "Renuncia"}
+                                    {empleado.motivo_baja === "despido" && "Despido"}
+                                    {empleado.motivo_baja === "abandono" && "Abandono"}
+                                  </div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex gap-2 justify-end">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleEdit(empleado)}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDelete(empleado)}
+                                  className="text-destructive hover:text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
                     )}
                   </TableBody>
                 </Table>

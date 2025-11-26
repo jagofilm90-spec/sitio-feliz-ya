@@ -469,15 +469,23 @@ const Empleados = () => {
                   </div>
                   <div>
                     <Label htmlFor="puesto">Puesto *</Label>
-                    <Input
-                      id="puesto"
+                    <Select
                       value={formData.puesto}
-                      onChange={(e) =>
-                        setFormData({ ...formData, puesto: e.target.value })
+                      onValueChange={(value) =>
+                        setFormData({ ...formData, puesto: value })
                       }
-                      placeholder="ej: Almacenista, Chofer, Ayudante"
-                      required
-                    />
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar puesto" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Secretaria">Secretaria</SelectItem>
+                        <SelectItem value="Almacenista">Almacenista</SelectItem>
+                        <SelectItem value="Chofer">Chofer</SelectItem>
+                        <SelectItem value="Ayudante de Chofer">Ayudante de Chofer</SelectItem>
+                        <SelectItem value="Vendedor">Vendedor</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 

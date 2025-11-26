@@ -723,6 +723,9 @@ const Empleados = () => {
     if (file) {
       const previewUrl = URL.createObjectURL(file);
       setTerminationPreviewUrls({ ...terminationPreviewUrls, [type]: previewUrl });
+      
+      // Log para debug
+      console.log(`Vista previa creada para ${type}:`, previewUrl);
     } else {
       setTerminationPreviewUrls({ ...terminationPreviewUrls, [type]: null });
     }
@@ -1155,11 +1158,11 @@ const Empleados = () => {
                               </p>
                             )}
                             {terminationPreviewUrls.carta && (
-                              <div className="mt-2 border rounded-lg overflow-hidden">
-                                <iframe
+                              <div className="mt-2 border rounded-lg overflow-hidden bg-muted/20">
+                                <embed
                                   src={terminationPreviewUrls.carta}
-                                  className="w-full h-[300px]"
-                                  title="Vista previa carta"
+                                  type="application/pdf"
+                                  className="w-full h-[400px]"
                                 />
                               </div>
                             )}
@@ -1215,11 +1218,11 @@ const Empleados = () => {
                               </p>
                             )}
                             {terminationPreviewUrls.finiquito && (
-                              <div className="mt-2 border rounded-lg overflow-hidden">
-                                <iframe
+                              <div className="mt-2 border rounded-lg overflow-hidden bg-muted/20">
+                                <embed
                                   src={terminationPreviewUrls.finiquito}
-                                  className="w-full h-[300px]"
-                                  title="Vista previa finiquito"
+                                  type="application/pdf"
+                                  className="w-full h-[400px]"
                                 />
                               </div>
                             )}

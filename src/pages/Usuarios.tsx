@@ -24,6 +24,17 @@ interface UserWithRoles extends Profile {
   roles: string[];
 }
 
+interface Empleado {
+  id: string;
+  user_id: string | null;
+  nombre_completo: string;
+  nombre: string | null;
+  primer_apellido: string | null;
+  segundo_apellido: string | null;
+  email: string | null;
+  telefono: string | null;
+}
+
 const ROLES = [
   { value: "admin", label: "Administrador", color: "destructive" },
   { value: "secretaria", label: "Secretaria", color: "default" },
@@ -34,6 +45,7 @@ const ROLES = [
 
 export default function Usuarios() {
   const [users, setUsers] = useState<UserWithRoles[]>([]);
+  const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -44,6 +56,7 @@ export default function Usuarios() {
   const [resetPasswordUser, setResetPasswordUser] = useState<UserWithRoles | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [selectedEmpleadoId, setSelectedEmpleadoId] = useState<string>("");
   const [newUser, setNewUser] = useState({
     email: "",
     password: "",
@@ -55,6 +68,7 @@ export default function Usuarios() {
 
   useEffect(() => {
     loadUsers();
+    loadEmpleados();
   }, []);
 
   const loadUsers = async () => {
@@ -92,6 +106,36 @@ export default function Usuarios() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadEmpleados = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("empleados")
+        .select("id, user_id, nombre_completo, nombre, primer_apellido, segundo_apellido, email, telefono")
+        .is("user_id", null)
+        .eq("activo", true)
+        .order("nombre_completo");
+
+      if (error) throw error;
+      setEmpleados(data || []);
+    } catch (error: any) {
+      console.error("Error loading empleados:", error);
+    }
+  };
+
+  const handleEmpleadoSelect = (empleadoId: string) => {
+    setSelectedEmpleadoId(empleadoId);
+    const empleado = empleados.find(e => e.id === empleadoId);
+    if (empleado) {
+      const fullName = `${empleado.nombre || ''} ${empleado.primer_apellido || ''} ${empleado.segundo_apellido || ''}`.trim();
+      setNewUser({
+        ...newUser,
+        full_name: fullName,
+        email: empleado.email || "",
+        phone: empleado.telefono || "",
+      });
     }
   };
 
@@ -145,7 +189,9 @@ export default function Usuarios() {
         phone: "",
         role: "vendedor",
       });
+      setSelectedEmpleadoId("");
       loadUsers();
+      loadEmpleados();
     } catch (error: any) {
       console.error("Error creating user:", error);
       toast({
@@ -323,6 +369,30 @@ export default function Usuarios() {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="empleado_select">Seleccionar Empleado (Opcional)</Label>
+                  <Select value={selectedEmpleadoId} onValueChange={handleEmpleadoSelect}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona un empleado existente" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {empleados.length === 0 ? (
+                        <SelectItem value="no-empleados" disabled>
+                          No hay empleados disponibles
+                        </SelectItem>
+                      ) : (
+                        empleados.map((empleado) => (
+                          <SelectItem key={empleado.id} value={empleado.id}>
+                            {empleado.nombre_completo}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Si seleccionas un empleado, se autorellenarán nombre, email y teléfono
+                  </p>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="full_name">Nombre Completo *</Label>
                   <Input

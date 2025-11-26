@@ -135,8 +135,10 @@ const Empleados = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDocDialogOpen, setIsDocDialogOpen] = useState(false);
   const [isPendingDialogOpen, setIsPendingDialogOpen] = useState(false);
+  const [isEditLicenseExpiryOpen, setIsEditLicenseExpiryOpen] = useState(false);
   const [editingEmpleado, setEditingEmpleado] = useState<Empleado | null>(null);
   const [selectedEmpleado, setSelectedEmpleado] = useState<string | null>(null);
+  const [editingLicenseDoc, setEditingLicenseDoc] = useState<EmpleadoDocumento | null>(null);
   const [uploading, setUploading] = useState(false);
   const [filtroPuesto, setFiltroPuesto] = useState<"todos" | "secretaria" | "vendedor" | "chofer" | "almacenista">("todos");
   const [filtroActivo, setFiltroActivo] = useState<"todos" | "activos" | "inactivos">("todos");
@@ -186,6 +188,11 @@ const Empleados = () => {
   }>({
     carta: null,
     finiquito: null,
+  });
+
+  const [licenseExpiryFormData, setLicenseExpiryFormData] = useState({
+    fecha_vencimiento: "",
+    es_permanente: false,
   });
 
   useEffect(() => {
@@ -872,6 +879,60 @@ const Empleados = () => {
     file: File | null
   ) => {
     setTerminationFiles({ ...terminationFiles, [type]: file });
+  };
+
+  const handleEditLicenseExpiry = (documento: EmpleadoDocumento) => {
+    setEditingLicenseDoc(documento);
+    
+    // Si es permanente (2099-12-31), marcar el checkbox
+    const esPermanente = documento.fecha_vencimiento === "2099-12-31";
+    setLicenseExpiryFormData({
+      fecha_vencimiento: esPermanente ? "" : (documento.fecha_vencimiento || ""),
+      es_permanente: esPermanente,
+    });
+    setIsEditLicenseExpiryOpen(true);
+  };
+
+  const handleSaveLicenseExpiry = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!editingLicenseDoc) return;
+
+    try {
+      // Determinar la fecha final
+      let fechaFinal: string | null = null;
+      
+      if (licenseExpiryFormData.es_permanente) {
+        fechaFinal = "2099-12-31";
+      } else if (licenseExpiryFormData.fecha_vencimiento) {
+        fechaFinal = licenseExpiryFormData.fecha_vencimiento;
+      }
+
+      // Actualizar en la base de datos
+      const { error } = await supabase
+        .from("empleados_documentos")
+        .update({ fecha_vencimiento: fechaFinal })
+        .eq("id", editingLicenseDoc.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Éxito",
+        description: "Fecha de vencimiento actualizada correctamente",
+      });
+
+      // Recargar documentos
+      await loadEmpleados();
+      setIsEditLicenseExpiryOpen(false);
+      setEditingLicenseDoc(null);
+      setLicenseExpiryFormData({ fecha_vencimiento: "", es_permanente: false });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
 
   const filteredEmpleados = empleados.filter((emp) => {
@@ -1693,43 +1754,55 @@ const Empleados = () => {
                               </div>
                             </TableCell>
                             <TableCell>
-                              {licenciaDoc?.fecha_vencimiento ? (
-                                (() => {
-                                  const esPermanente = licenciaDoc.fecha_vencimiento === "2099-12-31";
-                                  if (esPermanente) {
+                              <div className="flex items-center gap-2">
+                                {licenciaDoc?.fecha_vencimiento ? (
+                                  (() => {
+                                    const esPermanente = licenciaDoc.fecha_vencimiento === "2099-12-31";
+                                    if (esPermanente) {
+                                      return (
+                                        <Badge variant="secondary" className="bg-green-500/10 text-green-700 border-green-500/20">
+                                          PERMANENTE
+                                        </Badge>
+                                      );
+                                    }
+                                    
+                                    // Determinar color según estado
+                                    let badgeClass = "";
+                                    if (diasRestantes !== null && diasRestantes < 0) {
+                                      // Vencida - Rojo
+                                      badgeClass = "bg-red-500/10 text-red-700 border-red-500/20";
+                                    } else if (diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 30) {
+                                      // Próxima a vencer - Amarillo
+                                      badgeClass = "bg-yellow-500/10 text-yellow-700 border-yellow-500/20";
+                                    } else {
+                                      // Vigente - Verde
+                                      badgeClass = "bg-green-500/10 text-green-700 border-green-500/20";
+                                    }
+                                    
                                     return (
-                                      <Badge variant="secondary" className="bg-green-500/10 text-green-700 border-green-500/20">
-                                        PERMANENTE
+                                      <Badge variant="secondary" className={badgeClass}>
+                                        {new Date(licenciaDoc.fecha_vencimiento).toLocaleDateString('es-MX')}
+                                        {diasRestantes !== null && diasRestantes < 0 && " (Vencida)"}
+                                        {diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 30 && ` (${diasRestantes}d)`}
                                       </Badge>
                                     );
-                                  }
-                                  
-                                  // Determinar color según estado
-                                  let badgeClass = "";
-                                  if (diasRestantes !== null && diasRestantes < 0) {
-                                    // Vencida - Rojo
-                                    badgeClass = "bg-red-500/10 text-red-700 border-red-500/20";
-                                  } else if (diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 30) {
-                                    // Próxima a vencer - Amarillo
-                                    badgeClass = "bg-yellow-500/10 text-yellow-700 border-yellow-500/20";
-                                  } else {
-                                    // Vigente - Verde
-                                    badgeClass = "bg-green-500/10 text-green-700 border-green-500/20";
-                                  }
-                                  
-                                  return (
-                                    <Badge variant="secondary" className={badgeClass}>
-                                      {new Date(licenciaDoc.fecha_vencimiento).toLocaleDateString('es-MX')}
-                                      {diasRestantes !== null && diasRestantes < 0 && " (Vencida)"}
-                                      {diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 30 && ` (${diasRestantes}d)`}
-                                    </Badge>
-                                  );
-                                })()
-                              ) : (
-                                <Badge variant="outline" className="text-muted-foreground">
-                                  Sin licencia
-                                </Badge>
-                              )}
+                                  })()
+                                ) : (
+                                  <Badge variant="outline" className="text-muted-foreground">
+                                    Sin licencia
+                                  </Badge>
+                                )}
+                                {licenciaDoc && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleEditLicenseExpiry(licenciaDoc)}
+                                    className="h-6 w-6 p-0"
+                                  >
+                                    <Edit className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell>
                               {new Date(empleado.fecha_ingreso).toLocaleDateString()}
@@ -1859,43 +1932,55 @@ const Empleados = () => {
                               </div>
                             </TableCell>
                             <TableCell>
-                              {licenciaDoc?.fecha_vencimiento ? (
-                                (() => {
-                                  const esPermanente = licenciaDoc.fecha_vencimiento === "2099-12-31";
-                                  if (esPermanente) {
+                              <div className="flex items-center gap-2">
+                                {licenciaDoc?.fecha_vencimiento ? (
+                                  (() => {
+                                    const esPermanente = licenciaDoc.fecha_vencimiento === "2099-12-31";
+                                    if (esPermanente) {
+                                      return (
+                                        <Badge variant="secondary" className="bg-green-500/10 text-green-700 border-green-500/20">
+                                          PERMANENTE
+                                        </Badge>
+                                      );
+                                    }
+                                    
+                                    // Determinar color según estado
+                                    let badgeClass = "";
+                                    if (diasRestantes !== null && diasRestantes < 0) {
+                                      // Vencida - Rojo
+                                      badgeClass = "bg-red-500/10 text-red-700 border-red-500/20";
+                                    } else if (diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 30) {
+                                      // Próxima a vencer - Amarillo
+                                      badgeClass = "bg-yellow-500/10 text-yellow-700 border-yellow-500/20";
+                                    } else {
+                                      // Vigente - Verde
+                                      badgeClass = "bg-green-500/10 text-green-700 border-green-500/20";
+                                    }
+                                    
                                     return (
-                                      <Badge variant="secondary" className="bg-green-500/10 text-green-700 border-green-500/20">
-                                        PERMANENTE
+                                      <Badge variant="secondary" className={badgeClass}>
+                                        {new Date(licenciaDoc.fecha_vencimiento).toLocaleDateString('es-MX')}
+                                        {diasRestantes !== null && diasRestantes < 0 && " (Vencida)"}
+                                        {diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 30 && ` (${diasRestantes}d)`}
                                       </Badge>
                                     );
-                                  }
-                                  
-                                  // Determinar color según estado
-                                  let badgeClass = "";
-                                  if (diasRestantes !== null && diasRestantes < 0) {
-                                    // Vencida - Rojo
-                                    badgeClass = "bg-red-500/10 text-red-700 border-red-500/20";
-                                  } else if (diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 30) {
-                                    // Próxima a vencer - Amarillo
-                                    badgeClass = "bg-yellow-500/10 text-yellow-700 border-yellow-500/20";
-                                  } else {
-                                    // Vigente - Verde
-                                    badgeClass = "bg-green-500/10 text-green-700 border-green-500/20";
-                                  }
-                                  
-                                  return (
-                                    <Badge variant="secondary" className={badgeClass}>
-                                      {new Date(licenciaDoc.fecha_vencimiento).toLocaleDateString('es-MX')}
-                                      {diasRestantes !== null && diasRestantes < 0 && " (Vencida)"}
-                                      {diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 30 && ` (${diasRestantes}d)`}
-                                    </Badge>
-                                  );
-                                })()
-                              ) : (
-                                <Badge variant="outline" className="text-muted-foreground">
-                                  Sin licencia
-                                </Badge>
-                              )}
+                                  })()
+                                ) : (
+                                  <Badge variant="outline" className="text-muted-foreground">
+                                    Sin licencia
+                                  </Badge>
+                                )}
+                                {licenciaDoc && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleEditLicenseExpiry(licenciaDoc)}
+                                    className="h-6 w-6 p-0"
+                                  >
+                                    <Edit className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell>
                               {new Date(empleado.fecha_ingreso).toLocaleDateString()}
@@ -2262,6 +2347,73 @@ const Empleados = () => {
                   Cancelar
                 </Button>
                 <Button type="submit">Marcar como Faltante</Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog para editar fecha de vencimiento de licencia */}
+        <Dialog open={isEditLicenseExpiryOpen} onOpenChange={setIsEditLicenseExpiryOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Editar Fecha de Vencimiento</DialogTitle>
+              <DialogDescription>
+                Modifica manualmente la fecha de vencimiento de la licencia de conducir
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSaveLicenseExpiry} className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="es_permanente"
+                    checked={licenseExpiryFormData.es_permanente}
+                    onChange={(e) => {
+                      setLicenseExpiryFormData({
+                        ...licenseExpiryFormData,
+                        es_permanente: e.target.checked,
+                        fecha_vencimiento: e.target.checked ? "" : licenseExpiryFormData.fecha_vencimiento,
+                      });
+                    }}
+                    className="h-4 w-4"
+                  />
+                  <Label htmlFor="es_permanente" className="text-sm font-medium cursor-pointer">
+                    Licencia Permanente
+                  </Label>
+                </div>
+              </div>
+
+              {!licenseExpiryFormData.es_permanente && (
+                <div>
+                  <Label htmlFor="fecha_vencimiento">Fecha de Vencimiento</Label>
+                  <Input
+                    type="date"
+                    id="fecha_vencimiento"
+                    value={licenseExpiryFormData.fecha_vencimiento}
+                    onChange={(e) =>
+                      setLicenseExpiryFormData({
+                        ...licenseExpiryFormData,
+                        fecha_vencimiento: e.target.value,
+                      })
+                    }
+                    required={!licenseExpiryFormData.es_permanente}
+                  />
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setIsEditLicenseExpiryOpen(false);
+                    setEditingLicenseDoc(null);
+                    setLicenseExpiryFormData({ fecha_vencimiento: "", es_permanente: false });
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit">Guardar Cambios</Button>
               </div>
             </form>
           </DialogContent>

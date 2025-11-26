@@ -383,6 +383,20 @@ const Chat = () => {
 
   const crearConversacion = async () => {
     try {
+      // Verificar sesión y autenticación
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('🔐 Session al crear conversación:', session?.user?.id);
+      console.log('🔐 Current user ID:', currentUserId);
+
+      if (!session || !currentUserId) {
+        toast({
+          title: "Error de autenticación",
+          description: "No hay una sesión válida. Por favor recarga la página.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       if (tipoGrupo === 'individual' && usuariosSeleccionados.length !== 1) {
         toast({
           title: "Error",
@@ -391,7 +405,6 @@ const Chat = () => {
         });
         return;
       }
-
 
       if (tipoGrupo === 'grupo_puesto' && !puestoGrupo) {
         toast({
@@ -402,19 +415,28 @@ const Chat = () => {
         return;
       }
 
+      const dataToInsert = {
+        tipo: tipoGrupo,
+        nombre: null,
+        puesto: tipoGrupo === 'grupo_puesto' ? puestoGrupo : null,
+        creado_por: currentUserId,
+      };
+
+      console.log('📝 Datos a insertar:', dataToInsert);
+
       // Crear conversación
       const { data: nuevaConv, error: convError } = await supabase
         .from('conversaciones')
-        .insert({
-          tipo: tipoGrupo,
-          nombre: null,
-          puesto: tipoGrupo === 'grupo_puesto' ? puestoGrupo : null,
-          creado_por: currentUserId,
-        })
+        .insert(dataToInsert)
         .select()
         .single();
 
-      if (convError) throw convError;
+      console.log('✅ Respuesta insert:', { nuevaConv, convError });
+
+      if (convError) {
+        console.error('❌ Error completo:', convError);
+        throw convError;
+      }
 
       // Agregar participantes
       let participantesIds = [...usuariosSeleccionados];

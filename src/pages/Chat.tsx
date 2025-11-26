@@ -613,12 +613,13 @@ const Chat = () => {
     
     // Para chat individual, mostrar el nombre del otro usuario
     if (conv.tipo === 'individual' && conv.participantes && conv.participantes.length > 0) {
+      // Si todavía no sabemos quién soy yo, no intentamos adivinar el otro usuario
+      if (!currentUserId) return 'Chat individual';
+
       const otroUsuario = conv.participantes.find(p => p.id !== currentUserId);
       if (otroUsuario) {
         return otroUsuario.full_name;
       }
-      // Si no encontramos al otro usuario usando currentUserId, mostrar el primer participante
-      return conv.participantes[0].full_name;
     }
     
     return 'Chat individual';

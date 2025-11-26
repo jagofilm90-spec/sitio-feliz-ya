@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { MessageCircle, Send, Users, Plus, Search, Trash2 } from "lucide-react";
+import { MessageCircle, Send, Users, Plus, Search, Trash2, Paperclip, X, FileText, Image as ImageIcon } from "lucide-react";
 import { format } from "date-fns";
 import { playNotificationSound } from "@/utils/notificationSound";
 
@@ -62,6 +62,9 @@ interface Message {
   contenido: string;
   created_at: string;
   remitente?: UserProfile;
+  archivo_url?: string | null;
+  archivo_nombre?: string | null;
+  archivo_tipo?: string | null;
 }
 
 interface UserProfile {
@@ -85,6 +88,8 @@ const Chat = () => {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [usuariosEnLinea, setUsuariosEnLinea] = useState<Set<string>>(new Set());
   const [ultimoMensajeLeidoOtroUsuario, setUltimoMensajeLeidoOtroUsuario] = useState<string | null>(null);
+  const [archivoSeleccionado, setArchivoSeleccionado] = useState<File | null>(null);
+  const [subiendoArchivo, setSubiendoArchivo] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -629,15 +634,48 @@ const Chat = () => {
   };
 
   const enviarMensaje = async () => {
-    if (!nuevoMensaje.trim() || !conversacionActiva) return;
+    if ((!nuevoMensaje.trim() && !archivoSeleccionado) || !conversacionActiva) return;
 
     try {
+      setSubiendoArchivo(true);
+      
+      let archivoUrl = null;
+      let archivoNombre = null;
+      let archivoTipo = null;
+
+      // Si hay un archivo seleccionado, subirlo primero
+      if (archivoSeleccionado) {
+        const fileExt = archivoSeleccionado.name.split('.').pop();
+        const fileName = `${currentUserId}/${Date.now()}.${fileExt}`;
+        
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('chat-archivos')
+          .upload(fileName, archivoSeleccionado, {
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        if (uploadError) throw uploadError;
+
+        // Obtener URL pública del archivo
+        const { data: { publicUrl } } = supabase.storage
+          .from('chat-archivos')
+          .getPublicUrl(fileName);
+
+        archivoUrl = publicUrl;
+        archivoNombre = archivoSeleccionado.name;
+        archivoTipo = archivoSeleccionado.type;
+      }
+
       const { error } = await supabase
         .from('mensajes')
         .insert({
           conversacion_id: conversacionActiva.id,
           remitente_id: currentUserId,
-          contenido: nuevoMensaje.trim(),
+          contenido: nuevoMensaje.trim() || (archivoNombre ? `📎 ${archivoNombre}` : ''),
+          archivo_url: archivoUrl,
+          archivo_nombre: archivoNombre,
+          archivo_tipo: archivoTipo,
         });
 
       if (error) throw error;
@@ -649,6 +687,7 @@ const Chat = () => {
         .eq('id', conversacionActiva.id);
 
       setNuevoMensaje("");
+      setArchivoSeleccionado(null);
       loadConversaciones();
     } catch (error: any) {
       toast({
@@ -656,6 +695,8 @@ const Chat = () => {
         description: error.message,
         variant: "destructive",
       });
+    } finally {
+      setSubiendoArchivo(false);
     }
   };
 
@@ -1023,7 +1064,44 @@ const Chat = () => {
                                 : 'bg-muted'
                             }`}
                           >
-                            <p>{mensaje.contenido}</p>
+                            {/* Mostrar archivo adjunto si existe */}
+                            {mensaje.archivo_url && (
+                              <div className="mb-2">
+                                {mensaje.archivo_tipo?.startsWith('image/') ? (
+                                  <a 
+                                    href={mensaje.archivo_url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="block"
+                                  >
+                                    <img 
+                                      src={mensaje.archivo_url} 
+                                      alt={mensaje.archivo_nombre || 'Imagen'} 
+                                      className="max-w-xs rounded-md cursor-pointer hover:opacity-90 transition-opacity"
+                                    />
+                                  </a>
+                                ) : (
+                                  <a
+                                    href={mensaje.archivo_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={`flex items-center gap-2 p-2 rounded border ${
+                                      esMio 
+                                        ? 'border-primary-foreground/20 hover:bg-primary-foreground/10' 
+                                        : 'border-border hover:bg-accent'
+                                    } transition-colors`}
+                                  >
+                                    <FileText className="h-5 w-5" />
+                                    <span className="text-sm truncate max-w-[200px]">
+                                      {mensaje.archivo_nombre || 'Archivo'}
+                                    </span>
+                                  </a>
+                                )}
+                              </div>
+                            )}
+                            
+                            {mensaje.contenido && <p>{mensaje.contenido}</p>}
+                            
                             <div className="flex items-center justify-between gap-2 mt-1">
                               <p className={`text-xs ${esMio ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
                                 {format(new Date(mensaje.created_at), 'HH:mm')}
@@ -1044,7 +1122,56 @@ const Chat = () => {
 
               {/* Input de mensaje */}
               <div className="p-4 border-t">
+                {/* Mostrar archivo seleccionado */}
+                {archivoSeleccionado && (
+                  <div className="mb-2 flex items-center gap-2 p-2 bg-muted rounded-md">
+                    {archivoSeleccionado.type.startsWith('image/') ? (
+                      <ImageIcon className="h-4 w-4" />
+                    ) : (
+                      <FileText className="h-4 w-4" />
+                    )}
+                    <span className="text-sm truncate flex-1">{archivoSeleccionado.name}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => setArchivoSeleccionado(null)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+                
                 <div className="flex space-x-2">
+                  <input
+                    type="file"
+                    id="file-upload"
+                    className="hidden"
+                    accept=".jpg,.jpeg,.png,.pdf"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        // Validar tamaño (máximo 10MB)
+                        if (file.size > 10 * 1024 * 1024) {
+                          toast({
+                            title: "Archivo muy grande",
+                            description: "El archivo no debe superar 10MB",
+                            variant: "destructive",
+                          });
+                          return;
+                        }
+                        setArchivoSeleccionado(file);
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => document.getElementById('file-upload')?.click()}
+                    disabled={subiendoArchivo}
+                  >
+                    <Paperclip className="h-4 w-4" />
+                  </Button>
                   <Input
                     value={nuevoMensaje}
                     onChange={(e) => setNuevoMensaje(e.target.value)}
@@ -1055,9 +1182,17 @@ const Chat = () => {
                       }
                     }}
                     placeholder="Escribe un mensaje..."
+                    disabled={subiendoArchivo}
                   />
-                  <Button onClick={enviarMensaje} disabled={!nuevoMensaje.trim()}>
-                    <Send className="h-4 w-4" />
+                  <Button 
+                    onClick={enviarMensaje} 
+                    disabled={(!nuevoMensaje.trim() && !archivoSeleccionado) || subiendoArchivo}
+                  >
+                    {subiendoArchivo ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-foreground" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
                   </Button>
                 </div>
               </div>

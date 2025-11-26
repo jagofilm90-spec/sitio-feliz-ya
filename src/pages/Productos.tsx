@@ -389,7 +389,7 @@ const Productos = () => {
                       onChange={(e) => setFormData({ ...formData, aplica_iva: e.target.checked })}
                       className="rounded"
                     />
-                    <Label htmlFor="aplica_iva">Aplica IVA (16%)</Label>
+                    <Label htmlFor="aplica_iva">Precio incluye IVA (16%)</Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <input
@@ -399,7 +399,7 @@ const Productos = () => {
                       onChange={(e) => setFormData({ ...formData, aplica_ieps: e.target.checked })}
                       className="rounded"
                     />
-                    <Label htmlFor="aplica_ieps">Aplica IEPS (8%)</Label>
+                    <Label htmlFor="aplica_ieps">Precio incluye IEPS (8%)</Label>
                   </div>
                 </div>
                 <div className="flex justify-end gap-2">

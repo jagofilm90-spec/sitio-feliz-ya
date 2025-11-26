@@ -14,6 +14,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import {
@@ -25,7 +36,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { MessageCircle, Send, Users, Plus, Search } from "lucide-react";
+import { MessageCircle, Send, Users, Plus, Search, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 
 interface Conversation {
@@ -451,6 +462,33 @@ const Chat = () => {
         return;
       }
 
+      // Para chats individuales, verificar si ya existe una conversación con este usuario
+      if (tipoGrupo === 'individual') {
+        const otroUsuarioId = usuariosSeleccionados[0];
+        
+        // Buscar conversación existente con este usuario
+        const conversacionExistente = conversaciones.find(conv => {
+          if (conv.tipo !== 'individual') return false;
+          
+          const participantesIds = conv.participantes?.map(p => p.id) || [];
+          return participantesIds.includes(currentUserId!) && 
+                 participantesIds.includes(otroUsuarioId) &&
+                 participantesIds.length === 2;
+        });
+
+        if (conversacionExistente) {
+          // Ya existe una conversación, abrirla en vez de crear una nueva
+          setConversacionActiva(conversacionExistente);
+          setShowNewConversation(false);
+          setUsuariosSeleccionados([]);
+          toast({
+            title: "Chat existente",
+            description: "Ya tienes una conversación con este usuario",
+          });
+          return;
+        }
+      }
+
       if (tipoGrupo === 'grupo_puesto' && !puestoGrupo) {
         toast({
           title: "Error",
@@ -592,6 +630,52 @@ const Chat = () => {
     const indiceUltimoLeido = mensajes.findIndex(m => m.id === ultimoMensajeLeidoOtroUsuario);
     
     return indiceUltimoLeido >= indiceMensajeActual && indiceUltimoLeido !== -1;
+  };
+
+  const eliminarConversacion = async (conversacionId: string) => {
+    try {
+      // Primero eliminar participantes
+      const { error: partError } = await supabase
+        .from('conversacion_participantes')
+        .delete()
+        .eq('conversacion_id', conversacionId);
+
+      if (partError) throw partError;
+
+      // Luego eliminar mensajes
+      const { error: mensajesError } = await supabase
+        .from('mensajes')
+        .delete()
+        .eq('conversacion_id', conversacionId);
+
+      if (mensajesError) throw mensajesError;
+
+      // Finalmente eliminar la conversación
+      const { error: convError } = await supabase
+        .from('conversaciones')
+        .delete()
+        .eq('id', conversacionId);
+
+      if (convError) throw convError;
+
+      toast({
+        title: "Conversación eliminada",
+        description: "La conversación se eliminó correctamente",
+      });
+
+      // Si era la conversación activa, limpiarla
+      if (conversacionActiva?.id === conversacionId) {
+        setConversacionActiva(null);
+      }
+
+      loadConversaciones();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
 
   const filteredConversaciones = conversaciones.filter((conv) =>
@@ -750,13 +834,44 @@ const Chat = () => {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-2">
                         <p className="font-medium truncate">{getNombreConversacion(conv)}</p>
-                        {conv.mensajes_no_leidos > 0 && (
-                          <Badge variant="default" className="ml-2">
-                            {conv.mensajes_no_leidos}
-                          </Badge>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {conv.mensajes_no_leidos > 0 && (
+                            <Badge variant="default" className="ml-2">
+                              {conv.mensajes_no_leidos}
+                            </Badge>
+                          )}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>¿Eliminar conversación?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Esta acción no se puede deshacer. Se eliminarán todos los mensajes de esta conversación.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => eliminarConversacion(conv.id)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Eliminar
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </div>
                       {conv.ultimo_mensaje && (
                         <p className="text-sm text-muted-foreground truncate">

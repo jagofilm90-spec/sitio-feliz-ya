@@ -63,7 +63,7 @@ interface Empleado {
   email: string | null;
   direccion: string | null;
   fecha_ingreso: string;
-  puesto: string;
+  puesto: string | string[];
   activo: boolean;
   notas: string | null;
   numero_seguro_social: string | null;
@@ -148,7 +148,7 @@ const Empleados = () => {
     email: "",
     direccion: "",
     fecha_ingreso: new Date().toISOString().split("T")[0],
-    puesto: "",
+    puesto: [] as string[],
     user_id: "",
     activo: true,
     notas: "",
@@ -201,7 +201,16 @@ const Empleados = () => {
         .order("nombre_completo");
 
       if (error) throw error;
-      setEmpleados((data || []) as Empleado[]);
+      
+      // Convertir puesto de string a array si contiene comas
+      const empleadosConPuestoArray = (data || []).map(emp => ({
+        ...emp,
+        puesto: typeof emp.puesto === 'string' && emp.puesto.includes(", ") 
+          ? emp.puesto.split(", ") 
+          : emp.puesto
+      }));
+      
+      setEmpleados(empleadosConPuestoArray as Empleado[]);
 
       // Load documents for each employee
       if (data) {
@@ -278,6 +287,16 @@ const Empleados = () => {
     e.preventDefault();
 
     try {
+      // Validar que al menos un puesto esté seleccionado
+      if (!Array.isArray(formData.puesto) || formData.puesto.length === 0) {
+        toast({
+          title: "Error de validación",
+          description: "Debes seleccionar al menos un puesto",
+          variant: "destructive",
+        });
+        return;
+      }
+
       // Validar si ya existe un empleado con el mismo nombre completo
       const { data: existingEmpleado } = await supabase
         .from("empleados")
@@ -297,6 +316,7 @@ const Empleados = () => {
 
       const payload = {
         ...formData,
+        puesto: Array.isArray(formData.puesto) ? formData.puesto.join(", ") : formData.puesto,
         user_id: formData.user_id || null,
         sueldo_bruto: formData.sueldo_bruto ? parseFloat(formData.sueldo_bruto) : null,
         periodo_pago: formData.periodo_pago || null,
@@ -398,7 +418,7 @@ const Empleados = () => {
       email: empleado.email || "",
       direccion: empleado.direccion || "",
       fecha_ingreso: empleado.fecha_ingreso,
-      puesto: empleado.puesto,
+      puesto: Array.isArray(empleado.puesto) ? empleado.puesto : [empleado.puesto],
       user_id: empleado.user_id || "",
       activo: empleado.activo,
       notas: empleado.notas || "",
@@ -673,7 +693,7 @@ const Empleados = () => {
       email: "",
       direccion: "",
       fecha_ingreso: new Date().toISOString().split("T")[0],
-      puesto: "",
+      puesto: [] as string[],
       user_id: "",
       activo: true,
       notas: "",
@@ -695,9 +715,12 @@ const Empleados = () => {
   };
 
   const filteredEmpleados = empleados.filter((emp) => {
+    const puestos = Array.isArray(emp.puesto) ? emp.puesto : [emp.puesto];
+    const puestosText = puestos.join(" ");
+    
     const matchesSearch =
       emp.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.puesto.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      puestosText.toLowerCase().includes(searchTerm.toLowerCase()) ||
       emp.email?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesActivo =
@@ -707,13 +730,16 @@ const Empleados = () => {
 
     const matchesPuesto = 
       filtroPuesto === "todos" ||
-      emp.puesto.toLowerCase() === filtroPuesto;
+      puestos.some(p => p.toLowerCase() === filtroPuesto);
 
     return matchesSearch && matchesActivo && matchesPuesto;
   });
 
   const getEmpleadosPorPuesto = (puesto: string) => {
-    return empleados.filter(emp => emp.puesto.toLowerCase() === puesto.toLowerCase());
+    return empleados.filter(emp => {
+      const puestos = Array.isArray(emp.puesto) ? emp.puesto : [emp.puesto];
+      return puestos.some(p => p.toLowerCase() === puesto.toLowerCase());
+    });
   };
 
   const getUsuarioNombre = (userId: string | null) => {
@@ -913,38 +939,47 @@ const Empleados = () => {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="fecha_ingreso">Fecha de Ingreso *</Label>
-                    <Input
-                      id="fecha_ingreso"
-                      type="date"
-                      value={formData.fecha_ingreso}
-                      onChange={(e) =>
-                        setFormData({ ...formData, fecha_ingreso: e.target.value })
-                      }
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="puesto">Puesto *</Label>
-                    <Select
-                      value={formData.puesto}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, puesto: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar puesto" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Secretaria">Secretaria</SelectItem>
-                        <SelectItem value="Almacenista">Almacenista</SelectItem>
-                        <SelectItem value="Chofer">Chofer</SelectItem>
-                        <SelectItem value="Ayudante de Chofer">Ayudante de Chofer</SelectItem>
-                        <SelectItem value="Vendedor">Vendedor</SelectItem>
-                      </SelectContent>
-                    </Select>
+                <div>
+                  <Label htmlFor="fecha_ingreso">Fecha de Ingreso *</Label>
+                  <Input
+                    id="fecha_ingreso"
+                    type="date"
+                    value={formData.fecha_ingreso}
+                    onChange={(e) =>
+                      setFormData({ ...formData, fecha_ingreso: e.target.value })
+                    }
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Puesto(s) *</Label>
+                  <div className="space-y-2 border rounded-md p-3 bg-muted/20">
+                    {[
+                      { value: "Secretaria", label: "Secretaria" },
+                      { value: "Almacenista", label: "Almacenista" },
+                      { value: "Chofer", label: "Chofer" },
+                      { value: "Ayudante de Chofer", label: "Ayudante de Chofer" },
+                      { value: "Vendedor", label: "Vendedor" }
+                    ].map((puesto) => (
+                      <div key={puesto.value} className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id={`puesto-${puesto.value}`}
+                          checked={formData.puesto.includes(puesto.value)}
+                          onChange={(e) => {
+                            const newPuestos = e.target.checked
+                              ? [...formData.puesto, puesto.value]
+                              : formData.puesto.filter(p => p !== puesto.value);
+                            setFormData({ ...formData, puesto: newPuestos });
+                          }}
+                          className="rounded border-gray-300"
+                        />
+                        <Label htmlFor={`puesto-${puesto.value}`} className="cursor-pointer font-normal">
+                          {puesto.label}
+                        </Label>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -1282,7 +1317,18 @@ const Empleados = () => {
                             <TableCell className="font-medium">
                               {empleado.nombre_completo}
                             </TableCell>
-                            {tab === 'todos' && <TableCell>{empleado.puesto}</TableCell>}
+                            {tab === 'todos' && (
+                              <TableCell>
+                                <div className="flex gap-1 flex-wrap">
+                                  {(Array.isArray(empleado.puesto) 
+                                    ? empleado.puesto 
+                                    : empleado.puesto.split(", ")
+                                  ).map((p, idx) => (
+                                    <Badge key={idx} variant="outline">{p}</Badge>
+                                  ))}
+                                </div>
+                              </TableCell>
+                            )}
                             <TableCell>
                               <div className="text-sm">
                                 {empleado.telefono && <div>{empleado.telefono}</div>}

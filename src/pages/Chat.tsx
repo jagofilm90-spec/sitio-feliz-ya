@@ -89,9 +89,15 @@ const Chat = () => {
   useEffect(() => {
     loadCurrentUser();
     loadUsuarios();
-    loadConversaciones();
-    setupPresence();
   }, []);
+
+  // Cargar conversaciones solo cuando currentUserId esté disponible
+  useEffect(() => {
+    if (currentUserId) {
+      loadConversaciones();
+      setupPresence();
+    }
+  }, [currentUserId]);
 
   const setupPresence = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -276,6 +282,11 @@ const Chat = () => {
   };
 
   const loadConversaciones = async () => {
+    if (!currentUserId) {
+      console.log("No se puede cargar conversaciones sin currentUserId");
+      return;
+    }
+    
     try {
       const { data: conversacionesData, error } = await supabase
         .from('conversaciones')
@@ -601,9 +612,13 @@ const Chat = () => {
     if (conv.tipo === 'broadcast') return 'Todos los usuarios';
     
     // Para chat individual, mostrar el nombre del otro usuario
-    if (conv.tipo === 'individual' && conv.participantes) {
+    if (conv.tipo === 'individual' && conv.participantes && conv.participantes.length > 0) {
       const otroUsuario = conv.participantes.find(p => p.id !== currentUserId);
-      return otroUsuario ? otroUsuario.full_name : 'Chat individual';
+      if (otroUsuario) {
+        return otroUsuario.full_name;
+      }
+      // Si no encontramos al otro usuario usando currentUserId, mostrar el primer participante
+      return conv.participantes[0].full_name;
     }
     
     return 'Chat individual';

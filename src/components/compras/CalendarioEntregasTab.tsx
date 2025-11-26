@@ -10,9 +10,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Calendar } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Calendar, MoreVertical } from "lucide-react";
+import OrdenAccionesDialog from "./OrdenAccionesDialog";
+import { useState } from "react";
 
 const CalendarioEntregasTab = () => {
+  const [accionesDialogOpen, setAccionesDialogOpen] = useState(false);
+  const [ordenSeleccionada, setOrdenSeleccionada] = useState<any>(null);
+
   const { data: ordenesConEntrega = [] } = useQuery({
     queryKey: ["ordenes_calendario"],
     queryFn: async () => {
@@ -104,6 +110,7 @@ const CalendarioEntregasTab = () => {
                     <TableHead>Productos</TableHead>
                     <TableHead>Total</TableHead>
                     <TableHead>Estado</TableHead>
+                    <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -132,6 +139,18 @@ const CalendarioEntregasTab = () => {
                           {orden.status}
                         </Badge>
                       </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setOrdenSeleccionada(orden);
+                            setAccionesDialogOpen(true);
+                          }}
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -140,6 +159,12 @@ const CalendarioEntregasTab = () => {
           ))}
         </div>
       )}
+
+      <OrdenAccionesDialog
+        open={accionesDialogOpen}
+        onOpenChange={setAccionesDialogOpen}
+        orden={ordenSeleccionada}
+      />
     </Card>
   );
 };

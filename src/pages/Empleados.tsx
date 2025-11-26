@@ -1184,6 +1184,7 @@ const Empleados = () => {
                     }
                     required
                     placeholder="Nombre(s)"
+                    autoComplete="off"
                   />
                 </div>
 
@@ -1198,6 +1199,7 @@ const Empleados = () => {
                       }
                       required
                       placeholder="Primer apellido"
+                      autoComplete="off"
                     />
                   </div>
                   <div>
@@ -1209,6 +1211,7 @@ const Empleados = () => {
                         setFormData({ ...formData, segundo_apellido: e.target.value })
                       }
                       placeholder="Segundo apellido (opcional)"
+                      autoComplete="off"
                     />
                   </div>
                 </div>
@@ -1224,6 +1227,7 @@ const Empleados = () => {
                       }
                       placeholder="XXXX000000XXX"
                       maxLength={13}
+                      autoComplete="off"
                     />
                   </div>
                   <div>
@@ -1236,6 +1240,7 @@ const Empleados = () => {
                       }
                       placeholder="XXXX000000XXXXXXXX00"
                       maxLength={18}
+                      autoComplete="off"
                     />
                   </div>
                 </div>
@@ -1249,6 +1254,7 @@ const Empleados = () => {
                     onChange={(e) =>
                       setFormData({ ...formData, fecha_nacimiento: e.target.value })
                     }
+                    autoComplete="off"
                   />
                 </div>
 
@@ -1264,6 +1270,7 @@ const Empleados = () => {
                           setFormData({ ...formData, contacto_emergencia_nombre: e.target.value })
                         }
                         placeholder="Nombre completo"
+                        autoComplete="off"
                       />
                     </div>
                     <div>
@@ -1275,6 +1282,7 @@ const Empleados = () => {
                           setFormData({ ...formData, contacto_emergencia_telefono: e.target.value })
                         }
                         placeholder="10 dígitos"
+                        autoComplete="off"
                       />
                     </div>
                   </div>
@@ -1289,6 +1297,7 @@ const Empleados = () => {
                       onChange={(e) =>
                         setFormData({ ...formData, telefono: e.target.value })
                       }
+                      autoComplete="off"
                     />
                   </div>
                   <div>
@@ -1304,6 +1313,7 @@ const Empleados = () => {
                           setEmailCheckMessage("");
                         }}
                         className="flex-1"
+                        autoComplete="off"
                       />
                       <Button
                         type="button"
@@ -1337,6 +1347,7 @@ const Empleados = () => {
                     onChange={(e) =>
                       setFormData({ ...formData, direccion: e.target.value })
                     }
+                    autoComplete="off"
                   />
                 </div>
 
@@ -1351,6 +1362,7 @@ const Empleados = () => {
                         setFormData({ ...formData, fecha_ingreso: e.target.value })
                       }
                       required
+                      autoComplete="off"
                     />
                   </div>
                   <div>
@@ -1400,6 +1412,7 @@ const Empleados = () => {
                           setFormData({ ...formData, numero_seguro_social: e.target.value })
                         }
                         placeholder="ej: 12345678901"
+                        autoComplete="off"
                       />
                     </div>
 
@@ -1419,6 +1432,7 @@ const Empleados = () => {
                             }
                             placeholder="0.00"
                             className="pl-7"
+                            autoComplete="off"
                           />
                         </div>
                       </div>
@@ -1472,6 +1486,7 @@ const Empleados = () => {
                             onChange={(e) =>
                               setFormData({ ...formData, fecha_baja: e.target.value })
                             }
+                            autoComplete="off"
                           />
                         </div>
                         <div>

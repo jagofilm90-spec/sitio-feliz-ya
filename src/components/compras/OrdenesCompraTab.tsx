@@ -28,9 +28,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, Search } from "lucide-react";
+import { Plus, Trash2, Search, MoreVertical } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import OrdenAccionesDialog from "./OrdenAccionesDialog";
 
 interface ProductoEnOrden {
   producto_id: string;
@@ -45,11 +46,14 @@ const OrdenesCompraTab = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [accionesDialogOpen, setAccionesDialogOpen] = useState(false);
+  const [ordenSeleccionada, setOrdenSeleccionada] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState("");
   
   // Form state
   const [proveedorId, setProveedorId] = useState("");
   const [folio, setFolio] = useState("");
+  const [fechaEntrega, setFechaEntrega] = useState("");
   const [notas, setNotas] = useState("");
   const [productosEnOrden, setProductosEnOrden] = useState<ProductoEnOrden[]>([]);
   const [productoSeleccionado, setProductoSeleccionado] = useState("");
@@ -122,6 +126,7 @@ const OrdenesCompraTab = () => {
         .insert({
           folio,
           proveedor_id: proveedorId,
+          fecha_entrega_programada: fechaEntrega || null,
           subtotal,
           impuestos,
           total,
@@ -222,6 +227,7 @@ const OrdenesCompraTab = () => {
   const resetForm = () => {
     setProveedorId("");
     setFolio("");
+    setFechaEntrega("");
     setNotas("");
     setProductosEnOrden([]);
     setProductoSeleccionado("");
@@ -300,6 +306,7 @@ const OrdenesCompraTab = () => {
               <TableHead>Total</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead>Entrega Programada</TableHead>
+              <TableHead></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -324,6 +331,18 @@ const OrdenesCompraTab = () => {
                       ? new Date(orden.fecha_entrega_programada).toLocaleDateString()
                       : "-"}
                   </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setOrdenSeleccionada(orden);
+                        setAccionesDialogOpen(true);
+                      }}
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))
             )}
@@ -342,7 +361,7 @@ const OrdenesCompraTab = () => {
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label>Folio *</Label>
                 <Input
@@ -366,6 +385,14 @@ const OrdenesCompraTab = () => {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div>
+                <Label>Fecha de Entrega Programada</Label>
+                <Input
+                  type="date"
+                  value={fechaEntrega}
+                  onChange={(e) => setFechaEntrega(e.target.value)}
+                />
               </div>
             </div>
 
@@ -520,6 +547,12 @@ const OrdenesCompraTab = () => {
           </form>
         </DialogContent>
       </Dialog>
+
+      <OrdenAccionesDialog
+        open={accionesDialogOpen}
+        onOpenChange={setAccionesDialogOpen}
+        orden={ordenSeleccionada}
+      />
     </Card>
   );
 };

@@ -803,15 +803,19 @@ export type Database = {
       productos: {
         Row: {
           activo: boolean | null
+          categoria: string | null
           codigo: string
           created_at: string
           descripcion: string | null
           fecha_ultima_compra: string | null
           id: string
           maneja_caducidad: boolean | null
+          marca: string | null
           nombre: string
           precio_compra: number
           precio_venta: number
+          presentacion: string | null
+          proveedor_preferido_id: string | null
           stock_actual: number
           stock_minimo: number
           ultimo_costo_compra: number | null
@@ -820,15 +824,19 @@ export type Database = {
         }
         Insert: {
           activo?: boolean | null
+          categoria?: string | null
           codigo: string
           created_at?: string
           descripcion?: string | null
           fecha_ultima_compra?: string | null
           id?: string
           maneja_caducidad?: boolean | null
+          marca?: string | null
           nombre: string
           precio_compra?: number
           precio_venta?: number
+          presentacion?: string | null
+          proveedor_preferido_id?: string | null
           stock_actual?: number
           stock_minimo?: number
           ultimo_costo_compra?: number | null
@@ -837,22 +845,34 @@ export type Database = {
         }
         Update: {
           activo?: boolean | null
+          categoria?: string | null
           codigo?: string
           created_at?: string
           descripcion?: string | null
           fecha_ultima_compra?: string | null
           id?: string
           maneja_caducidad?: boolean | null
+          marca?: string | null
           nombre?: string
           precio_compra?: number
           precio_venta?: number
+          presentacion?: string | null
+          proveedor_preferido_id?: string | null
           stock_actual?: number
           stock_minimo?: number
           ultimo_costo_compra?: number | null
           unidad?: Database["public"]["Enums"]["unit_type"]
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "productos_proveedor_preferido_id_fkey"
+            columns: ["proveedor_preferido_id"]
+            isOneToOne: false
+            referencedRelation: "proveedores"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {

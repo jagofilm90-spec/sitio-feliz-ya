@@ -128,7 +128,7 @@ export default function Usuarios() {
         .select("id, user_id, nombre_completo, nombre, primer_apellido, segundo_apellido, email, telefono, puesto")
         .is("user_id", null)
         .eq("activo", true)
-        .in("puesto", ["Vendedor", "Secretaria", "Chofer"])
+        .in("puesto", ["Vendedor", "Secretaria", "Chofer", "Almacenista"])
         .order("nombre_completo");
 
       if (error) throw error;

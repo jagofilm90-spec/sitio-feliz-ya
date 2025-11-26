@@ -1231,11 +1231,13 @@ const Empleados = () => {
                     </Select>
                   </div>
                   <div>
-                    <Label htmlFor="file">Archivo PDF</Label>
+                    <Label htmlFor="file">
+                      {docFormData.tipo_documento === 'licencia_conducir' ? 'Archivo (PDF o imagen)' : 'Archivo PDF'}
+                    </Label>
                     <Input
                       id="file"
                       type="file"
-                      accept=".pdf"
+                      accept={docFormData.tipo_documento === 'licencia_conducir' ? '.pdf,.jpg,.jpeg,.png,.webp' : '.pdf'}
                       onChange={(e) =>
                         setDocFormData({
                           ...docFormData,

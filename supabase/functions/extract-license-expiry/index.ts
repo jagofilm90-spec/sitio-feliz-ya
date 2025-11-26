@@ -36,6 +36,12 @@ serve(async (req) => {
     // Convertir el blob a base64
     const arrayBuffer = await fileData.arrayBuffer();
     const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    
+    // Detectar tipo de archivo por extensión
+    const fileExtension = filePath.split('.').pop()?.toLowerCase();
+    const imageExtensions = ['jpg', 'jpeg', 'png', 'webp'];
+    const isImage = imageExtensions.includes(fileExtension || '');
+    const mimeType = isImage ? `image/${fileExtension === 'jpg' ? 'jpeg' : fileExtension}` : 'application/pdf';
 
     // Llamar a Lovable AI para extraer la fecha de vencimiento
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -68,7 +74,7 @@ serve(async (req) => {
               {
                 type: "image_url",
                 image_url: {
-                  url: `data:application/pdf;base64,${base64}`
+                  url: `data:${mimeType};base64,${base64}`
                 }
               }
             ]

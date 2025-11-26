@@ -33,6 +33,7 @@ import { Badge } from "@/components/ui/badge";
 
 const Productos = () => {
   const [productos, setProductos] = useState<any[]>([]);
+  const [proveedores, setProveedores] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -43,31 +44,46 @@ const Productos = () => {
     codigo: string;
     nombre: string;
     descripcion: string;
+    marca: string;
+    presentacion: string;
+    categoria: string;
     unidad: "kg" | "pieza" | "caja" | "bulto" | "costal" | "litro";
     precio_venta: string;
     precio_compra: string;
     stock_minimo: string;
     maneja_caducidad: boolean;
+    proveedor_preferido_id: string;
   }>({
     codigo: "",
     nombre: "",
     descripcion: "",
+    marca: "",
+    presentacion: "",
+    categoria: "",
     unidad: "pieza",
     precio_venta: "",
     precio_compra: "",
     stock_minimo: "",
     maneja_caducidad: false,
+    proveedor_preferido_id: "",
   });
 
   useEffect(() => {
     loadProductos();
+    loadProveedores();
   }, []);
 
   const loadProductos = async () => {
     try {
       const { data, error } = await supabase
         .from("productos")
-        .select("*")
+        .select(`
+          *,
+          proveedores:proveedor_preferido_id (
+            id,
+            nombre
+          )
+        `)
         .order("nombre");
 
       if (error) throw error;
@@ -83,6 +99,21 @@ const Productos = () => {
     }
   };
 
+  const loadProveedores = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("proveedores")
+        .select("id, nombre")
+        .eq("activo", true)
+        .order("nombre");
+
+      if (error) throw error;
+      setProveedores(data || []);
+    } catch (error: any) {
+      console.error("Error loading proveedores:", error);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -92,6 +123,10 @@ const Productos = () => {
         precio_venta: parseFloat(formData.precio_venta),
         precio_compra: parseFloat(formData.precio_compra),
         stock_minimo: parseInt(formData.stock_minimo),
+        proveedor_preferido_id: formData.proveedor_preferido_id || null,
+        marca: formData.marca || null,
+        presentacion: formData.presentacion || null,
+        categoria: formData.categoria || null,
       };
 
       if (editingProduct) {
@@ -129,11 +164,15 @@ const Productos = () => {
       codigo: product.codigo,
       nombre: product.nombre,
       descripcion: product.descripcion || "",
+      marca: product.marca || "",
+      presentacion: product.presentacion || "",
+      categoria: product.categoria || "",
       unidad: product.unidad,
       precio_venta: product.precio_venta.toString(),
       precio_compra: product.precio_compra.toString(),
       stock_minimo: product.stock_minimo.toString(),
       maneja_caducidad: product.maneja_caducidad,
+      proveedor_preferido_id: product.proveedor_preferido_id || "",
     });
     setDialogOpen(true);
   };
@@ -165,18 +204,25 @@ const Productos = () => {
       codigo: "",
       nombre: "",
       descripcion: "",
+      marca: "",
+      presentacion: "",
+      categoria: "",
       unidad: "pieza",
       precio_venta: "",
       precio_compra: "",
       stock_minimo: "",
       maneja_caducidad: false,
+      proveedor_preferido_id: "",
     });
   };
 
   const filteredProductos = productos.filter(
     (p) =>
       p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.codigo.toLowerCase().includes(searchTerm.toLowerCase())
+      p.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.marca && p.marca.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (p.categoria && p.categoria.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (p.presentacion && p.presentacion.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (
@@ -242,6 +288,56 @@ const Productos = () => {
                     onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
                     required
                   />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="marca">Marca</Label>
+                    <Input
+                      id="marca"
+                      value={formData.marca}
+                      onChange={(e) => setFormData({ ...formData, marca: e.target.value })}
+                      placeholder="Ej: Almasa, Morelos, Purina"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="presentacion">Presentación</Label>
+                    <Input
+                      id="presentacion"
+                      value={formData.presentacion}
+                      onChange={(e) => setFormData({ ...formData, presentacion: e.target.value })}
+                      placeholder="Ej: 25 KG, 50 KG"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="categoria">Categoría</Label>
+                    <Input
+                      id="categoria"
+                      value={formData.categoria}
+                      onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
+                      placeholder="Ej: Azúcar, Arroz, Alimentos"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="proveedor_preferido">Proveedor Preferido</Label>
+                    <Select
+                      value={formData.proveedor_preferido_id}
+                      onValueChange={(value) => setFormData({ ...formData, proveedor_preferido_id: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar proveedor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Sin proveedor</SelectItem>
+                        {proveedores.map((proveedor) => (
+                          <SelectItem key={proveedor.id} value={proveedor.id}>
+                            {proveedor.nombre}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="descripcion">Descripción</Label>
@@ -324,11 +420,11 @@ const Productos = () => {
               <TableRow>
                 <TableHead>Código</TableHead>
                 <TableHead>Nombre</TableHead>
-                <TableHead>Unidad</TableHead>
+                <TableHead>Marca</TableHead>
+                <TableHead>Presentación</TableHead>
+                <TableHead>Categoría</TableHead>
                 <TableHead>Precio Venta</TableHead>
                 <TableHead>Stock</TableHead>
-                <TableHead>Stock Mín.</TableHead>
-                <TableHead>Caducidad</TableHead>
                 <TableHead>Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -350,20 +446,14 @@ const Productos = () => {
                   <TableRow key={producto.id}>
                     <TableCell className="font-medium">{producto.codigo}</TableCell>
                     <TableCell>{producto.nombre}</TableCell>
-                    <TableCell>{producto.unidad}</TableCell>
+                    <TableCell>{producto.marca || "-"}</TableCell>
+                    <TableCell>{producto.presentacion || "-"}</TableCell>
+                    <TableCell>{producto.categoria || "-"}</TableCell>
                     <TableCell>${producto.precio_venta.toFixed(2)}</TableCell>
                     <TableCell>
                       <Badge variant={producto.stock_actual <= producto.stock_minimo ? "destructive" : "default"}>
                         {producto.stock_actual}
                       </Badge>
-                    </TableCell>
-                    <TableCell>{producto.stock_minimo}</TableCell>
-                    <TableCell>
-                      {producto.maneja_caducidad ? (
-                        <Badge variant="secondary">Sí</Badge>
-                      ) : (
-                        <Badge variant="outline">No</Badge>
-                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">

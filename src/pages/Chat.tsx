@@ -132,8 +132,8 @@ const Chat = () => {
     if (conversacionActiva) {
       loadMensajes(conversacionActiva.id);
       marcarComoLeido(conversacionActiva.id);
-      
-      // Suscribirse a nuevos mensajes en tiempo real
+
+      // Suscribirse a nuevos mensajes en tiempo real para la conversación activa
       const channel = supabase
         .channel('mensajes-realtime')
         .on(
@@ -142,11 +142,11 @@ const Chat = () => {
             event: 'INSERT',
             schema: 'public',
             table: 'mensajes',
-            filter: `conversacion_id=eq.${conversacionActiva.id}`
+            filter: `conversacion_id=eq.${conversacionActiva.id}`,
           },
           async (payload) => {
             const nuevoMensaje = payload.new as Message;
-            
+
             // Cargar datos del remitente
             const { data: remitente } = await supabase
               .from('profiles')
@@ -165,6 +165,54 @@ const Chat = () => {
       };
     }
   }, [conversacionActiva]);
+
+  // Notificaciones en tiempo real para conversaciones inactivas
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    const channel = supabase
+      .channel('mensajes-notificaciones')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'mensajes',
+        },
+        async (payload) => {
+          const nuevoMensaje = payload.new as Message;
+
+          // Ignorar mensajes propios o de la conversación actualmente abierta
+          if (
+            nuevoMensaje.remitente_id === currentUserId ||
+            (conversacionActiva && nuevoMensaje.conversacion_id === conversacionActiva.id)
+          ) {
+            return;
+          }
+
+          const conv = conversaciones.find((c) => c.id === nuevoMensaje.conversacion_id);
+          const titulo = conv
+            ? `Nuevo mensaje en ${getNombreConversacion(conv)}`
+            : 'Nuevo mensaje';
+
+          toast({
+            title: titulo,
+            description:
+              nuevoMensaje.contenido.length > 80
+                ? `${nuevoMensaje.contenido.slice(0, 77)}...`
+                : nuevoMensaje.contenido,
+          });
+
+          // Refrescar lista de conversaciones para actualizar contadores
+          loadConversaciones();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUserId, conversacionActiva, conversaciones]);
 
   const loadCurrentUser = async () => {
     const { data: { user } } = await supabase.auth.getUser();

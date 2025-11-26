@@ -799,6 +799,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      es_participante_conversacion: {
+        Args: { _conversacion_id: string; _user_id: string }
+        Returns: boolean
+      }
       get_cliente_id_for_user: { Args: { user_uuid: string }; Returns: string }
       has_role: {
         Args: {

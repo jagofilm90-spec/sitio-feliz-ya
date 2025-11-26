@@ -813,6 +813,7 @@ export type Database = {
           marca: string | null
           nombre: string
           precio_compra: number
+          precio_por_kilo: boolean
           precio_venta: number
           presentacion: string | null
           proveedor_preferido_id: string | null
@@ -834,6 +835,7 @@ export type Database = {
           marca?: string | null
           nombre: string
           precio_compra?: number
+          precio_por_kilo?: boolean
           precio_venta?: number
           presentacion?: string | null
           proveedor_preferido_id?: string | null
@@ -855,6 +857,7 @@ export type Database = {
           marca?: string | null
           nombre?: string
           precio_compra?: number
+          precio_por_kilo?: boolean
           precio_venta?: number
           presentacion?: string | null
           proveedor_preferido_id?: string | null

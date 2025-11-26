@@ -172,6 +172,14 @@ const Empleados = () => {
     notas: "",
   });
 
+  const [terminationFiles, setTerminationFiles] = useState<{
+    carta: File | null;
+    finiquito: File | null;
+  }>({
+    carta: null,
+    finiquito: null,
+  });
+
   useEffect(() => {
     loadEmpleados();
     loadUsuarios();
@@ -296,6 +304,8 @@ const Empleados = () => {
         motivo_baja: formData.motivo_baja || null,
       };
 
+      let empleadoId: string;
+
       if (editingEmpleado) {
         const { error } = await supabase
           .from("empleados")
@@ -303,6 +313,20 @@ const Empleados = () => {
           .eq("id", editingEmpleado.id);
 
         if (error) throw error;
+        empleadoId = editingEmpleado.id;
+
+        // Subir archivos de terminación si están presentes
+        if (!formData.activo && formData.motivo_baja) {
+          if (formData.motivo_baja === "renuncia" && terminationFiles.carta) {
+            await uploadTerminationDocument(empleadoId, "carta_renuncia", terminationFiles.carta);
+          }
+          if (formData.motivo_baja === "despido" && terminationFiles.carta) {
+            await uploadTerminationDocument(empleadoId, "carta_despido", terminationFiles.carta);
+          }
+          if (terminationFiles.finiquito) {
+            await uploadTerminationDocument(empleadoId, "comprobante_finiquito", terminationFiles.finiquito);
+          }
+        }
 
         toast({
           title: "Empleado actualizado",
@@ -326,6 +350,41 @@ const Empleados = () => {
       toast({
         title: "Error",
         description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const uploadTerminationDocument = async (
+    empleadoId: string,
+    tipoDocumento: "carta_renuncia" | "carta_despido" | "comprobante_finiquito",
+    file: File
+  ) => {
+    try {
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${empleadoId}/${Date.now()}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from("empleados-documentos")
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      const { error: dbError } = await supabase.from("empleados_documentos").insert([
+        {
+          empleado_id: empleadoId,
+          tipo_documento: tipoDocumento,
+          nombre_archivo: file.name,
+          ruta_storage: fileName,
+        },
+      ]);
+
+      if (dbError) throw dbError;
+    } catch (error: any) {
+      console.error("Error uploading termination document:", error);
+      toast({
+        title: "Error al subir documento",
+        description: `No se pudo subir ${file.name}`,
         variant: "destructive",
       });
     }
@@ -620,6 +679,7 @@ const Empleados = () => {
       fecha_baja: "",
       motivo_baja: "",
     });
+    setTerminationFiles({ carta: null, finiquito: null });
     setEditingEmpleado(null);
   };
 
@@ -993,37 +1053,59 @@ const Empleados = () => {
                       </div>
 
                       {/* Documentos de terminación según el motivo */}
-                      {formData.motivo_baja && (
+                      {formData.motivo_baja && (formData.motivo_baja === "renuncia" || formData.motivo_baja === "despido") && (
                         <div className="border-t pt-4 space-y-3">
-                          <p className="text-sm font-medium">Documentos requeridos:</p>
+                          <p className="text-sm font-medium">Documentos de terminación:</p>
                           
-                          {(formData.motivo_baja === "renuncia" || formData.motivo_baja === "despido") && (
-                            <>
-                              <div>
-                                <Label htmlFor="doc_carta">
-                                  {formData.motivo_baja === "renuncia" ? "Carta de Renuncia" : "Carta de Despido"}
-                                </Label>
-                                <p className="text-xs text-muted-foreground mb-2">
-                                  Sube estos documentos usando el botón "Docs" después de guardar los cambios
-                                </p>
-                              </div>
-                              <div>
-                                <Label htmlFor="doc_finiquito">Comprobante de Finiquito</Label>
-                                <p className="text-xs text-muted-foreground mb-2">
-                                  Sube estos documentos usando el botón "Docs" después de guardar los cambios
-                                </p>
-                              </div>
-                            </>
-                          )}
-
-                          {formData.motivo_baja === "abandono" && (
-                            <div>
-                              <Label htmlFor="doc_abandono">Carta de Abandono de Trabajo</Label>
-                              <p className="text-xs text-muted-foreground mb-2">
-                                Sube este documento usando el botón "Docs" después de guardar los cambios
+                          <div>
+                            <Label htmlFor="carta_file">
+                              {formData.motivo_baja === "renuncia" ? "Carta de Renuncia (PDF)" : "Carta de Despido (PDF)"}
+                            </Label>
+                            <Input
+                              id="carta_file"
+                              type="file"
+                              accept=".pdf"
+                              onChange={(e) =>
+                                setTerminationFiles({
+                                  ...terminationFiles,
+                                  carta: e.target.files?.[0] || null,
+                                })
+                              }
+                            />
+                            {terminationFiles.carta && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Archivo seleccionado: {terminationFiles.carta.name}
                               </p>
-                            </div>
-                          )}
+                            )}
+                          </div>
+                          
+                          <div>
+                            <Label htmlFor="finiquito_file">Comprobante de Finiquito (PDF)</Label>
+                            <Input
+                              id="finiquito_file"
+                              type="file"
+                              accept=".pdf"
+                              onChange={(e) =>
+                                setTerminationFiles({
+                                  ...terminationFiles,
+                                  finiquito: e.target.files?.[0] || null,
+                                })
+                              }
+                            />
+                            {terminationFiles.finiquito && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Archivo seleccionado: {terminationFiles.finiquito.name}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {formData.motivo_baja === "abandono" && (
+                        <div className="border-t pt-4">
+                          <p className="text-sm text-muted-foreground">
+                            Para abandono de trabajo, puedes subir una carta usando el tipo de documento "Otro" en la sección de documentos.
+                          </p>
                         </div>
                       )}
                     </div>

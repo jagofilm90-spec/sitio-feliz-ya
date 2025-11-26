@@ -54,6 +54,9 @@ interface Empleado {
   puesto: string;
   activo: boolean;
   notas: string | null;
+  numero_seguro_social: string | null;
+  sueldo_bruto: number | null;
+  periodo_pago: "semanal" | "quincenal" | null;
   created_at: string;
   updated_at: string;
 }
@@ -106,6 +109,9 @@ const Empleados = () => {
     user_id: "",
     activo: true,
     notas: "",
+    numero_seguro_social: "",
+    sueldo_bruto: "",
+    periodo_pago: "",
   });
 
   const [docFormData, setDocFormData] = useState({
@@ -126,7 +132,7 @@ const Empleados = () => {
         .order("nombre_completo");
 
       if (error) throw error;
-      setEmpleados(data || []);
+      setEmpleados((data || []) as Empleado[]);
 
       // Load documents for each employee
       if (data) {
@@ -177,6 +183,8 @@ const Empleados = () => {
       const payload = {
         ...formData,
         user_id: formData.user_id || null,
+        sueldo_bruto: formData.sueldo_bruto ? parseFloat(formData.sueldo_bruto) : null,
+        periodo_pago: formData.periodo_pago || null,
       };
 
       if (editingEmpleado) {
@@ -226,6 +234,9 @@ const Empleados = () => {
       user_id: empleado.user_id || "",
       activo: empleado.activo,
       notas: empleado.notas || "",
+      numero_seguro_social: empleado.numero_seguro_social || "",
+      sueldo_bruto: empleado.sueldo_bruto ? empleado.sueldo_bruto.toString() : "",
+      periodo_pago: empleado.periodo_pago || "",
     });
     setIsDialogOpen(true);
   };
@@ -341,6 +352,9 @@ const Empleados = () => {
       user_id: "",
       activo: true,
       notas: "",
+      numero_seguro_social: "",
+      sueldo_bruto: "",
+      periodo_pago: "",
     });
     setEditingEmpleado(null);
   };
@@ -536,6 +550,57 @@ const Empleados = () => {
                     }
                     rows={3}
                   />
+                </div>
+
+                <div className="border-t pt-4">
+                  <h3 className="font-medium mb-3">Información de Nómina</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="numero_seguro_social">Número de Seguro Social</Label>
+                      <Input
+                        id="numero_seguro_social"
+                        value={formData.numero_seguro_social}
+                        onChange={(e) =>
+                          setFormData({ ...formData, numero_seguro_social: e.target.value })
+                        }
+                        placeholder="ej: 12345678901"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="sueldo_bruto">Sueldo Bruto</Label>
+                        <Input
+                          id="sueldo_bruto"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={formData.sueldo_bruto}
+                          onChange={(e) =>
+                            setFormData({ ...formData, sueldo_bruto: e.target.value })
+                          }
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="periodo_pago">Periodo de Pago</Label>
+                        <Select
+                          value={formData.periodo_pago || undefined}
+                          onValueChange={(value) =>
+                            setFormData({ ...formData, periodo_pago: value })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar periodo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="semanal">Semanal</SelectItem>
+                            <SelectItem value="quincenal">Quincenal</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex items-center space-x-2">

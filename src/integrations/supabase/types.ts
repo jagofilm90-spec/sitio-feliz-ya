@@ -79,6 +79,68 @@ export type Database = {
           },
         ]
       }
+      conversacion_participantes: {
+        Row: {
+          conversacion_id: string
+          created_at: string | null
+          id: string
+          ultimo_mensaje_leido_id: string | null
+          user_id: string
+        }
+        Insert: {
+          conversacion_id: string
+          created_at?: string | null
+          id?: string
+          ultimo_mensaje_leido_id?: string | null
+          user_id: string
+        }
+        Update: {
+          conversacion_id?: string
+          created_at?: string | null
+          id?: string
+          ultimo_mensaje_leido_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversacion_participantes_conversacion_id_fkey"
+            columns: ["conversacion_id"]
+            isOneToOne: false
+            referencedRelation: "conversaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversaciones: {
+        Row: {
+          creado_por: string | null
+          created_at: string | null
+          id: string
+          nombre: string | null
+          puesto: string | null
+          tipo: Database["public"]["Enums"]["conversation_type"]
+          updated_at: string | null
+        }
+        Insert: {
+          creado_por?: string | null
+          created_at?: string | null
+          id?: string
+          nombre?: string | null
+          puesto?: string | null
+          tipo: Database["public"]["Enums"]["conversation_type"]
+          updated_at?: string | null
+        }
+        Update: {
+          creado_por?: string | null
+          created_at?: string | null
+          id?: string
+          nombre?: string | null
+          puesto?: string | null
+          tipo?: Database["public"]["Enums"]["conversation_type"]
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       empleados: {
         Row: {
           activo: boolean | null
@@ -382,6 +444,38 @@ export type Database = {
             columns: ["usuario_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mensajes: {
+        Row: {
+          contenido: string
+          conversacion_id: string
+          created_at: string | null
+          id: string
+          remitente_id: string | null
+        }
+        Insert: {
+          contenido: string
+          conversacion_id: string
+          created_at?: string | null
+          id?: string
+          remitente_id?: string | null
+        }
+        Update: {
+          contenido?: string
+          conversacion_id?: string
+          created_at?: string | null
+          id?: string
+          remitente_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mensajes_conversacion_id_fkey"
+            columns: ["conversacion_id"]
+            isOneToOne: false
+            referencedRelation: "conversaciones"
             referencedColumns: ["id"]
           },
         ]
@@ -722,6 +816,11 @@ export type Database = {
         | "almacen"
         | "secretaria"
         | "cliente"
+      conversation_type:
+        | "individual"
+        | "grupo_personalizado"
+        | "grupo_puesto"
+        | "broadcast"
       credit_term: "contado" | "8_dias" | "15_dias" | "30_dias"
       order_status: "pendiente" | "en_ruta" | "entregado" | "cancelado"
       unit_type: "kg" | "pieza" | "caja" | "bulto" | "costal" | "litro"
@@ -859,6 +958,12 @@ export const Constants = {
         "almacen",
         "secretaria",
         "cliente",
+      ],
+      conversation_type: [
+        "individual",
+        "grupo_personalizado",
+        "grupo_puesto",
+        "broadcast",
       ],
       credit_term: ["contado", "8_dias", "15_dias", "30_dias"],
       order_status: ["pendiente", "en_ruta", "entregado", "cancelado"],

@@ -1,0 +1,656 @@
+import { useEffect, useState } from "react";
+import Layout from "@/components/Layout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { MessageCircle, Send, Users, Plus, Search } from "lucide-react";
+import { format } from "date-fns";
+
+interface Conversation {
+  id: string;
+  tipo: "individual" | "grupo_personalizado" | "grupo_puesto" | "broadcast";
+  nombre: string | null;
+  puesto: string | null;
+  created_at: string;
+  updated_at: string;
+  ultimo_mensaje?: {
+    contenido: string;
+    created_at: string;
+  };
+  mensajes_no_leidos: number;
+  participantes?: UserProfile[];
+}
+
+interface Message {
+  id: string;
+  conversacion_id: string;
+  remitente_id: string | null;
+  contenido: string;
+  created_at: string;
+  remitente?: UserProfile;
+}
+
+interface UserProfile {
+  id: string;
+  full_name: string;
+  email: string;
+}
+
+const Chat = () => {
+  const [conversaciones, setConversaciones] = useState<Conversation[]>([]);
+  const [conversacionActiva, setConversacionActiva] = useState<Conversation | null>(null);
+  const [mensajes, setMensajes] = useState<Message[]>([]);
+  const [nuevoMensaje, setNuevoMensaje] = useState("");
+  const [usuarios, setUsuarios] = useState<UserProfile[]>([]);
+  const [usuariosSeleccionados, setUsuariosSeleccionados] = useState<string[]>([]);
+  const [tipoGrupo, setTipoGrupo] = useState<"individual" | "grupo_personalizado" | "grupo_puesto" | "broadcast">("individual");
+  const [nombreGrupo, setNombreGrupo] = useState("");
+  const [puestoGrupo, setPuestoGrupo] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showNewConversation, setShowNewConversation] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    loadCurrentUser();
+    loadUsuarios();
+    loadConversaciones();
+  }, []);
+
+  useEffect(() => {
+    if (conversacionActiva) {
+      loadMensajes(conversacionActiva.id);
+      marcarComoLeido(conversacionActiva.id);
+      
+      // Suscribirse a nuevos mensajes en tiempo real
+      const channel = supabase
+        .channel('mensajes-realtime')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'mensajes',
+            filter: `conversacion_id=eq.${conversacionActiva.id}`
+          },
+          async (payload) => {
+            const nuevoMensaje = payload.new as Message;
+            
+            // Cargar datos del remitente
+            const { data: remitente } = await supabase
+              .from('profiles')
+              .select('id, full_name, email')
+              .eq('id', nuevoMensaje.remitente_id)
+              .single();
+
+            setMensajes((prev) => [...prev, { ...nuevoMensaje, remitente }]);
+            marcarComoLeido(conversacionActiva.id);
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [conversacionActiva]);
+
+  const loadCurrentUser = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    setCurrentUserId(user?.id || null);
+  };
+
+  const loadUsuarios = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .order('full_name');
+
+      if (error) throw error;
+      setUsuarios(data || []);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const loadConversaciones = async () => {
+    try {
+      const { data: conversacionesData, error } = await supabase
+        .from('conversaciones')
+        .select(`
+          *,
+          conversacion_participantes!inner(user_id)
+        `)
+        .order('updated_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Cargar último mensaje y contar no leídos para cada conversación
+      const conversacionesConDetalles = await Promise.all(
+        (conversacionesData || []).map(async (conv) => {
+          // Último mensaje
+          const { data: ultimoMensaje } = await supabase
+            .from('mensajes')
+            .select('contenido, created_at')
+            .eq('conversacion_id', conv.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+          // Mensajes no leídos
+          const { data: participante } = await supabase
+            .from('conversacion_participantes')
+            .select('ultimo_mensaje_leido_id')
+            .eq('conversacion_id', conv.id)
+            .eq('user_id', currentUserId)
+            .single();
+
+          let mensajesNoLeidos = 0;
+          if (participante) {
+            const { count } = await supabase
+              .from('mensajes')
+              .select('id', { count: 'exact', head: true })
+              .eq('conversacion_id', conv.id)
+              .gt('created_at', participante.ultimo_mensaje_leido_id || '1970-01-01');
+
+            mensajesNoLeidos = count || 0;
+          }
+
+          return {
+            ...conv,
+            ultimo_mensaje: ultimoMensaje,
+            mensajes_no_leidos: mensajesNoLeidos,
+          };
+        })
+      );
+
+      setConversaciones(conversacionesConDetalles);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const loadMensajes = async (conversacionId: string) => {
+    try {
+      const { data: mensajesData, error } = await supabase
+        .from('mensajes')
+        .select('*')
+        .eq('conversacion_id', conversacionId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      // Cargar datos de los remitentes
+      if (mensajesData && mensajesData.length > 0) {
+        const remitentesIds = [...new Set(mensajesData.map(m => m.remitente_id).filter(Boolean))];
+        
+        const { data: remitentes } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', remitentesIds);
+
+        const remitentesMap = new Map(remitentes?.map(r => [r.id, r]) || []);
+
+        const mensajesConRemitente = mensajesData.map(mensaje => ({
+          ...mensaje,
+          remitente: mensaje.remitente_id ? remitentesMap.get(mensaje.remitente_id) : undefined
+        }));
+
+        setMensajes(mensajesConRemitente);
+      } else {
+        setMensajes([]);
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const marcarComoLeido = async (conversacionId: string) => {
+    try {
+      const { data: ultimoMensaje } = await supabase
+        .from('mensajes')
+        .select('id')
+        .eq('conversacion_id', conversacionId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (ultimoMensaje) {
+        await supabase
+          .from('conversacion_participantes')
+          .update({ ultimo_mensaje_leido_id: ultimoMensaje.id })
+          .eq('conversacion_id', conversacionId)
+          .eq('user_id', currentUserId);
+      }
+
+      loadConversaciones();
+    } catch (error: any) {
+      console.error('Error marcando como leído:', error);
+    }
+  };
+
+  const crearConversacion = async () => {
+    try {
+      if (tipoGrupo === 'individual' && usuariosSeleccionados.length !== 1) {
+        toast({
+          title: "Error",
+          description: "Selecciona exactamente un usuario para chat individual",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (tipoGrupo === 'grupo_personalizado' && (!nombreGrupo || usuariosSeleccionados.length < 2)) {
+        toast({
+          title: "Error",
+          description: "Proporciona un nombre y selecciona al menos 2 usuarios",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (tipoGrupo === 'grupo_puesto' && !puestoGrupo) {
+        toast({
+          title: "Error",
+          description: "Selecciona un puesto",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Crear conversación
+      const { data: nuevaConv, error: convError } = await supabase
+        .from('conversaciones')
+        .insert({
+          tipo: tipoGrupo,
+          nombre: tipoGrupo === 'grupo_personalizado' ? nombreGrupo : null,
+          puesto: tipoGrupo === 'grupo_puesto' ? puestoGrupo : null,
+          creado_por: currentUserId,
+        })
+        .select()
+        .single();
+
+      if (convError) throw convError;
+
+      // Agregar participantes
+      let participantesIds = [...usuariosSeleccionados];
+
+      if (tipoGrupo === 'grupo_puesto') {
+        // Obtener todos los empleados con ese puesto
+        const { data: empleados } = await supabase
+          .from('empleados')
+          .select('user_id')
+          .eq('puesto', puestoGrupo)
+          .not('user_id', 'is', null);
+
+        participantesIds = empleados?.map(e => e.user_id!).filter(Boolean) || [];
+      } else if (tipoGrupo === 'broadcast') {
+        // Agregar todos los usuarios
+        participantesIds = usuarios.map(u => u.id);
+      }
+
+      // Agregar al creador si no está en la lista
+      if (!participantesIds.includes(currentUserId!)) {
+        participantesIds.push(currentUserId!);
+      }
+
+      const participantes = participantesIds.map(userId => ({
+        conversacion_id: nuevaConv.id,
+        user_id: userId,
+      }));
+
+      const { error: partError } = await supabase
+        .from('conversacion_participantes')
+        .insert(participantes);
+
+      if (partError) throw partError;
+
+      toast({
+        title: "Conversación creada",
+        description: "La conversación se creó correctamente",
+      });
+
+      setShowNewConversation(false);
+      setUsuariosSeleccionados([]);
+      setNombreGrupo("");
+      setPuestoGrupo("");
+      loadConversaciones();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const enviarMensaje = async () => {
+    if (!nuevoMensaje.trim() || !conversacionActiva) return;
+
+    try {
+      const { error } = await supabase
+        .from('mensajes')
+        .insert({
+          conversacion_id: conversacionActiva.id,
+          remitente_id: currentUserId,
+          contenido: nuevoMensaje.trim(),
+        });
+
+      if (error) throw error;
+
+      // Actualizar updated_at de la conversación
+      await supabase
+        .from('conversaciones')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', conversacionActiva.id);
+
+      setNuevoMensaje("");
+      loadConversaciones();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const getNombreConversacion = (conv: Conversation) => {
+    if (conv.nombre) return conv.nombre;
+    if (conv.tipo === 'grupo_puesto') return `Grupo: ${conv.puesto}`;
+    if (conv.tipo === 'broadcast') return 'Todos los usuarios';
+    return 'Chat individual';
+  };
+
+  const filteredConversaciones = conversaciones.filter((conv) =>
+    getNombreConversacion(conv).toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  return (
+    <Layout>
+      <div className="flex h-[calc(100vh-4rem)]">
+        {/* Sidebar de conversaciones */}
+        <div className="w-80 border-r flex flex-col">
+          <div className="p-4 border-b space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold">Mensajes</h2>
+              <Dialog open={showNewConversation} onOpenChange={setShowNewConversation}>
+                <DialogTrigger asChild>
+                  <Button size="sm">
+                    <Plus className="h-4 w-4 mr-1" />
+                    Nuevo
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Nueva Conversación</DialogTitle>
+                    <DialogDescription>
+                      Crea un chat individual, grupo personalizado, grupo por puesto o mensaje broadcast
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <Label>Tipo de conversación</Label>
+                      <Select value={tipoGrupo} onValueChange={(v: any) => setTipoGrupo(v)}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="individual">Chat Individual</SelectItem>
+                          <SelectItem value="grupo_personalizado">Grupo Personalizado</SelectItem>
+                          <SelectItem value="grupo_puesto">Grupo por Puesto</SelectItem>
+                          <SelectItem value="broadcast">Mensaje a Todos</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {tipoGrupo === 'grupo_personalizado' && (
+                      <div>
+                        <Label>Nombre del grupo</Label>
+                        <Input
+                          value={nombreGrupo}
+                          onChange={(e) => setNombreGrupo(e.target.value)}
+                          placeholder="ej: Equipo de Ventas"
+                        />
+                      </div>
+                    )}
+
+                    {tipoGrupo === 'grupo_puesto' && (
+                      <div>
+                        <Label>Selecciona el puesto</Label>
+                        <Select value={puestoGrupo} onValueChange={setPuestoGrupo}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar puesto" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Chofer">Choferes</SelectItem>
+                            <SelectItem value="Vendedor">Vendedores</SelectItem>
+                            <SelectItem value="Almacenista">Almacenistas</SelectItem>
+                            <SelectItem value="Secretaria">Secretarias</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {(tipoGrupo === 'individual' || tipoGrupo === 'grupo_personalizado') && (
+                      <div>
+                        <Label>Selecciona usuarios</Label>
+                        <ScrollArea className="h-64 border rounded-md p-3">
+                          <div className="space-y-2">
+                            {usuarios.map((usuario) => (
+                              <div key={usuario.id} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={usuario.id}
+                                  checked={usuariosSeleccionados.includes(usuario.id)}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setUsuariosSeleccionados([...usuariosSeleccionados, usuario.id]);
+                                    } else {
+                                      setUsuariosSeleccionados(
+                                        usuariosSeleccionados.filter((id) => id !== usuario.id)
+                                      );
+                                    }
+                                  }}
+                                />
+                                <Label htmlFor={usuario.id} className="font-normal cursor-pointer">
+                                  {usuario.full_name}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      </div>
+                    )}
+
+                    {tipoGrupo === 'broadcast' && (
+                      <div className="bg-muted p-3 rounded-md">
+                        <p className="text-sm text-muted-foreground">
+                          El mensaje será enviado a todos los usuarios del sistema
+                        </p>
+                      </div>
+                    )}
+
+                    <Button onClick={crearConversacion} className="w-full">
+                      Crear Conversación
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+            
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar conversaciones..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+          </div>
+
+          <ScrollArea className="flex-1">
+            {filteredConversaciones.map((conv) => (
+              <Card
+                key={conv.id}
+                className={`m-2 p-3 cursor-pointer hover:bg-accent transition-colors ${
+                  conversacionActiva?.id === conv.id ? 'bg-accent' : ''
+                }`}
+                onClick={() => setConversacionActiva(conv)}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start space-x-3 flex-1">
+                    <Avatar>
+                      <AvatarFallback>
+                        {conv.tipo === 'individual' ? <MessageCircle className="h-5 w-5" /> : <Users className="h-5 w-5" />}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <p className="font-medium truncate">{getNombreConversacion(conv)}</p>
+                        {conv.mensajes_no_leidos > 0 && (
+                          <Badge variant="default" className="ml-2">
+                            {conv.mensajes_no_leidos}
+                          </Badge>
+                        )}
+                      </div>
+                      {conv.ultimo_mensaje && (
+                        <p className="text-sm text-muted-foreground truncate">
+                          {conv.ultimo_mensaje.contenido}
+                        </p>
+                      )}
+                      {conv.ultimo_mensaje && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {format(new Date(conv.ultimo_mensaje.created_at), 'dd/MM/yyyy HH:mm')}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </ScrollArea>
+        </div>
+
+        {/* Área de mensajes */}
+        <div className="flex-1 flex flex-col">
+          {conversacionActiva ? (
+            <>
+              {/* Header del chat */}
+              <div className="p-4 border-b">
+                <h3 className="font-bold">{getNombreConversacion(conversacionActiva)}</h3>
+                <p className="text-sm text-muted-foreground">
+                  {conversacionActiva.tipo === 'broadcast' && 'Mensaje para todos los usuarios'}
+                  {conversacionActiva.tipo === 'grupo_puesto' && `Grupo de ${conversacionActiva.puesto}`}
+                  {conversacionActiva.tipo === 'grupo_personalizado' && 'Grupo personalizado'}
+                  {conversacionActiva.tipo === 'individual' && 'Chat individual'}
+                </p>
+              </div>
+
+              {/* Mensajes */}
+              <ScrollArea className="flex-1 p-4">
+                <div className="space-y-4">
+                  {mensajes.map((mensaje) => {
+                    const esMio = mensaje.remitente_id === currentUserId;
+                    return (
+                      <div
+                        key={mensaje.id}
+                        className={`flex ${esMio ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div className={`max-w-[70%] ${esMio ? 'order-2' : 'order-1'}`}>
+                          {!esMio && (
+                            <p className="text-xs font-medium mb-1 text-muted-foreground">
+                              {mensaje.remitente?.full_name || 'Usuario'}
+                            </p>
+                          )}
+                          <div
+                            className={`rounded-lg p-3 ${
+                              esMio
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-muted'
+                            }`}
+                          >
+                            <p>{mensaje.contenido}</p>
+                            <p className={`text-xs mt-1 ${esMio ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                              {format(new Date(mensaje.created_at), 'HH:mm')}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+
+              {/* Input de mensaje */}
+              <div className="p-4 border-t">
+                <div className="flex space-x-2">
+                  <Input
+                    value={nuevoMensaje}
+                    onChange={(e) => setNuevoMensaje(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        enviarMensaje();
+                      }
+                    }}
+                    placeholder="Escribe un mensaje..."
+                  />
+                  <Button onClick={enviarMensaje} disabled={!nuevoMensaje.trim()}>
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-muted-foreground">
+              <div className="text-center">
+                <MessageCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Selecciona una conversación para comenzar</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </Layout>
+  );
+};
+
+export default Chat;

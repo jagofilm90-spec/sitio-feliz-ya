@@ -16,6 +16,7 @@ import Facturas from "./pages/Facturas";
 import PortalCliente from "./pages/PortalCliente";
 import Usuarios from "./pages/Usuarios";
 import Empleados from "./pages/Empleados";
+import Chat from "./pages/Chat";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +39,7 @@ const App = () => (
           <Route path="/portal-cliente" element={<PortalCliente />} />
           <Route path="/empleados" element={<Empleados />} />
           <Route path="/usuarios" element={<Usuarios />} />
+          <Route path="/chat" element={<Chat />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

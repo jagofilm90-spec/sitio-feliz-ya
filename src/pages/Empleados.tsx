@@ -846,6 +846,33 @@ const Empleados = () => {
     }
   };
 
+  // Función helper para calcular documentos esperados según puesto
+  const getDocumentosEsperados = (puesto: string): number => {
+    // Documentos base para todos los puestos:
+    // contrato_laboral, ine, carta_seguro_social, constancia_situacion_fiscal, 
+    // acta_nacimiento, comprobante_domicilio, curp, rfc
+    const documentosBase = 8;
+    
+    // Choferes y vendedores necesitan licencia_conducir adicional
+    if (puesto.toLowerCase() === "chofer" || puesto.toLowerCase() === "vendedor") {
+      return documentosBase + 1; // 9 documentos
+    }
+    
+    return documentosBase; // 8 documentos
+  };
+
+  // Función helper para contar documentos subidos (excluyendo terminación)
+  const getDocumentosSubidos = (empleadoId: string): number => {
+    const docs = documentos[empleadoId] || [];
+    // Excluir documentos de terminación del conteo
+    const docsActivos = docs.filter(doc => 
+      doc.tipo_documento !== "carta_renuncia" && 
+      doc.tipo_documento !== "carta_despido" && 
+      doc.tipo_documento !== "comprobante_finiquito"
+    );
+    return docsActivos.length;
+  };
+
   const resetForm = () => {
     setFormData({
       nombre_completo: "",
@@ -1635,7 +1662,7 @@ const Empleados = () => {
                               </span>
                             </TableCell>
                             <TableCell>
-                              <div className="flex gap-1">
+                              <div className="flex flex-col gap-1">
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -1644,12 +1671,12 @@ const Empleados = () => {
                                     setIsDocDialogOpen(true);
                                   }}
                                 >
-                                  <Upload className="h-4 w-4 mr-2" />
-                                  Docs ({documentos[empleado.id]?.length || 0})
+                                  <FileText className="h-4 w-4 mr-2" />
+                                  {getDocumentosSubidos(empleado.id)}/{getDocumentosEsperados(empleado.puesto)}
                                 </Button>
                                 {documentosPendientes[empleado.id]?.length > 0 && (
-                                  <Badge variant="destructive" className="ml-1">
-                                    {documentosPendientes[empleado.id].length} faltantes
+                                  <Badge variant="destructive" className="text-xs">
+                                    {documentosPendientes[empleado.id].length} pendientes
                                   </Badge>
                                 )}
                               </div>
@@ -1813,7 +1840,7 @@ const Empleados = () => {
                               </span>
                             </TableCell>
                             <TableCell>
-                              <div className="flex gap-1">
+                              <div className="flex flex-col gap-1">
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -1822,12 +1849,12 @@ const Empleados = () => {
                                     setIsDocDialogOpen(true);
                                   }}
                                 >
-                                  <Upload className="h-4 w-4 mr-2" />
-                                  Docs ({documentos[empleado.id]?.length || 0})
+                                  <FileText className="h-4 w-4 mr-2" />
+                                  {getDocumentosSubidos(empleado.id)}/{getDocumentosEsperados(empleado.puesto)}
                                 </Button>
                                 {documentosPendientes[empleado.id]?.length > 0 && (
-                                  <Badge variant="destructive" className="ml-1">
-                                    {documentosPendientes[empleado.id].length} faltantes
+                                  <Badge variant="destructive" className="text-xs">
+                                    {documentosPendientes[empleado.id].length} pendientes
                                   </Badge>
                                 )}
                               </div>
@@ -1991,7 +2018,7 @@ const Empleados = () => {
                               </span>
                             </TableCell>
                             <TableCell>
-                              <div className="flex gap-1">
+                              <div className="flex flex-col gap-1">
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -2000,12 +2027,12 @@ const Empleados = () => {
                                     setIsDocDialogOpen(true);
                                   }}
                                 >
-                                  <Upload className="h-4 w-4 mr-2" />
-                                  Docs ({documentos[empleado.id]?.length || 0})
+                                  <FileText className="h-4 w-4 mr-2" />
+                                  {getDocumentosSubidos(empleado.id)}/{getDocumentosEsperados(empleado.puesto)}
                                 </Button>
                                 {documentosPendientes[empleado.id]?.length > 0 && (
-                                  <Badge variant="destructive" className="ml-1">
-                                    {documentosPendientes[empleado.id].length} faltantes
+                                  <Badge variant="destructive" className="text-xs">
+                                    {documentosPendientes[empleado.id].length} pendientes
                                   </Badge>
                                 )}
                               </div>

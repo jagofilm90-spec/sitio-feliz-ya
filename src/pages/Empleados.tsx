@@ -954,7 +954,7 @@ const Empleados = () => {
                   <Label htmlFor="activo">Empleado activo</Label>
                 </div>
 
-                {!formData.activo && (
+                {!formData.activo && editingEmpleado && (
                   <div className="border-t pt-4 bg-muted/30 p-4 rounded-lg">
                     <h3 className="font-medium mb-3 text-destructive">
                       Información de Baja
@@ -991,10 +991,41 @@ const Empleados = () => {
                           </Select>
                         </div>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        Puedes subir la carta de renuncia/despido y el comprobante de
-                        finiquito en la sección de documentos después de guardar
-                      </p>
+
+                      {/* Documentos de terminación según el motivo */}
+                      {formData.motivo_baja && (
+                        <div className="border-t pt-4 space-y-3">
+                          <p className="text-sm font-medium">Documentos requeridos:</p>
+                          
+                          {(formData.motivo_baja === "renuncia" || formData.motivo_baja === "despido") && (
+                            <>
+                              <div>
+                                <Label htmlFor="doc_carta">
+                                  {formData.motivo_baja === "renuncia" ? "Carta de Renuncia" : "Carta de Despido"}
+                                </Label>
+                                <p className="text-xs text-muted-foreground mb-2">
+                                  Sube estos documentos usando el botón "Docs" después de guardar los cambios
+                                </p>
+                              </div>
+                              <div>
+                                <Label htmlFor="doc_finiquito">Comprobante de Finiquito</Label>
+                                <p className="text-xs text-muted-foreground mb-2">
+                                  Sube estos documentos usando el botón "Docs" después de guardar los cambios
+                                </p>
+                              </div>
+                            </>
+                          )}
+
+                          {formData.motivo_baja === "abandono" && (
+                            <div>
+                              <Label htmlFor="doc_abandono">Carta de Abandono de Trabajo</Label>
+                              <p className="text-xs text-muted-foreground mb-2">
+                                Sube este documento usando el botón "Docs" después de guardar los cambios
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1574,10 +1605,13 @@ const Empleados = () => {
                         <SelectValue placeholder="Selecciona tipo de documento" />
                       </SelectTrigger>
                       <SelectContent>
-                        {/* Filtrar tipos de documento ya subidos */}
+                        {/* Filtrar tipos de documento según el estado del empleado */}
                         {selectedEmpleado && (() => {
+                          const empleado = empleados.find(e => e.id === selectedEmpleado);
                           const tiposSubidos = documentos[selectedEmpleado]?.map(doc => doc.tipo_documento) || [];
-                          const todosTipos: Array<{ value: EmpleadoDocumento["tipo_documento"], label: string }> = [
+                          
+                          // Tipos de documento normales (sin terminación)
+                          const tiposNormales: Array<{ value: EmpleadoDocumento["tipo_documento"], label: string }> = [
                             { value: "contrato_laboral", label: "Contrato Laboral" },
                             { value: "ine", label: "INE / Identificación" },
                             { value: "licencia_conducir", label: "Licencia de Conducir" },
@@ -1587,12 +1621,27 @@ const Empleados = () => {
                             { value: "comprobante_domicilio", label: "Comprobante de Domicilio" },
                             { value: "curp", label: "CURP" },
                             { value: "rfc", label: "RFC" },
-                            { value: "carta_renuncia", label: "Carta de Renuncia" },
-                            { value: "carta_despido", label: "Carta de Despido" },
-                            { value: "comprobante_finiquito", label: "Comprobante de Finiquito" },
                             { value: "otro", label: "Otro" },
                           ];
-                          
+
+                          // Tipos de documento de terminación (solo si el empleado está inactivo)
+                          const tiposTerminacion: Array<{ value: EmpleadoDocumento["tipo_documento"], label: string }> = [];
+                          if (empleado && !empleado.activo && empleado.motivo_baja) {
+                            if (empleado.motivo_baja === "renuncia") {
+                              tiposTerminacion.push(
+                                { value: "carta_renuncia", label: "Carta de Renuncia" },
+                                { value: "comprobante_finiquito", label: "Comprobante de Finiquito" }
+                              );
+                            } else if (empleado.motivo_baja === "despido") {
+                              tiposTerminacion.push(
+                                { value: "carta_despido", label: "Carta de Despido" },
+                                { value: "comprobante_finiquito", label: "Comprobante de Finiquito" }
+                              );
+                            }
+                            // Para abandono, solo pueden usar "otro" que ya está en tipos normales
+                          }
+
+                          const todosTipos = [...tiposNormales, ...tiposTerminacion];
                           const tiposDisponibles = todosTipos.filter(tipo => !tiposSubidos.includes(tipo.value));
                           
                           if (tiposDisponibles.length === 0) {

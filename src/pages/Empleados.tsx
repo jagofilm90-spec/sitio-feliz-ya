@@ -180,14 +180,6 @@ const Empleados = () => {
     finiquito: null,
   });
 
-  const [terminationPreviewUrls, setTerminationPreviewUrls] = useState<{
-    carta: string | null;
-    finiquito: string | null;
-  }>({
-    carta: null,
-    finiquito: null,
-  });
-
   useEffect(() => {
     loadEmpleados();
     loadUsuarios();
@@ -419,9 +411,6 @@ const Empleados = () => {
     
     // Reset termination files when opening edit
     setTerminationFiles({ carta: null, finiquito: null });
-    if (terminationPreviewUrls.carta) URL.revokeObjectURL(terminationPreviewUrls.carta);
-    if (terminationPreviewUrls.finiquito) URL.revokeObjectURL(terminationPreviewUrls.finiquito);
-    setTerminationPreviewUrls({ carta: null, finiquito: null });
     
     setIsDialogOpen(true);
   };
@@ -695,12 +684,6 @@ const Empleados = () => {
       motivo_baja: "",
     });
     setTerminationFiles({ carta: null, finiquito: null });
-    
-    // Limpiar URLs de vista previa
-    if (terminationPreviewUrls.carta) URL.revokeObjectURL(terminationPreviewUrls.carta);
-    if (terminationPreviewUrls.finiquito) URL.revokeObjectURL(terminationPreviewUrls.finiquito);
-    setTerminationPreviewUrls({ carta: null, finiquito: null });
-    
     setEditingEmpleado(null);
   };
 
@@ -708,27 +691,7 @@ const Empleados = () => {
     type: "carta" | "finiquito",
     file: File | null
   ) => {
-    // Limpiar URL anterior si existe
-    if (type === "carta" && terminationPreviewUrls.carta) {
-      URL.revokeObjectURL(terminationPreviewUrls.carta);
-    }
-    if (type === "finiquito" && terminationPreviewUrls.finiquito) {
-      URL.revokeObjectURL(terminationPreviewUrls.finiquito);
-    }
-
-    // Actualizar archivo
     setTerminationFiles({ ...terminationFiles, [type]: file });
-
-    // Crear nueva URL de vista previa si hay archivo
-    if (file) {
-      const previewUrl = URL.createObjectURL(file);
-      setTerminationPreviewUrls({ ...terminationPreviewUrls, [type]: previewUrl });
-      
-      // Log para debug
-      console.log(`Vista previa creada para ${type}:`, previewUrl);
-    } else {
-      setTerminationPreviewUrls({ ...terminationPreviewUrls, [type]: null });
-    }
   };
 
   const filteredEmpleados = empleados.filter((emp) => {
@@ -1157,15 +1120,6 @@ const Empleados = () => {
                                 Archivo seleccionado: {terminationFiles.carta.name}
                               </p>
                             )}
-                            {terminationPreviewUrls.carta && (
-                              <div className="mt-2 border rounded-lg overflow-hidden bg-muted/20">
-                                <embed
-                                  src={terminationPreviewUrls.carta}
-                                  type="application/pdf"
-                                  className="w-full h-[400px]"
-                                />
-                              </div>
-                            )}
                           </div>
                           
                           {/* Comprobante de Finiquito */}
@@ -1216,15 +1170,6 @@ const Empleados = () => {
                               <p className="text-xs text-muted-foreground">
                                 Archivo seleccionado: {terminationFiles.finiquito.name}
                               </p>
-                            )}
-                            {terminationPreviewUrls.finiquito && (
-                              <div className="mt-2 border rounded-lg overflow-hidden bg-muted/20">
-                                <embed
-                                  src={terminationPreviewUrls.finiquito}
-                                  type="application/pdf"
-                                  className="w-full h-[400px]"
-                                />
-                              </div>
                             )}
                           </div>
                         </div>

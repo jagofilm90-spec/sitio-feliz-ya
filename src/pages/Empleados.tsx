@@ -562,6 +562,20 @@ const Empleados = () => {
     return usuario ? usuario.full_name : "-";
   };
 
+  // Filtrar usuarios que ya están asignados a empleados (excepto el actual si estamos editando)
+  const usuariosDisponibles = usuarios.filter((usuario) => {
+    const empleadoConUsuario = empleados.find((emp) => emp.user_id === usuario.id);
+    
+    // Si no hay empleado con este usuario, está disponible
+    if (!empleadoConUsuario) return true;
+    
+    // Si estamos editando y es el usuario del empleado actual, también está disponible
+    if (editingEmpleado && empleadoConUsuario.id === editingEmpleado.id) return true;
+    
+    // En cualquier otro caso, no está disponible
+    return false;
+  });
+
   const getTipoDocumentoLabel = (tipo: EmpleadoDocumento["tipo_documento"]) => {
     const labels: Record<EmpleadoDocumento["tipo_documento"], string> = {
       contrato_laboral: "Contrato Laboral",
@@ -631,11 +645,17 @@ const Empleados = () => {
                       <SelectValue placeholder="Seleccionar usuario existente" />
                     </SelectTrigger>
                     <SelectContent>
-                      {usuarios.map((usuario) => (
-                        <SelectItem key={usuario.id} value={usuario.id}>
-                          {usuario.full_name} ({usuario.email})
+                      {usuariosDisponibles.length === 0 ? (
+                        <SelectItem value="no-users" disabled>
+                          No hay usuarios disponibles
                         </SelectItem>
-                      ))}
+                      ) : (
+                        usuariosDisponibles.map((usuario) => (
+                          <SelectItem key={usuario.id} value={usuario.id}>
+                            {usuario.full_name} ({usuario.email})
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground mt-1">

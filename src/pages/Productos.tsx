@@ -43,34 +43,25 @@ const Productos = () => {
   const [formData, setFormData] = useState<{
     codigo: string;
     nombre: string;
-    descripcion: string;
-    marca: string;
     presentacion: string;
-    categoria: string;
     unidad: "kg" | "pieza" | "caja" | "bulto" | "costal" | "litro";
     precio_venta: string;
     precio_compra: string;
     stock_minimo: string;
     maneja_caducidad: boolean;
-    proveedor_preferido_id: string;
   }>({
     codigo: "",
     nombre: "",
-    descripcion: "",
-    marca: "",
     presentacion: "",
-    categoria: "",
     unidad: "pieza",
     precio_venta: "",
     precio_compra: "",
     stock_minimo: "",
     maneja_caducidad: false,
-    proveedor_preferido_id: "",
   });
 
   useEffect(() => {
     loadProductos();
-    loadProveedores();
   }, []);
 
   const loadProductos = async () => {
@@ -99,34 +90,20 @@ const Productos = () => {
     }
   };
 
-  const loadProveedores = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("proveedores")
-        .select("id, nombre")
-        .eq("activo", true)
-        .order("nombre");
-
-      if (error) throw error;
-      setProveedores(data || []);
-    } catch (error: any) {
-      console.error("Error loading proveedores:", error);
-    }
-  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
       const productData = {
-        ...formData,
-        precio_venta: parseFloat(formData.precio_venta),
-        precio_compra: parseFloat(formData.precio_compra),
-        stock_minimo: parseInt(formData.stock_minimo),
-        proveedor_preferido_id: formData.proveedor_preferido_id || null,
-        marca: formData.marca || null,
+        codigo: formData.codigo,
+        nombre: formData.nombre,
         presentacion: formData.presentacion || null,
-        categoria: formData.categoria || null,
+        unidad: formData.unidad,
+        precio_venta: parseFloat(formData.precio_venta),
+        precio_compra: parseFloat(formData.precio_compra) || 0,
+        stock_minimo: parseInt(formData.stock_minimo),
+        maneja_caducidad: formData.maneja_caducidad,
       };
 
       if (editingProduct) {
@@ -163,16 +140,12 @@ const Productos = () => {
     setFormData({
       codigo: product.codigo,
       nombre: product.nombre,
-      descripcion: product.descripcion || "",
-      marca: product.marca || "",
       presentacion: product.presentacion || "",
-      categoria: product.categoria || "",
       unidad: product.unidad,
       precio_venta: product.precio_venta.toString(),
       precio_compra: product.precio_compra.toString(),
       stock_minimo: product.stock_minimo.toString(),
       maneja_caducidad: product.maneja_caducidad,
-      proveedor_preferido_id: product.proveedor_preferido_id || "",
     });
     setDialogOpen(true);
   };
@@ -203,16 +176,12 @@ const Productos = () => {
     setFormData({
       codigo: "",
       nombre: "",
-      descripcion: "",
-      marca: "",
       presentacion: "",
-      categoria: "",
       unidad: "pieza",
       precio_venta: "",
       precio_compra: "",
       stock_minimo: "",
       maneja_caducidad: false,
-      proveedor_preferido_id: "",
     });
   };
 
@@ -220,8 +189,6 @@ const Productos = () => {
     (p) =>
       p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (p.marca && p.marca.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (p.categoria && p.categoria.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (p.presentacion && p.presentacion.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
@@ -258,6 +225,7 @@ const Productos = () => {
                       value={formData.codigo}
                       onChange={(e) => setFormData({ ...formData, codigo: e.target.value })}
                       required
+                      autoComplete="off"
                     />
                   </div>
                   <div className="space-y-2">
@@ -281,82 +249,41 @@ const Productos = () => {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="nombre">Nombre *</Label>
+                  <Label htmlFor="nombre">Descripción del Producto *</Label>
                   <Input
                     id="nombre"
                     value={formData.nombre}
                     onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
                     required
+                    autoComplete="off"
+                    placeholder="Ej: Arroz, Azúcar, Frijol"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="marca">Marca</Label>
-                    <Input
-                      id="marca"
-                      value={formData.marca}
-                      onChange={(e) => setFormData({ ...formData, marca: e.target.value })}
-                      placeholder="Ej: Almasa, Morelos, Purina"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="presentacion">Presentación</Label>
-                    <Input
-                      id="presentacion"
-                      value={formData.presentacion}
-                      onChange={(e) => setFormData({ ...formData, presentacion: e.target.value })}
-                      placeholder="Ej: 25 KG, 50 KG"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="categoria">Categoría</Label>
-                    <Input
-                      id="categoria"
-                      value={formData.categoria}
-                      onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
-                      placeholder="Ej: Azúcar, Arroz, Alimentos"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="proveedor_preferido">Proveedor Preferido</Label>
-                    <Select
-                      value={formData.proveedor_preferido_id || undefined}
-                      onValueChange={(value) => setFormData({ ...formData, proveedor_preferido_id: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar proveedor" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {proveedores.map((proveedor) => (
-                          <SelectItem key={proveedor.id} value={proveedor.id}>
-                            {proveedor.nombre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
                 <div className="space-y-2">
-                  <Label htmlFor="descripcion">Descripción</Label>
+                  <Label htmlFor="presentacion">Presentación</Label>
                   <Input
-                    id="descripcion"
-                    value={formData.descripcion}
-                    onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
+                    id="presentacion"
+                    value={formData.presentacion}
+                    onChange={(e) => setFormData({ ...formData, presentacion: e.target.value })}
+                    placeholder="Ej: 25 KG, 50 KG, 1 LT"
+                    autoComplete="off"
                   />
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="precio_compra">Precio Compra *</Label>
+                    <Label htmlFor="precio_compra">Precio Compra</Label>
                     <Input
                       id="precio_compra"
                       type="number"
                       step="0.01"
                       value={formData.precio_compra}
                       onChange={(e) => setFormData({ ...formData, precio_compra: e.target.value })}
-                      required
+                      placeholder="0.00"
+                      autoComplete="off"
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Se actualizará desde Compras
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="precio_venta">Precio Venta *</Label>
@@ -367,6 +294,7 @@ const Productos = () => {
                       value={formData.precio_venta}
                       onChange={(e) => setFormData({ ...formData, precio_venta: e.target.value })}
                       required
+                      autoComplete="off"
                     />
                   </div>
                   <div className="space-y-2">
@@ -377,6 +305,7 @@ const Productos = () => {
                       value={formData.stock_minimo}
                       onChange={(e) => setFormData({ ...formData, stock_minimo: e.target.value })}
                       required
+                      autoComplete="off"
                     />
                   </div>
                 </div>
@@ -418,11 +347,11 @@ const Productos = () => {
             <TableHeader>
               <TableRow>
                 <TableHead>Código</TableHead>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Marca</TableHead>
+                <TableHead>Descripción</TableHead>
                 <TableHead>Presentación</TableHead>
-                <TableHead>Categoría</TableHead>
+                <TableHead>Unidad</TableHead>
                 <TableHead>Precio Venta</TableHead>
+                <TableHead>Precio Compra</TableHead>
                 <TableHead>Stock</TableHead>
                 <TableHead>Acciones</TableHead>
               </TableRow>
@@ -444,11 +373,16 @@ const Productos = () => {
                 filteredProductos.map((producto) => (
                   <TableRow key={producto.id}>
                     <TableCell className="font-medium">{producto.codigo}</TableCell>
-                    <TableCell>{producto.nombre}</TableCell>
-                    <TableCell>{producto.marca || "-"}</TableCell>
+                    <TableCell>
+                      {producto.nombre}
+                      {producto.maneja_caducidad && " 📅"}
+                    </TableCell>
                     <TableCell>{producto.presentacion || "-"}</TableCell>
-                    <TableCell>{producto.categoria || "-"}</TableCell>
-                    <TableCell>${producto.precio_venta.toFixed(2)}</TableCell>
+                    <TableCell className="uppercase">{producto.unidad}</TableCell>
+                    <TableCell className="font-medium">${producto.precio_venta.toFixed(2)}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {producto.precio_compra > 0 ? `$${producto.precio_compra.toFixed(2)}` : "-"}
+                    </TableCell>
                     <TableCell>
                       <Badge variant={producto.stock_actual <= producto.stock_minimo ? "destructive" : "default"}>
                         {producto.stock_actual}

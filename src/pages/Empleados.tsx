@@ -460,16 +460,15 @@ const Empleados = () => {
                 <div>
                   <Label htmlFor="user_id">Usuario del Sistema (opcional)</Label>
                   <Select
-                    value={formData.user_id}
+                    value={formData.user_id || undefined}
                     onValueChange={(value) =>
                       setFormData({ ...formData, user_id: value })
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar usuario (opcional)" />
+                      <SelectValue placeholder="Sin usuario asignado" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Sin usuario asignado</SelectItem>
                       {usuarios.map((usuario) => (
                         <SelectItem key={usuario.id} value={usuario.id}>
                           {usuario.full_name} ({usuario.email})

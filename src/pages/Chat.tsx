@@ -700,6 +700,28 @@ const Chat = () => {
     }
   };
 
+  const descargarArchivo = async (url: string, nombre: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = nombre;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error('Error descargando archivo:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo descargar el archivo",
+        variant: "destructive",
+      });
+    }
+  };
+
   const getNombreConversacion = (conv: Conversation) => {
     if (conv.nombre) return conv.nombre;
     if (conv.tipo === 'grupo_puesto') return `Grupo: ${conv.puesto}`;
@@ -1068,9 +1090,8 @@ const Chat = () => {
                             {mensaje.archivo_url && (
                               <div className="mb-2">
                                 {mensaje.archivo_tipo?.startsWith('image/') ? (
-                                  <a 
-                                    href={mensaje.archivo_url} 
-                                    download={mensaje.archivo_nombre}
+                                  <button
+                                    onClick={() => descargarArchivo(mensaje.archivo_url!, mensaje.archivo_nombre || 'imagen.jpg')}
                                     className="block"
                                   >
                                     <img 
@@ -1078,12 +1099,11 @@ const Chat = () => {
                                       alt={mensaje.archivo_nombre || 'Imagen'} 
                                       className="max-w-xs rounded-md cursor-pointer hover:opacity-90 transition-opacity"
                                     />
-                                  </a>
+                                  </button>
                                 ) : (
-                                  <a
-                                    href={mensaje.archivo_url}
-                                    download={mensaje.archivo_nombre}
-                                    className={`flex items-center gap-2 p-2 rounded border ${
+                                  <button
+                                    onClick={() => descargarArchivo(mensaje.archivo_url!, mensaje.archivo_nombre || 'archivo.pdf')}
+                                    className={`flex items-center gap-2 p-2 rounded border w-full ${
                                       esMio 
                                         ? 'border-primary-foreground/20 hover:bg-primary-foreground/10' 
                                         : 'border-border hover:bg-accent'
@@ -1093,7 +1113,7 @@ const Chat = () => {
                                     <span className="text-sm truncate max-w-[200px]">
                                       {mensaje.archivo_nombre || 'Archivo'}
                                     </span>
-                                  </a>
+                                  </button>
                                 )}
                               </div>
                             )}

@@ -2,7 +2,9 @@ import { ReactNode, useEffect, useState } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import {
   Package,
   Users,
@@ -30,6 +32,7 @@ const Layout = ({ children }: LayoutProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
+  const unreadCount = useUnreadMessages();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -119,14 +122,23 @@ const Layout = ({ children }: LayoutProps) => {
             {menuItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;
+              const showBadge = item.path === "/chat" && unreadCount > 0;
               return (
                 <Link key={item.path} to={item.path}>
                   <Button
                     variant={isActive ? "secondary" : "ghost"}
-                    className="w-full justify-start"
+                    className="w-full justify-start relative"
                   >
                     <Icon className="h-4 w-4 mr-2" />
                     {item.label}
+                    {showBadge && (
+                      <Badge 
+                        variant="destructive" 
+                        className="ml-auto h-5 min-w-5 flex items-center justify-center px-1.5"
+                      >
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                      </Badge>
+                    )}
                   </Button>
                 </Link>
               );
@@ -142,6 +154,7 @@ const Layout = ({ children }: LayoutProps) => {
                 {menuItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = location.pathname === item.path;
+                  const showBadge = item.path === "/chat" && unreadCount > 0;
                   return (
                     <Link
                       key={item.path}
@@ -150,10 +163,18 @@ const Layout = ({ children }: LayoutProps) => {
                     >
                       <Button
                         variant={isActive ? "secondary" : "ghost"}
-                        className="w-full justify-start"
+                        className="w-full justify-start relative"
                       >
                         <Icon className="h-4 w-4 mr-2" />
                         {item.label}
+                        {showBadge && (
+                          <Badge 
+                            variant="destructive" 
+                            className="ml-auto h-5 min-w-5 flex items-center justify-center px-1.5"
+                          >
+                            {unreadCount > 99 ? "99+" : unreadCount}
+                          </Badge>
+                        )}
                       </Button>
                     </Link>
                   );

@@ -416,6 +416,13 @@ const Empleados = () => {
       fecha_baja: empleado.fecha_baja || "",
       motivo_baja: empleado.motivo_baja || "",
     });
+    
+    // Reset termination files when opening edit
+    setTerminationFiles({ carta: null, finiquito: null });
+    if (terminationPreviewUrls.carta) URL.revokeObjectURL(terminationPreviewUrls.carta);
+    if (terminationPreviewUrls.finiquito) URL.revokeObjectURL(terminationPreviewUrls.finiquito);
+    setTerminationPreviewUrls({ carta: null, finiquito: null });
+    
     setIsDialogOpen(true);
   };
 
@@ -1095,10 +1102,45 @@ const Empleados = () => {
                         <div className="border-t pt-4 space-y-4">
                           <p className="text-sm font-medium">Documentos de terminación:</p>
                           
+                          {/* Carta de Renuncia/Despido */}
                           <div className="space-y-2">
                             <Label htmlFor="carta_file">
                               {formData.motivo_baja === "renuncia" ? "Carta de Renuncia (PDF)" : "Carta de Despido (PDF)"}
                             </Label>
+                            
+                            {/* Mostrar documento existente si ya fue subido */}
+                            {editingEmpleado && documentos[editingEmpleado.id] && (() => {
+                              const tipoDoc = formData.motivo_baja === "renuncia" ? "carta_renuncia" : "carta_despido";
+                              const docExistente = documentos[editingEmpleado.id].find(d => d.tipo_documento === tipoDoc);
+                              
+                              if (docExistente) {
+                                return (
+                                  <div className="p-3 border rounded-lg bg-muted/30 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <FileText className="h-4 w-4 text-muted-foreground" />
+                                      <div>
+                                        <p className="text-sm font-medium">{docExistente.nombre_archivo}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          Subido: {new Date(docExistente.created_at).toLocaleDateString('es-MX')}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleDownloadDocument(docExistente)}
+                                    >
+                                      <Download className="h-4 w-4 mr-2" />
+                                      Descargar
+                                    </Button>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
+                            
+                            {/* Input para subir nuevo documento */}
                             <Input
                               id="carta_file"
                               type="file"
@@ -1123,8 +1165,42 @@ const Empleados = () => {
                             )}
                           </div>
                           
+                          {/* Comprobante de Finiquito */}
                           <div className="space-y-2">
                             <Label htmlFor="finiquito_file">Comprobante de Finiquito (PDF)</Label>
+                            
+                            {/* Mostrar documento existente si ya fue subido */}
+                            {editingEmpleado && documentos[editingEmpleado.id] && (() => {
+                              const docExistente = documentos[editingEmpleado.id].find(d => d.tipo_documento === "comprobante_finiquito");
+                              
+                              if (docExistente) {
+                                return (
+                                  <div className="p-3 border rounded-lg bg-muted/30 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <FileText className="h-4 w-4 text-muted-foreground" />
+                                      <div>
+                                        <p className="text-sm font-medium">{docExistente.nombre_archivo}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          Subido: {new Date(docExistente.created_at).toLocaleDateString('es-MX')}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleDownloadDocument(docExistente)}
+                                    >
+                                      <Download className="h-4 w-4 mr-2" />
+                                      Descargar
+                                    </Button>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
+                            
+                            {/* Input para subir nuevo documento */}
                             <Input
                               id="finiquito_file"
                               type="file"

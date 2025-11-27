@@ -1216,11 +1216,17 @@ export type Database = {
           id: string
           nombre: string
           notas: string | null
+          numero_serie: string | null
           peso_maximo_foraneo_kg: number
           peso_maximo_local_kg: number
           placa: string | null
+          poliza_seguro_url: string | null
+          poliza_seguro_vencimiento: string | null
           status: string
+          tarjeta_circulacion_url: string | null
+          tarjeta_circulacion_vencimiento: string | null
           tipo: string
+          tipo_combustible: string | null
           updated_at: string
         }
         Insert: {
@@ -1229,11 +1235,17 @@ export type Database = {
           id?: string
           nombre: string
           notas?: string | null
+          numero_serie?: string | null
           peso_maximo_foraneo_kg?: number
           peso_maximo_local_kg?: number
           placa?: string | null
+          poliza_seguro_url?: string | null
+          poliza_seguro_vencimiento?: string | null
           status?: string
+          tarjeta_circulacion_url?: string | null
+          tarjeta_circulacion_vencimiento?: string | null
           tipo?: string
+          tipo_combustible?: string | null
           updated_at?: string
         }
         Update: {
@@ -1242,11 +1254,17 @@ export type Database = {
           id?: string
           nombre?: string
           notas?: string | null
+          numero_serie?: string | null
           peso_maximo_foraneo_kg?: number
           peso_maximo_local_kg?: number
           placa?: string | null
+          poliza_seguro_url?: string | null
+          poliza_seguro_vencimiento?: string | null
           status?: string
+          tarjeta_circulacion_url?: string | null
+          tarjeta_circulacion_vencimiento?: string | null
           tipo?: string
+          tipo_combustible?: string | null
           updated_at?: string
         }
         Relationships: []

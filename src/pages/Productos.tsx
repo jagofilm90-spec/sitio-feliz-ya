@@ -45,7 +45,37 @@ const Productos = () => {
   const [tabActivo, setTabActivo] = useState<"activos" | "inactivos">("activos");
   const [codigoGapWarning, setCodigoGapWarning] = useState<string | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
+  const [similarNameWarning, setSimilarNameWarning] = useState<string | null>(null);
   const { toast } = useToast();
+
+  // Función para normalizar texto (quitar acentos y convertir a minúsculas)
+  const normalizeText = (text: string): string => {
+    return text
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+  };
+
+  // Función para verificar si existe un producto con nombre similar (ignorando acentos)
+  const checkSimilarProductName = (nombre: string): string | null => {
+    if (!nombre || nombre.trim().length < 3) return null;
+    
+    const normalizedInput = normalizeText(nombre);
+    
+    const similar = productos.find(p => {
+      if (editingProduct && p.id === editingProduct.id) return false;
+      const normalizedExisting = normalizeText(p.nombre || '');
+      // Verificar si son similares (ignorando acentos) pero diferentes textualmente
+      return normalizedExisting === normalizedInput && 
+             (p.nombre || '').trim().toLowerCase() !== nombre.trim().toLowerCase();
+    });
+
+    if (similar) {
+      return `¿Quisiste decir "${similar.nombre}"? (${similar.codigo})`;
+    }
+    return null;
+  };
 
   // Función para obtener el siguiente código disponible basado en un prefijo
   const getNextAvailableCodeForPrefix = (prefix: string): string | null => {
@@ -134,10 +164,10 @@ const Productos = () => {
     }
   };
 
-  // Función para verificar productos duplicados
+  // Función para verificar productos duplicados (ahora también compara sin acentos)
   const checkDuplicateProduct = (nombre: string, marca: string, presentacion: string, unidad: string): string | null => {
-    const normalizedNombre = nombre.trim().toLowerCase();
-    const normalizedMarca = (marca || '').trim().toLowerCase();
+    const normalizedNombre = normalizeText(nombre);
+    const normalizedMarca = normalizeText(marca || '');
     const normalizedPresentacion = (presentacion || '').trim();
     const normalizedUnidad = unidad;
 
@@ -145,12 +175,12 @@ const Productos = () => {
       // Si estamos editando, excluir el producto actual
       if (editingProduct && p.id === editingProduct.id) return false;
 
-      const pNombre = (p.nombre || '').trim().toLowerCase();
-      const pMarca = (p.marca || '').trim().toLowerCase();
+      const pNombre = normalizeText(p.nombre || '');
+      const pMarca = normalizeText(p.marca || '');
       const pPresentacion = (p.presentacion || '').trim();
       const pUnidad = p.unidad;
 
-      // Es duplicado si coinciden nombre, marca, presentación Y unidad
+      // Es duplicado si coinciden nombre, marca, presentación Y unidad (ignorando acentos)
       return pNombre === normalizedNombre &&
              pMarca === normalizedMarca &&
              pPresentacion === normalizedPresentacion &&
@@ -342,6 +372,7 @@ const Productos = () => {
     setEditingProduct(null);
     setCodigoGapWarning(null);
     setDuplicateWarning(null);
+    setSimilarNameWarning(null);
     setFormData({
       codigo: "",
       nombre: "",
@@ -489,12 +520,25 @@ const Productos = () => {
                       const nombre = e.target.value;
                       setFormData({ ...formData, nombre });
                       setDuplicateWarning(checkDuplicateProduct(nombre, formData.marca, formData.presentacion, formData.unidad));
+                      setSimilarNameWarning(checkSimilarProductName(nombre));
                     }}
                     required
                     autoComplete="off"
                     spellCheck={true}
+                    lang="es-MX"
+                    list="nombres-existentes"
                     placeholder="Ej: Alpiste, Azúcar, Frijol"
                   />
+                  <datalist id="nombres-existentes">
+                    {[...new Set(productos.map(p => p.nombre).filter(Boolean))].sort().map((nom) => (
+                      <option key={nom} value={nom} />
+                    ))}
+                  </datalist>
+                  {similarNameWarning && (
+                    <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
+                      💡 {similarNameWarning}
+                    </p>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -510,7 +554,14 @@ const Productos = () => {
                       placeholder="Ej: Morelos, Purina"
                       autoComplete="off"
                       spellCheck={true}
+                      lang="es-MX"
+                      list="marcas-existentes"
                     />
+                    <datalist id="marcas-existentes">
+                      {[...new Set(productos.map(p => p.marca).filter(Boolean))].sort().map((m) => (
+                        <option key={m} value={m} />
+                      ))}
+                    </datalist>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="categoria">Categoría (para agrupar)</Label>
@@ -521,6 +572,7 @@ const Productos = () => {
                       placeholder="Ej: Arándano, Uva Pasa, Arroz"
                       list="categorias-existentes"
                       spellCheck={true}
+                      lang="es-MX"
                     />
                     <datalist id="categorias-existentes">
                       {[...new Set(productos.map(p => p.categoria).filter(Boolean))].sort().map((cat) => (

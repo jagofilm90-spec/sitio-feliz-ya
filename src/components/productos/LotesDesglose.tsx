@@ -109,26 +109,32 @@ export const LotesDesglose = ({ productoId, productoNombre, stockTotal }: LotesD
               return (
                 <div
                   key={lote.id}
-                  className="p-3 bg-muted/50 rounded-md space-y-1 text-sm"
+                  className="p-3 bg-card border rounded-lg space-y-2 text-sm hover:border-primary/50 transition-colors"
                 >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-medium">
-                        {lote.cantidad_disponible} unidades @ ${lote.precio_compra.toFixed(2)}
-                      </p>
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="flex-1">
                       {lote.lote_referencia && (
-                        <p className="text-xs text-muted-foreground">
-                          Lote: {lote.lote_referencia}
+                        <p className="font-semibold text-base mb-1">
+                          {lote.lote_referencia}
                         </p>
                       )}
+                      <p className="text-lg font-bold text-primary">
+                        ${lote.precio_compra.toFixed(2)}
+                        <span className="text-xs font-normal text-muted-foreground ml-1">
+                          por unidad
+                        </span>
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Disponible: <span className="font-medium text-foreground">{lote.cantidad_disponible} unidades</span>
+                      </p>
                     </div>
                     {estadoCaducidad && (
-                      <Badge variant={estadoCaducidad.variant} className="text-xs">
+                      <Badge variant={estadoCaducidad.variant} className="text-xs shrink-0">
                         {estadoCaducidad.label}
                       </Badge>
                     )}
                   </div>
-                  <div className="text-xs text-muted-foreground space-y-0.5">
+                  <div className="text-xs text-muted-foreground space-y-0.5 pt-2 border-t">
                     <p>
                       Entrada: {format(new Date(lote.fecha_entrada), "dd MMM yyyy")}
                     </p>

@@ -19,9 +19,19 @@ interface NotificacionStockBajo {
   leida: boolean;
 }
 
+interface LicenciaAlerta {
+  id: string;
+  empleado_nombre: string;
+  empleado_puesto: string;
+  fecha_vencimiento: string;
+  dias_restantes: number;
+  vencida: boolean;
+}
+
 export interface NotificacionesData {
   alertasCaducidad: ProductoCaducidad[];
   notificacionesStock: NotificacionStockBajo[];
+  alertasLicencias: LicenciaAlerta[];
   totalCount: number;
 }
 
@@ -29,21 +39,24 @@ export const useNotificaciones = () => {
   const [notificaciones, setNotificaciones] = useState<NotificacionesData>({
     alertasCaducidad: [],
     notificacionesStock: [],
+    alertasLicencias: [],
     totalCount: 0,
   });
   const [loading, setLoading] = useState(true);
 
   const cargarNotificaciones = async () => {
     try {
-      const [caducidad, stock] = await Promise.all([
+      const [caducidad, stock, licencias] = await Promise.all([
         cargarAlertasCaducidad(),
         cargarNotificacionesStock(),
+        cargarAlertasLicencias(),
       ]);
 
-      const total = caducidad.length + stock.length;
+      const total = caducidad.length + stock.length + licencias.length;
       setNotificaciones({
         alertasCaducidad: caducidad,
         notificacionesStock: stock,
+        alertasLicencias: licencias,
         totalCount: total,
       });
     } catch (error) {
@@ -126,6 +139,73 @@ export const useNotificaciones = () => {
       return data || [];
     } catch (error) {
       console.error("Error cargando notificaciones de stock:", error);
+      return [];
+    }
+  };
+
+  const cargarAlertasLicencias = async (): Promise<LicenciaAlerta[]> => {
+    try {
+      const fechaActual = new Date();
+      const fecha30Dias = new Date();
+      fecha30Dias.setDate(fecha30Dias.getDate() + 30);
+
+      // Obtener empleados que son choferes o vendedores
+      const { data: empleados, error: empleadosError } = await supabase
+        .from("empleados")
+        .select("id, nombre_completo, puesto")
+        .eq("activo", true)
+        .in("puesto", ["Chofer", "Vendedor"]);
+
+      if (empleadosError || !empleados || empleados.length === 0) {
+        return [];
+      }
+
+      const empleadosIds = empleados.map(e => e.id);
+
+      // Obtener documentos de licencias
+      const { data: documentos, error: documentosError } = await supabase
+        .from("empleados_documentos")
+        .select("empleado_id, fecha_vencimiento")
+        .in("empleado_id", empleadosIds)
+        .eq("tipo_documento", "licencia_conducir")
+        .not("fecha_vencimiento", "is", null);
+
+      if (documentosError || !documentos) return [];
+
+      const alertas: LicenciaAlerta[] = [];
+
+      documentos.forEach(doc => {
+        const empleado = empleados.find(e => e.id === doc.empleado_id);
+        if (!empleado || !doc.fecha_vencimiento) return;
+
+        const fechaVencimiento = new Date(doc.fecha_vencimiento);
+        
+        // Excluir licencias permanentes (año 2099)
+        if (fechaVencimiento.getFullYear() === 2099) return;
+
+        const diasRestantes = Math.ceil((fechaVencimiento.getTime() - fechaActual.getTime()) / (1000 * 60 * 60 * 24));
+        
+        // Mostrar si está vencida o vence en los próximos 30 días
+        if (diasRestantes <= 30) {
+          alertas.push({
+            id: `${doc.empleado_id}-licencia`,
+            empleado_nombre: empleado.nombre_completo,
+            empleado_puesto: empleado.puesto,
+            fecha_vencimiento: doc.fecha_vencimiento,
+            dias_restantes: diasRestantes,
+            vencida: diasRestantes < 0,
+          });
+        }
+      });
+
+      // Ordenar: vencidas primero, luego por días restantes
+      return alertas.sort((a, b) => {
+        if (a.vencida && !b.vencida) return -1;
+        if (!a.vencida && b.vencida) return 1;
+        return a.dias_restantes - b.dias_restantes;
+      });
+    } catch (error) {
+      console.error("Error cargando alertas de licencias:", error);
       return [];
     }
   };

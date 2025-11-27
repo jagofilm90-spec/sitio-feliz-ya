@@ -13,16 +13,23 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Eye, Truck, MapPin, Route } from "lucide-react";
+import { Search, Eye, Truck, MapPin, Route, Play, Square, Gauge } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import VehiculosTab from "@/components/rutas/VehiculosTab";
 import ZonasTab from "@/components/rutas/ZonasTab";
 import PlanificadorRutas from "@/components/rutas/PlanificadorRutas";
+import RutaKilometrajeDialog from "@/components/rutas/RutaKilometrajeDialog";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 
 const Rutas = () => {
   const [rutas, setRutas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [kmDialogOpen, setKmDialogOpen] = useState(false);
+  const [selectedRuta, setSelectedRuta] = useState<any>(null);
+  const [kmMode, setKmMode] = useState<"iniciar" | "finalizar">("iniciar");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -37,7 +44,7 @@ const Rutas = () => {
           *,
           chofer:chofer_id (full_name),
           ayudante:ayudante_id (full_name),
-          vehiculo:vehiculo_id (nombre, peso_maximo_local_kg, peso_maximo_foraneo_kg)
+          vehiculo:vehiculo_id (id, nombre, peso_maximo_local_kg, peso_maximo_foraneo_kg)
         `)
         .order("fecha_ruta", { ascending: false });
 
@@ -81,6 +88,18 @@ const Rutas = () => {
         {labels[status] || status}
       </Badge>
     );
+  };
+
+  const handleIniciarRuta = (ruta: any) => {
+    setSelectedRuta(ruta);
+    setKmMode("iniciar");
+    setKmDialogOpen(true);
+  };
+
+  const handleFinalizarRuta = (ruta: any) => {
+    setSelectedRuta(ruta);
+    setKmMode("finalizar");
+    setKmDialogOpen(true);
   };
 
   return (
@@ -138,6 +157,7 @@ const Rutas = () => {
                     <TableHead>Vehículo</TableHead>
                     <TableHead>Chofer</TableHead>
                     <TableHead>Peso</TableHead>
+                    <TableHead>Kilometraje</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead>Acciones</TableHead>
                   </TableRow>
@@ -145,13 +165,13 @@ const Rutas = () => {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center">
+                      <TableCell colSpan={9} className="text-center">
                         Cargando...
                       </TableCell>
                     </TableRow>
                   ) : filteredRutas.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center">
+                      <TableCell colSpan={9} className="text-center">
                         No hay rutas registradas
                       </TableCell>
                     </TableRow>
@@ -179,11 +199,81 @@ const Rutas = () => {
                             </span>
                           )}
                         </TableCell>
+                        <TableCell>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="flex items-center gap-1">
+                                  <Gauge className="h-3 w-3 text-muted-foreground" />
+                                  {ruta.kilometros_recorridos !== null && ruta.kilometros_recorridos > 0 ? (
+                                    <span className="text-sm font-medium">
+                                      {ruta.kilometros_recorridos.toLocaleString()} km
+                                    </span>
+                                  ) : ruta.kilometraje_inicial !== null ? (
+                                    <span className="text-sm text-muted-foreground">
+                                      {ruta.kilometraje_inicial.toLocaleString()} km (inicio)
+                                    </span>
+                                  ) : (
+                                    <span className="text-sm text-muted-foreground">—</span>
+                                  )}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <div className="text-xs space-y-1">
+                                  <p>Inicial: {ruta.kilometraje_inicial?.toLocaleString() || "—"} km</p>
+                                  <p>Final: {ruta.kilometraje_final?.toLocaleString() || "—"} km</p>
+                                  {ruta.fecha_hora_inicio && (
+                                    <p>Inicio: {format(new Date(ruta.fecha_hora_inicio), "dd/MM HH:mm", { locale: es })}</p>
+                                  )}
+                                  {ruta.fecha_hora_fin && (
+                                    <p>Fin: {format(new Date(ruta.fecha_hora_fin), "dd/MM HH:mm", { locale: es })}</p>
+                                  )}
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </TableCell>
                         <TableCell>{getStatusBadge(ruta.status)}</TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="icon">
-                            <Eye className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            {ruta.status === "programada" && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="text-green-600 hover:text-green-700 hover:bg-green-100"
+                                      onClick={() => handleIniciarRuta(ruta)}
+                                    >
+                                      <Play className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Iniciar ruta (registrar km inicial)</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                            {ruta.status === "en_curso" && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="text-red-600 hover:text-red-700 hover:bg-red-100"
+                                      onClick={() => handleFinalizarRuta(ruta)}
+                                    >
+                                      <Square className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Finalizar ruta (registrar km final)</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                            <Button variant="ghost" size="icon">
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -201,6 +291,14 @@ const Rutas = () => {
             <ZonasTab />
           </TabsContent>
         </Tabs>
+
+        <RutaKilometrajeDialog
+          ruta={selectedRuta}
+          open={kmDialogOpen}
+          onOpenChange={setKmDialogOpen}
+          onSuccess={loadRutas}
+          mode={kmMode}
+        />
       </div>
     </Layout>
   );

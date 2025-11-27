@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, ArrowUp, ArrowDown, Minus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { NotificacionesCaducidad } from "@/components/NotificacionesCaducidad";
 
@@ -246,6 +246,44 @@ const Inventario = () => {
         {tipo.charAt(0).toUpperCase() + tipo.slice(1)}
       </Badge>
     );
+  };
+
+  const getStockChangeIndicator = (stockAnterior: number | null, stockNuevo: number | null, tipoMovimiento: string) => {
+    if (stockAnterior === null || stockNuevo === null) return null;
+    
+    const diferencia = stockNuevo - stockAnterior;
+    
+    if (diferencia > 0) {
+      return (
+        <div className="flex items-center gap-2">
+          <span className="font-semibold">{stockNuevo}</span>
+          <div className="flex items-center gap-1 text-green-600">
+            <ArrowUp className="h-4 w-4" />
+            <span className="text-xs font-medium">+{diferencia}</span>
+          </div>
+        </div>
+      );
+    } else if (diferencia < 0) {
+      return (
+        <div className="flex items-center gap-2">
+          <span className="font-semibold">{stockNuevo}</span>
+          <div className="flex items-center gap-1 text-red-600">
+            <ArrowDown className="h-4 w-4" />
+            <span className="text-xs font-medium">{diferencia}</span>
+          </div>
+        </div>
+      );
+    } else {
+      return (
+        <div className="flex items-center gap-2">
+          <span className="font-semibold">{stockNuevo}</span>
+          <div className="flex items-center gap-1 text-yellow-600">
+            <Minus className="h-4 w-4" />
+            <span className="text-xs font-medium">0</span>
+          </div>
+        </div>
+      );
+    }
   };
 
   return (
@@ -497,7 +535,11 @@ const Inventario = () => {
                     <TableCell>{getTipoMovimientoBadge(movimiento.tipo_movimiento)}</TableCell>
                     <TableCell className="font-semibold">{movimiento.cantidad}</TableCell>
                     <TableCell className="text-muted-foreground">{movimiento.stock_anterior ?? "—"}</TableCell>
-                    <TableCell className="font-semibold">{movimiento.stock_nuevo ?? "—"}</TableCell>
+                    <TableCell>
+                      {movimiento.stock_anterior !== null && movimiento.stock_nuevo !== null
+                        ? getStockChangeIndicator(movimiento.stock_anterior, movimiento.stock_nuevo, movimiento.tipo_movimiento)
+                        : movimiento.stock_nuevo ?? "—"}
+                    </TableCell>
                     <TableCell>{movimiento.lote || "—"}</TableCell>
                     <TableCell>
                       {movimiento.fecha_caducidad

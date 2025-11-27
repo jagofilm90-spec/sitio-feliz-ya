@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { Bell, PackageX, AlertCircle, X, IdCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,11 +15,25 @@ import { useNavigate } from "react-router-dom";
 export const CentroNotificaciones = () => {
   const { alertasCaducidad, notificacionesStock, alertasLicencias, totalCount, loading, marcarComoLeida } = useNotificaciones();
   const navigate = useNavigate();
+  const [dismissedLicencias, setDismissedLicencias] = useState<string[]>([]);
+  const [dismissedCaducidad, setDismissedCaducidad] = useState<string[]>([]);
+
+  const visibleAlertasLicencias = useMemo(
+    () => alertasLicencias.filter((a) => !dismissedLicencias.includes(a.id)),
+    [alertasLicencias, dismissedLicencias]
+  );
+
+  const visibleAlertasCaducidad = useMemo(
+    () => alertasCaducidad.filter((a) => !dismissedCaducidad.includes(a.id)),
+    [alertasCaducidad, dismissedCaducidad]
+  );
+
+  const computedCount = notificacionesStock.length + visibleAlertasLicencias.length + visibleAlertasCaducidad.length;
 
   const handleLicenciaClick = (puesto: string) => {
     const tabMap: Record<string, string> = {
       "Chofer": "chofer",
-      "Vendedor": "vendedor"
+      "Vendedor": "vendedor",
     };
     const tab = tabMap[puesto] || "todos";
     navigate(`/empleados?tab=${tab}`);
@@ -33,12 +48,12 @@ export const CentroNotificaciones = () => {
       <PopoverTrigger asChild>
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="h-5 w-5" />
-          {totalCount > 0 && (
+          {computedCount > 0 && (
             <Badge 
               variant="destructive" 
               className="absolute -top-1 -right-1 h-5 min-w-5 flex items-center justify-center px-1 text-xs"
             >
-              {totalCount > 99 ? "99+" : totalCount}
+              {computedCount > 99 ? "99+" : computedCount}
             </Badge>
           )}
         </Button>
@@ -46,8 +61,8 @@ export const CentroNotificaciones = () => {
       <PopoverContent className="w-96 p-0" align="end">
         <div className="flex items-center justify-between p-4 border-b">
           <h3 className="font-semibold">Notificaciones</h3>
-          {totalCount > 0 && (
-            <Badge variant="secondary">{totalCount}</Badge>
+          {computedCount > 0 && (
+            <Badge variant="secondary">{computedCount}</Badge>
           )}
         </div>
 
@@ -56,7 +71,7 @@ export const CentroNotificaciones = () => {
             <div className="p-4 text-center text-muted-foreground">
               Cargando notificaciones...
             </div>
-          ) : totalCount === 0 ? (
+          ) : computedCount === 0 ? (
             <div className="p-8 text-center text-muted-foreground">
               <Bell className="h-12 w-12 mx-auto mb-2 opacity-50" />
               <p>No hay notificaciones</p>
@@ -100,12 +115,12 @@ export const CentroNotificaciones = () => {
               )}
 
               {/* Alertas de Licencias */}
-              {alertasLicencias.length > 0 && (
+              {visibleAlertasLicencias.length > 0 && (
                 <div className="mb-2">
                   <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">
                     Licencias de Conductor
                   </div>
-                  {alertasLicencias.map((alerta) => (
+                  {visibleAlertasLicencias.map((alerta) => (
                     <div
                       key={alerta.id}
                       className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors group"
@@ -143,24 +158,24 @@ export const CentroNotificaciones = () => {
                         className="h-6 w-6 p-0 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={(e) => {
                           e.stopPropagation();
-                          // Aquí se podría implementar lógica para descartar temporalmente
+                          setDismissedLicencias((prev) => [...prev, alerta.id]);
                         }}
                       >
                         <X className="h-4 w-4" />
                       </Button>
                     </div>
                   ))}
-                  {alertasCaducidad.length > 0 && <Separator className="my-2" />}
+                  {visibleAlertasCaducidad.length > 0 && <Separator className="my-2" />}
                 </div>
               )}
 
               {/* Alertas de Caducidad */}
-              {alertasCaducidad.length > 0 && (
+              {visibleAlertasCaducidad.length > 0 && (
                 <div>
                   <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">
                     Próximos a Caducar
                   </div>
-                  {alertasCaducidad.map((alerta) => (
+                  {visibleAlertasCaducidad.map((alerta) => (
                     <div
                       key={alerta.id}
                       className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors group"
@@ -195,7 +210,7 @@ export const CentroNotificaciones = () => {
                         className="h-6 w-6 p-0 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={(e) => {
                           e.stopPropagation();
-                          // Aquí se podría implementar lógica para descartar temporalmente
+                          setDismissedCaducidad((prev) => [...prev, alerta.id]);
                         }}
                       >
                         <X className="h-4 w-4" />

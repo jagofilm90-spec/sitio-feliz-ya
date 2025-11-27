@@ -30,7 +30,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Search, ArrowUp, ArrowDown, Minus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { NotificacionesCaducidad } from "@/components/NotificacionesCaducidad";
+import { NotificacionesSistema } from "@/components/NotificacionesSistema";
 
 const Inventario = () => {
   const [movimientos, setMovimientos] = useState<any[]>([]);
@@ -289,7 +289,7 @@ const Inventario = () => {
   return (
     <Layout>
       <div className="space-y-6">
-        <NotificacionesCaducidad />
+        <NotificacionesSistema />
         
         <div className="flex justify-between items-center">
           <div>

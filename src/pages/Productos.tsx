@@ -31,6 +31,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { LotesDesglose } from "@/components/productos/LotesDesglose";
+import { NotificacionesSistema } from "@/components/NotificacionesSistema";
 
 const Productos = () => {
   const [productos, setProductos] = useState<any[]>([]);
@@ -227,6 +228,8 @@ const Productos = () => {
   return (
     <Layout>
       <div className="space-y-6">
+        <NotificacionesSistema />
+        
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold">Productos</h1>

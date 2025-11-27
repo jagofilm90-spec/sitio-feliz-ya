@@ -167,6 +167,7 @@ const Productos = () => {
     codigo: string;
     nombre: string;
     marca: string;
+    categoria: string;
     presentacion: string;
     unidad: "bulto" | "caja" | "churla";
     precio_por_kilo: boolean;
@@ -183,6 +184,7 @@ const Productos = () => {
     codigo: "",
     nombre: "",
     marca: "",
+    categoria: "",
     presentacion: "",
     unidad: "bulto",
     precio_por_kilo: false,
@@ -248,6 +250,7 @@ const Productos = () => {
         codigo: formData.codigo,
         nombre: formData.nombre,
         marca: formData.marca || null,
+        categoria: formData.categoria || null,
         presentacion: formData.presentacion || null,
         unidad: formData.unidad,
         precio_por_kilo: formData.precio_por_kilo,
@@ -297,6 +300,7 @@ const Productos = () => {
       codigo: product.codigo,
       nombre: product.nombre,
       marca: product.marca || "",
+      categoria: product.categoria || "",
       presentacion: product.presentacion || "",
       unidad: product.unidad,
       precio_por_kilo: product.precio_por_kilo || false,
@@ -342,6 +346,7 @@ const Productos = () => {
       codigo: "",
       nombre: "",
       marca: "",
+      categoria: "",
       presentacion: "",
       unidad: "bulto",
       precio_por_kilo: false,
@@ -505,6 +510,21 @@ const Productos = () => {
                       autoComplete="off"
                     />
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="categoria">Categoría (para agrupar)</Label>
+                    <Input
+                      id="categoria"
+                      value={formData.categoria}
+                      onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
+                      placeholder="Ej: Arándano, Uva Pasa, Arroz"
+                      autoComplete="off"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Agrupa productos de diferentes marcas
+                    </p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="presentacion">Presentación (Kilos) *</Label>
                     <Input

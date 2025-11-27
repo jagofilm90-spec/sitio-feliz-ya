@@ -544,6 +544,7 @@ const Productos = () => {
                         <TableCell>
                           {producto.nombre}
                           {producto.maneja_caducidad && " 📅"}
+                          {producto.requiere_fumigacion && " 🦠"}
                         </TableCell>
                         <TableCell>{producto.marca || "-"}</TableCell>
                         <TableCell>{producto.presentacion ? `${producto.presentacion} kg` : "-"}</TableCell>

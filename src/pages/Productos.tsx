@@ -43,7 +43,53 @@ const Productos = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [tabActivo, setTabActivo] = useState<"activos" | "inactivos">("activos");
+  const [codigoGapWarning, setCodigoGapWarning] = useState<string | null>(null);
   const { toast } = useToast();
+
+  // Función para verificar huecos en la secuencia de códigos
+  const checkCodigoGap = (codigo: string) => {
+    if (!codigo) {
+      setCodigoGapWarning(null);
+      return;
+    }
+
+    // Extraer el número del código ingresado
+    const numMatch = codigo.match(/(\d+)/);
+    if (!numMatch) {
+      setCodigoGapWarning(null);
+      return;
+    }
+
+    const inputNum = parseInt(numMatch[1], 10);
+    const prefix = codigo.slice(0, codigo.indexOf(numMatch[1]));
+    const numLength = numMatch[1].length;
+
+    // Obtener todos los códigos existentes con el mismo prefijo
+    const existingCodes = productos
+      .map(p => {
+        const match = p.codigo.match(new RegExp(`^${prefix}(\\d{${numLength}})$`));
+        return match ? parseInt(match[1], 10) : null;
+      })
+      .filter(n => n !== null) as number[];
+
+    // Buscar huecos en la secuencia
+    const missingCodes: string[] = [];
+    for (let i = 1; i < inputNum; i++) {
+      if (!existingCodes.includes(i)) {
+        const paddedNum = i.toString().padStart(numLength, '0');
+        missingCodes.push(`${prefix}${paddedNum}`);
+      }
+    }
+
+    if (missingCodes.length > 0) {
+      const displayCodes = missingCodes.length <= 3 
+        ? missingCodes.join(", ") 
+        : `${missingCodes.slice(0, 3).join(", ")}... (${missingCodes.length} códigos faltantes)`;
+      setCodigoGapWarning(`Códigos faltantes: ${displayCodes}`);
+    } else {
+      setCodigoGapWarning(null);
+    }
+  };
 
   const [formData, setFormData] = useState<{
     codigo: string;
@@ -206,6 +252,7 @@ const Productos = () => {
 
   const resetForm = () => {
     setEditingProduct(null);
+    setCodigoGapWarning(null);
     setFormData({
       codigo: "",
       nombre: "",
@@ -296,10 +343,18 @@ const Productos = () => {
                     <Input
                       id="codigo"
                       value={formData.codigo}
-                      onChange={(e) => setFormData({ ...formData, codigo: e.target.value })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, codigo: e.target.value });
+                        checkCodigoGap(e.target.value);
+                      }}
                       required
                       autoComplete="off"
                     />
+                    {codigoGapWarning && !editingProduct && (
+                      <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
+                        ⚠️ {codigoGapWarning}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="unidad">Unidad *</Label>

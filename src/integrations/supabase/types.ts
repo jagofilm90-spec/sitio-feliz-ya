@@ -1118,9 +1118,14 @@ export type Database = {
           ayudante_id: string | null
           chofer_id: string
           created_at: string
+          fecha_hora_fin: string | null
+          fecha_hora_inicio: string | null
           fecha_ruta: string
           folio: string
           id: string
+          kilometraje_final: number | null
+          kilometraje_inicial: number | null
+          kilometros_recorridos: number | null
           notas: string | null
           peso_total_kg: number | null
           status: string | null
@@ -1132,9 +1137,14 @@ export type Database = {
           ayudante_id?: string | null
           chofer_id: string
           created_at?: string
+          fecha_hora_fin?: string | null
+          fecha_hora_inicio?: string | null
           fecha_ruta: string
           folio: string
           id?: string
+          kilometraje_final?: number | null
+          kilometraje_inicial?: number | null
+          kilometros_recorridos?: number | null
           notas?: string | null
           peso_total_kg?: number | null
           status?: string | null
@@ -1146,9 +1156,14 @@ export type Database = {
           ayudante_id?: string | null
           chofer_id?: string
           created_at?: string
+          fecha_hora_fin?: string | null
+          fecha_hora_inicio?: string | null
           fecha_ruta?: string
           folio?: string
           id?: string
+          kilometraje_final?: number | null
+          kilometraje_inicial?: number | null
+          kilometros_recorridos?: number | null
           notas?: string | null
           peso_total_kg?: number | null
           status?: string | null
@@ -1268,6 +1283,47 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      vehiculos_mantenimientos: {
+        Row: {
+          created_at: string
+          fecha_mantenimiento: string
+          id: string
+          kilometraje_actual: number
+          kilometraje_proximo: number | null
+          notas: string | null
+          tipo_mantenimiento: string
+          vehiculo_id: string
+        }
+        Insert: {
+          created_at?: string
+          fecha_mantenimiento?: string
+          id?: string
+          kilometraje_actual: number
+          kilometraje_proximo?: number | null
+          notas?: string | null
+          tipo_mantenimiento: string
+          vehiculo_id: string
+        }
+        Update: {
+          created_at?: string
+          fecha_mantenimiento?: string
+          id?: string
+          kilometraje_actual?: number
+          kilometraje_proximo?: number | null
+          notas?: string | null
+          tipo_mantenimiento?: string
+          vehiculo_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehiculos_mantenimientos_vehiculo_id_fkey"
+            columns: ["vehiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vehiculos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       zonas: {
         Row: {

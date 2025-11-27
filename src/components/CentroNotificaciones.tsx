@@ -9,9 +9,11 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useNotificaciones } from "@/hooks/useNotificaciones";
+import { useNavigate } from "react-router-dom";
 
 export const CentroNotificaciones = () => {
   const { alertasCaducidad, notificacionesStock, alertasLicencias, totalCount, loading, marcarComoLeida } = useNotificaciones();
+  const navigate = useNavigate();
 
   return (
     <Popover>
@@ -57,7 +59,11 @@ export const CentroNotificaciones = () => {
                   {notificacionesStock.map((notif) => (
                     <div
                       key={notif.id}
-                      className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors"
+                      className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                      onClick={() => {
+                        marcarComoLeida(notif.id);
+                        navigate("/productos");
+                      }}
                     >
                       <PackageX className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
@@ -74,14 +80,6 @@ export const CentroNotificaciones = () => {
                           })}
                         </p>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 flex-shrink-0"
-                        onClick={() => marcarComoLeida(notif.id)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
                     </div>
                   ))}
                   {alertasCaducidad.length > 0 && <Separator className="my-2" />}
@@ -97,7 +95,8 @@ export const CentroNotificaciones = () => {
                   {alertasLicencias.map((alerta) => (
                     <div
                       key={alerta.id}
-                      className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors"
+                      className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                      onClick={() => navigate("/empleados")}
                     >
                       <IdCard 
                         className={`h-5 w-5 mt-0.5 flex-shrink-0 ${
@@ -138,7 +137,8 @@ export const CentroNotificaciones = () => {
                   {alertasCaducidad.map((alerta) => (
                     <div
                       key={alerta.id}
-                      className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors"
+                      className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                      onClick={() => navigate("/inventario")}
                     >
                       <AlertCircle 
                         className={`h-5 w-5 mt-0.5 flex-shrink-0 ${

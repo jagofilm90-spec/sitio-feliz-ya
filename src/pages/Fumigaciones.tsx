@@ -13,9 +13,11 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { format, addMonths, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
-import { Loader2 } from "lucide-react";
+import { Loader2, Pencil, Check, X } from "lucide-react";
 
 interface ProductoFumigacion {
   id: string;
@@ -34,6 +36,8 @@ const Fumigaciones = () => {
   const [productos, setProductos] = useState<ProductoFumigacion[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtroEstado, setFiltroEstado] = useState<"todos" | "vencida" | "proxima" | "vigente">("todos");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingDate, setEditingDate] = useState<string>("");
 
   useEffect(() => {
     cargarProductos();
@@ -96,6 +100,43 @@ const Fumigaciones = () => {
     }
   };
 
+  const startEditing = (producto: ProductoFumigacion) => {
+    setEditingId(producto.id);
+    setEditingDate(producto.fecha_ultima_fumigacion || "");
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditingDate("");
+  };
+
+  const saveDate = async (productoId: string) => {
+    try {
+      const { error } = await supabase
+        .from("productos")
+        .update({ fecha_ultima_fumigacion: editingDate || null })
+        .eq("id", productoId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Fecha actualizada",
+        description: "La fecha de fumigación se actualizó correctamente. Próxima fumigación en 6 meses.",
+      });
+
+      setEditingId(null);
+      setEditingDate("");
+      cargarProductos();
+    } catch (error) {
+      console.error("Error actualizando fecha:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar la fecha",
+        variant: "destructive",
+      });
+    }
+  };
+
   const productosFiltrados = productos.filter((producto) => {
     if (filtroEstado === "todos") return true;
     return producto.estado === filtroEstado;
@@ -152,7 +193,7 @@ const Fumigaciones = () => {
               <CardHeader>
                 <CardTitle>Productos que requieren fumigación</CardTitle>
                 <CardDescription>
-                  Se notifica automáticamente 2 semanas antes de cumplir 6 meses desde la última fumigación
+                  Se notifica automáticamente 2 semanas antes de cumplir 6 meses desde la última fumigación. Haz clic en el lápiz para editar la fecha.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -187,9 +228,48 @@ const Fumigaciones = () => {
                             <TableCell>{producto.marca || "-"}</TableCell>
                             <TableCell>{producto.stock_actual}</TableCell>
                             <TableCell>
-                              {producto.fecha_ultima_fumigacion
-                                ? format(new Date(producto.fecha_ultima_fumigacion), "dd/MM/yyyy", { locale: es })
-                                : "-"}
+                              {editingId === producto.id ? (
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    type="date"
+                                    value={editingDate}
+                                    onChange={(e) => setEditingDate(e.target.value)}
+                                    className="w-36 h-8"
+                                  />
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                    onClick={() => saveDate(producto.id)}
+                                  >
+                                    <Check className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    onClick={cancelEditing}
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <span>
+                                    {producto.fecha_ultima_fumigacion
+                                      ? format(new Date(producto.fecha_ultima_fumigacion), "dd/MM/yyyy", { locale: es })
+                                      : "-"}
+                                  </span>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-6 w-6"
+                                    onClick={() => startEditing(producto)}
+                                  >
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              )}
                             </TableCell>
                             <TableCell>
                               {producto.proximaFumigacion

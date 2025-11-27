@@ -514,16 +514,15 @@ const Productos = () => {
                         <TableCell className="font-medium">{precioMostrar}</TableCell>
                         <TableCell>
                           <div className="space-y-2">
-                            <div className="flex items-center gap-2">
+                            {producto.stock_actual === 0 ? (
+                              <Badge variant="destructive" className="text-xs">
+                                Sin Stock
+                              </Badge>
+                            ) : (
                               <Badge variant={producto.stock_actual <= producto.stock_minimo ? "destructive" : "default"}>
                                 {producto.stock_actual}
                               </Badge>
-                              {producto.stock_actual === 0 && (
-                                <Badge variant="destructive" className="text-xs">
-                                  Sin Stock
-                                </Badge>
-                              )}
-                            </div>
+                            )}
                             <LotesDesglose
                               productoId={producto.id}
                               productoNombre={producto.nombre}

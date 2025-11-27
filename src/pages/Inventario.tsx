@@ -26,11 +26,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, ArrowUp, ArrowDown, Minus } from "lucide-react";
+import { Plus, Search, ArrowUp, ArrowDown, Minus, Package, List } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { NotificacionesSistema } from "@/components/NotificacionesSistema";
+import { InventarioPorCategoria } from "@/components/inventario/InventarioPorCategoria";
 
 const Inventario = () => {
   const [movimientos, setMovimientos] = useState<any[]>([]);
@@ -311,6 +313,8 @@ const Inventario = () => {
     }
   };
 
+  const [activeTab, setActiveTab] = useState("movimientos");
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -321,293 +325,312 @@ const Inventario = () => {
             <h1 className="text-3xl font-bold">Inventario</h1>
             <p className="text-muted-foreground">Control de movimientos de inventario</p>
           </div>
-          <Dialog open={dialogOpen} onOpenChange={(open) => {
-            setDialogOpen(open);
-            if (!open) resetForm();
-          }}>
-            <DialogTrigger asChild>
-              <Button onClick={resetForm}>
-                <Plus className="h-4 w-4 mr-2" />
-                {isEditing ? "Editar movimiento" : "Registrar Movimiento"}
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>
-                  {isEditing ? "Editar Movimiento de Inventario" : "Registrar Movimiento de Inventario"}
-                </DialogTitle>
-                <DialogDescription>
-                  Registra entradas, salidas o ajustes de inventario
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleSave} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="producto_id">Producto *</Label>
-                    <Select
-                      value={formData.producto_id}
-                      onValueChange={handleProductChange}
-                      required
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona un producto" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {productos.map((producto) => (
-                          <SelectItem key={producto.id} value={producto.id}>
-                            {producto.codigo} - {producto.nombre} (Stock: {producto.stock_actual})
-                            {producto.maneja_caducidad && " 📅"}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="tipo_movimiento">Tipo de Movimiento *</Label>
-                    <Select
-                      value={formData.tipo_movimiento}
-                      onValueChange={(value) => setFormData({ ...formData, tipo_movimiento: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="entrada">Entrada</SelectItem>
-                        <SelectItem value="salida">Salida</SelectItem>
-                        <SelectItem value="ajuste">Ajuste</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="cantidad">Cantidad *</Label>
-                    <Input
-                      id="cantidad"
-                      type="number"
-                      value={formData.cantidad}
-                      onChange={(e) => setFormData({ ...formData, cantidad: e.target.value })}
-                      required
-                    />
-                  </div>
-                  {selectedProduct?.maneja_caducidad && (
+          {activeTab === "movimientos" && (
+            <Dialog open={dialogOpen} onOpenChange={(open) => {
+              setDialogOpen(open);
+              if (!open) resetForm();
+            }}>
+              <DialogTrigger asChild>
+                <Button onClick={resetForm}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  {isEditing ? "Editar movimiento" : "Registrar Movimiento"}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>
+                    {isEditing ? "Editar Movimiento de Inventario" : "Registrar Movimiento de Inventario"}
+                  </DialogTitle>
+                  <DialogDescription>
+                    Registra entradas, salidas o ajustes de inventario
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleSave} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="fecha_caducidad">Fecha de Caducidad *</Label>
+                      <Label htmlFor="producto_id">Producto *</Label>
+                      <Select
+                        value={formData.producto_id}
+                        onValueChange={handleProductChange}
+                        required
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecciona un producto" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {productos.map((producto) => (
+                            <SelectItem key={producto.id} value={producto.id}>
+                              {producto.codigo} - {producto.nombre} (Stock: {producto.stock_actual})
+                              {producto.maneja_caducidad && " 📅"}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="tipo_movimiento">Tipo de Movimiento *</Label>
+                      <Select
+                        value={formData.tipo_movimiento}
+                        onValueChange={(value) => setFormData({ ...formData, tipo_movimiento: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="entrada">Entrada</SelectItem>
+                          <SelectItem value="salida">Salida</SelectItem>
+                          <SelectItem value="ajuste">Ajuste</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="cantidad">Cantidad *</Label>
                       <Input
-                        id="fecha_caducidad"
+                        id="cantidad"
+                        type="number"
+                        value={formData.cantidad}
+                        onChange={(e) => setFormData({ ...formData, cantidad: e.target.value })}
+                        required
+                      />
+                    </div>
+                    {selectedProduct?.maneja_caducidad && (
+                      <div className="space-y-2">
+                        <Label htmlFor="fecha_caducidad">Fecha de Caducidad *</Label>
+                        <Input
+                          id="fecha_caducidad"
+                          type="date"
+                          value={formData.fecha_caducidad}
+                          onChange={(e) => setFormData({ ...formData, fecha_caducidad: e.target.value })}
+                          required
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Este producto requiere fecha de caducidad
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  {formData.tipo_movimiento === "entrada" && selectedProduct?.requiere_fumigacion && (
+                    <div className="space-y-2 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                      <Label htmlFor="fecha_ultima_fumigacion">Fecha de última fumigación *</Label>
+                      <Input
+                        id="fecha_ultima_fumigacion"
                         type="date"
-                        value={formData.fecha_caducidad}
-                        onChange={(e) => setFormData({ ...formData, fecha_caducidad: e.target.value })}
+                        value={formData.fecha_ultima_fumigacion}
+                        onChange={(e) => setFormData({ ...formData, fecha_ultima_fumigacion: e.target.value })}
                         required
                       />
                       <p className="text-xs text-muted-foreground">
-                        Este producto requiere fecha de caducidad
+                        Este producto requiere registro de fumigación
                       </p>
                     </div>
                   )}
-                 </div>
-                {formData.tipo_movimiento === "entrada" && selectedProduct?.requiere_fumigacion && (
-                  <div className="space-y-2 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                    <Label htmlFor="fecha_ultima_fumigacion">Fecha de última fumigación *</Label>
-                    <Input
-                      id="fecha_ultima_fumigacion"
-                      type="date"
-                      value={formData.fecha_ultima_fumigacion}
-                      onChange={(e) => setFormData({ ...formData, fecha_ultima_fumigacion: e.target.value })}
-                      required
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Este producto requiere registro de fumigación
-                    </p>
-                  </div>
-                )}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="lote">Lote</Label>
-                    <Input
-                      id="lote"
-                      value={formData.lote}
-                      onChange={(e) => setFormData({ ...formData, lote: e.target.value })}
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="lote">Lote</Label>
+                      <Input
+                        id="lote"
+                        value={formData.lote}
+                        onChange={(e) => setFormData({ ...formData, lote: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="referencia">Referencia</Label>
+                      <Input
+                        id="referencia"
+                        value={formData.referencia}
+                        onChange={(e) => setFormData({ ...formData, referencia: e.target.value })}
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="referencia">Referencia</Label>
+                    <Label htmlFor="notas">Notas</Label>
                     <Input
-                      id="referencia"
-                      value={formData.referencia}
-                      onChange={(e) => setFormData({ ...formData, referencia: e.target.value })}
+                      id="notas"
+                      value={formData.notas}
+                      onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
                     />
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="notas">Notas</Label>
-                  <Input
-                    id="notas"
-                    value={formData.notas}
-                    onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
-                  />
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setDialogOpen(false);
-                      resetForm();
-                    }}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button type="submit">{isEditing ? "Guardar cambios" : "Registrar"}</Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setDialogOpen(false);
+                        resetForm();
+                      }}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button type="submit">{isEditing ? "Guardar cambios" : "Registrar"}</Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
 
-        <div className="space-y-4">
-          <div className="flex gap-4 flex-wrap">
-            <div className="relative flex-1 min-w-[250px]">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por producto, código o lote..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Select value={filterTipo} onValueChange={setFilterTipo}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Tipo de movimiento" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos los tipos</SelectItem>
-                <SelectItem value="entrada">Entradas</SelectItem>
-                <SelectItem value="salida">Salidas</SelectItem>
-                <SelectItem value="ajuste">Ajustes</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div className="flex gap-4 flex-wrap items-end">
-            <div className="space-y-2">
-              <Label htmlFor="fecha_inicio">Desde</Label>
-              <Input
-                id="fecha_inicio"
-                type="date"
-                value={filterFechaInicio}
-                onChange={(e) => setFilterFechaInicio(e.target.value)}
-                className="w-[180px]"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="fecha_fin">Hasta</Label>
-              <Input
-                id="fecha_fin"
-                type="date"
-                value={filterFechaFin}
-                onChange={(e) => setFilterFechaFin(e.target.value)}
-                className="w-[180px]"
-              />
-            </div>
-            {(filterTipo !== "todos" || filterFechaInicio || filterFechaFin) && (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setFilterTipo("todos");
-                  setFilterFechaInicio("");
-                  setFilterFechaFin("");
-                }}
-              >
-                Limpiar filtros
-              </Button>
-            )}
-            <div className="ml-auto text-sm text-muted-foreground">
-              Mostrando {filteredMovimientos.length} de {movimientos.length} movimientos
-            </div>
-          </div>
-        </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList>
+            <TabsTrigger value="movimientos" className="flex items-center gap-2">
+              <List className="h-4 w-4" />
+              Movimientos
+            </TabsTrigger>
+            <TabsTrigger value="categoria" className="flex items-center gap-2">
+              <Package className="h-4 w-4" />
+              Por Categoría
+            </TabsTrigger>
+          </TabsList>
 
-        <div className="border rounded-lg">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Producto</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Cantidad</TableHead>
-                <TableHead>Stock Anterior</TableHead>
-                <TableHead>Stock Nuevo</TableHead>
-                <TableHead>Lote</TableHead>
-                <TableHead>Caducidad</TableHead>
-                <TableHead>Usuario</TableHead>
-                <TableHead>Referencia</TableHead>
-                <TableHead className="w-[140px] text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={11} className="text-center">
-                    Cargando...
-                  </TableCell>
-                </TableRow>
-              ) : filteredMovimientos.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={11} className="text-center">
-                    No hay movimientos registrados
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredMovimientos.map((movimiento) => (
-                  <TableRow key={movimiento.id}>
-                    <TableCell className="font-mono text-xs">
-                      <div>{new Date(movimiento.created_at).toLocaleDateString('es-MX')}</div>
-                      <div className="text-muted-foreground">
-                        {new Date(movimiento.created_at).toLocaleTimeString('es-MX')}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {movimiento.productos?.codigo} - {movimiento.productos?.nombre}
-                    </TableCell>
-                    <TableCell>{getTipoMovimientoBadge(movimiento.tipo_movimiento)}</TableCell>
-                    <TableCell className="font-semibold">{movimiento.cantidad}</TableCell>
-                    <TableCell className="text-muted-foreground">{movimiento.stock_anterior ?? "—"}</TableCell>
-                    <TableCell>
-                      {movimiento.stock_anterior !== null && movimiento.stock_nuevo !== null
-                        ? getStockChangeIndicator(movimiento.stock_anterior, movimiento.stock_nuevo, movimiento.tipo_movimiento)
-                        : movimiento.stock_nuevo ?? "—"}
-                    </TableCell>
-                    <TableCell>{movimiento.lote || "—"}</TableCell>
-                    <TableCell>
-                      {movimiento.fecha_caducidad
-                        ? new Date(movimiento.fecha_caducidad).toLocaleDateString()
-                        : "—"}
-                    </TableCell>
-                    <TableCell>{movimiento.profiles?.full_name || "—"}</TableCell>
-                    <TableCell>{movimiento.referencia || "—"}</TableCell>
-                    <TableCell className="text-right space-x-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleEditMovimiento(movimiento)}
-                      >
-                        Editar
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => handleDeleteMovimiento(movimiento)}
-                      >
-                        Eliminar
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
+          <TabsContent value="movimientos" className="space-y-4">
+            <div className="flex gap-4 flex-wrap">
+              <div className="relative flex-1 min-w-[250px]">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por producto, código o lote..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Select value={filterTipo} onValueChange={setFilterTipo}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Tipo de movimiento" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos los tipos</SelectItem>
+                  <SelectItem value="entrada">Entradas</SelectItem>
+                  <SelectItem value="salida">Salidas</SelectItem>
+                  <SelectItem value="ajuste">Ajustes</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="flex gap-4 flex-wrap items-end">
+              <div className="space-y-2">
+                <Label htmlFor="fecha_inicio">Desde</Label>
+                <Input
+                  id="fecha_inicio"
+                  type="date"
+                  value={filterFechaInicio}
+                  onChange={(e) => setFilterFechaInicio(e.target.value)}
+                  className="w-[180px]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fecha_fin">Hasta</Label>
+                <Input
+                  id="fecha_fin"
+                  type="date"
+                  value={filterFechaFin}
+                  onChange={(e) => setFilterFechaFin(e.target.value)}
+                  className="w-[180px]"
+                />
+              </div>
+              {(filterTipo !== "todos" || filterFechaInicio || filterFechaFin) && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setFilterTipo("todos");
+                    setFilterFechaInicio("");
+                    setFilterFechaFin("");
+                  }}
+                >
+                  Limpiar filtros
+                </Button>
               )}
-            </TableBody>
-          </Table>
-        </div>
+              <div className="ml-auto text-sm text-muted-foreground">
+                Mostrando {filteredMovimientos.length} de {movimientos.length} movimientos
+              </div>
+            </div>
+
+            <div className="border rounded-lg">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Producto</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Cantidad</TableHead>
+                    <TableHead>Stock Anterior</TableHead>
+                    <TableHead>Stock Nuevo</TableHead>
+                    <TableHead>Lote</TableHead>
+                    <TableHead>Caducidad</TableHead>
+                    <TableHead>Usuario</TableHead>
+                    <TableHead>Referencia</TableHead>
+                    <TableHead className="w-[140px] text-right">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={11} className="text-center">
+                        Cargando...
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredMovimientos.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={11} className="text-center">
+                        No hay movimientos registrados
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredMovimientos.map((movimiento) => (
+                      <TableRow key={movimiento.id}>
+                        <TableCell className="font-mono text-xs">
+                          <div>{new Date(movimiento.created_at).toLocaleDateString('es-MX')}</div>
+                          <div className="text-muted-foreground">
+                            {new Date(movimiento.created_at).toLocaleTimeString('es-MX')}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {movimiento.productos?.codigo} - {movimiento.productos?.nombre}
+                        </TableCell>
+                        <TableCell>{getTipoMovimientoBadge(movimiento.tipo_movimiento)}</TableCell>
+                        <TableCell className="font-semibold">{movimiento.cantidad}</TableCell>
+                        <TableCell className="text-muted-foreground">{movimiento.stock_anterior ?? "—"}</TableCell>
+                        <TableCell>
+                          {movimiento.stock_anterior !== null && movimiento.stock_nuevo !== null
+                            ? getStockChangeIndicator(movimiento.stock_anterior, movimiento.stock_nuevo, movimiento.tipo_movimiento)
+                            : movimiento.stock_nuevo ?? "—"}
+                        </TableCell>
+                        <TableCell>{movimiento.lote || "—"}</TableCell>
+                        <TableCell>
+                          {movimiento.fecha_caducidad
+                            ? new Date(movimiento.fecha_caducidad).toLocaleDateString()
+                            : "—"}
+                        </TableCell>
+                        <TableCell>{movimiento.profiles?.full_name || "—"}</TableCell>
+                        <TableCell>{movimiento.referencia || "—"}</TableCell>
+                        <TableCell className="text-right space-x-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEditMovimiento(movimiento)}
+                          >
+                            Editar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleDeleteMovimiento(movimiento)}
+                          >
+                            Eliminar
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="categoria">
+            <InventarioPorCategoria />
+          </TabsContent>
+        </Tabs>
       </div>
     </Layout>
   );

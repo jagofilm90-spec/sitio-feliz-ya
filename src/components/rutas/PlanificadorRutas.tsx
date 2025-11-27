@@ -21,9 +21,14 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Truck, Package, AlertTriangle, Check, X, MapPin, Calendar } from "lucide-react";
+import { Plus, Truck, Package, AlertTriangle, Check, X, MapPin, Calendar, User, Users } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+
+interface Chofer {
+  id: string;
+  full_name: string;
+}
 
 interface Vehiculo {
   id: string;
@@ -53,6 +58,7 @@ interface PedidoSeleccionado extends Pedido {
 
 const PlanificadorRutas = () => {
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
+  const [choferes, setChoferes] = useState<Chofer[]>([]);
   const [pedidosPendientes, setPedidosPendientes] = useState<Pedido[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -60,6 +66,8 @@ const PlanificadorRutas = () => {
 
   // Form state
   const [selectedVehiculo, setSelectedVehiculo] = useState<string>("");
+  const [selectedChofer, setSelectedChofer] = useState<string>("");
+  const [selectedAyudante, setSelectedAyudante] = useState<string>("");
   const [fechaRuta, setFechaRuta] = useState<string>(format(new Date(), "yyyy-MM-dd"));
   const [tipoRuta, setTipoRuta] = useState<"local" | "foranea">("local");
   const [pedidosSeleccionados, setPedidosSeleccionados] = useState<PedidoSeleccionado[]>([]);
@@ -81,6 +89,25 @@ const PlanificadorRutas = () => {
 
       if (vehiculosError) throw vehiculosError;
       setVehiculos(vehiculosData || []);
+
+      // Load drivers (choferes)
+      const { data: choferesData, error: choferesError } = await supabase
+        .from("user_roles")
+        .select(`
+          user_id,
+          profiles:user_id (id, full_name)
+        `)
+        .eq("role", "chofer");
+
+      if (choferesError) throw choferesError;
+      
+      const transformedChoferes = (choferesData || [])
+        .filter((c: any) => c.profiles)
+        .map((c: any) => ({
+          id: c.profiles.id,
+          full_name: c.profiles.full_name,
+        }));
+      setChoferes(transformedChoferes);
 
       // Load pending orders with client info and zone
       const { data: pedidosData, error: pedidosError } = await supabase
@@ -152,20 +179,16 @@ const PlanificadorRutas = () => {
   };
 
   const handleCrearRuta = async () => {
-    if (!selectedVehiculo || pedidosSeleccionados.length === 0) {
+    if (!selectedVehiculo || !selectedChofer || pedidosSeleccionados.length === 0) {
       toast({
         title: "Error",
-        description: "Selecciona un vehículo y al menos un pedido",
+        description: "Selecciona un vehículo, chofer y al menos un pedido",
         variant: "destructive",
       });
       return;
     }
 
     try {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("No autenticado");
-
       // Generate folio
       const { data: lastRuta } = await supabase
         .from("rutas")
@@ -184,7 +207,8 @@ const PlanificadorRutas = () => {
         .insert([{
           folio: newFolio,
           fecha_ruta: fechaRuta,
-          chofer_id: user.id, // Temporary - should be selected
+          chofer_id: selectedChofer,
+          ayudante_id: selectedAyudante || null,
           vehiculo_id: selectedVehiculo,
           peso_total_kg: pesoTotal,
           tipo_ruta: tipoRuta,
@@ -240,11 +264,16 @@ const PlanificadorRutas = () => {
 
   const resetForm = () => {
     setSelectedVehiculo("");
+    setSelectedChofer("");
+    setSelectedAyudante("");
     setFechaRuta(format(new Date(), "yyyy-MM-dd"));
     setTipoRuta("local");
     setPedidosSeleccionados([]);
     setNotas("");
   };
+
+  // Filter ayudantes to not show the selected chofer
+  const ayudantesDisponibles = choferes.filter(c => c.id !== selectedChofer);
 
   const pedidosDisponibles = pedidosPendientes.filter(
     p => !pedidosSeleccionados.some(ps => ps.id === p.id)
@@ -317,6 +346,46 @@ const PlanificadorRutas = () => {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1">
+                    <User className="h-4 w-4" />
+                    Chofer *
+                  </Label>
+                  <Select value={selectedChofer} onValueChange={setSelectedChofer}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona un chofer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {choferes.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.full_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1">
+                    <Users className="h-4 w-4" />
+                    Ayudante
+                  </Label>
+                  <Select value={selectedAyudante} onValueChange={setSelectedAyudante}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sin ayudante" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Sin ayudante</SelectItem>
+                      {ayudantesDisponibles.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.full_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               {vehiculoSeleccionado && (
@@ -472,7 +541,7 @@ const PlanificadorRutas = () => {
             </Button>
             <Button
               onClick={handleCrearRuta}
-              disabled={!selectedVehiculo || pedidosSeleccionados.length === 0 || excedido}
+              disabled={!selectedVehiculo || !selectedChofer || pedidosSeleccionados.length === 0 || excedido}
             >
               <Check className="h-4 w-4 mr-2" />
               Crear Ruta

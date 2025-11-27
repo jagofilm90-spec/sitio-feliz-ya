@@ -1138,7 +1138,14 @@ export type Database = {
         | "broadcast"
       credit_term: "contado" | "8_dias" | "15_dias" | "30_dias"
       order_status: "pendiente" | "en_ruta" | "entregado" | "cancelado"
-      unit_type: "kg" | "pieza" | "caja" | "bulto" | "costal" | "litro"
+      unit_type:
+        | "kg"
+        | "pieza"
+        | "caja"
+        | "bulto"
+        | "costal"
+        | "litro"
+        | "churla"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1282,7 +1289,7 @@ export const Constants = {
       ],
       credit_term: ["contado", "8_dias", "15_dias", "30_dias"],
       order_status: ["pendiente", "en_ruta", "entregado", "cancelado"],
-      unit_type: ["kg", "pieza", "caja", "bulto", "costal", "litro"],
+      unit_type: ["kg", "pieza", "caja", "bulto", "costal", "litro", "churla"],
     },
   },
 } as const

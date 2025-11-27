@@ -21,6 +21,7 @@ import {
   UserCog,
   MessageCircle,
   ShoppingBag,
+  PieChart,
 } from "lucide-react";
 
 interface LayoutProps {
@@ -72,6 +73,7 @@ const Layout = ({ children }: LayoutProps) => {
     { icon: ShoppingCart, label: "Pedidos", path: "/pedidos" },
     { icon: ShoppingBag, label: "Compras", path: "/compras" },
     { icon: Warehouse, label: "Inventario", path: "/inventario" },
+    { icon: PieChart, label: "Rentabilidad", path: "/rentabilidad" },
     { icon: Truck, label: "Rutas y Entregas", path: "/rutas" },
     { icon: FileText, label: "Facturación", path: "/facturas" },
     { icon: UserCog, label: "Empleados", path: "/empleados" },

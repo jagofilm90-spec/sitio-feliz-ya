@@ -18,6 +18,7 @@ import Usuarios from "./pages/Usuarios";
 import Empleados from "./pages/Empleados";
 import Chat from "./pages/Chat";
 import Compras from "./pages/Compras";
+import Rentabilidad from "./pages/Rentabilidad";
 
 const queryClient = new QueryClient();
 
@@ -42,6 +43,7 @@ const App = () => (
           <Route path="/usuarios" element={<Usuarios />} />
           <Route path="/chat" element={<Chat />} />
           <Route path="/compras" element={<Compras />} />
+          <Route path="/rentabilidad" element={<Rentabilidad />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

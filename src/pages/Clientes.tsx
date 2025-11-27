@@ -31,8 +31,14 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
+interface Zona {
+  id: string;
+  nombre: string;
+}
+
 const Clientes = () => {
   const [clientes, setClientes] = useState<any[]>([]);
+  const [zonas, setZonas] = useState<Zona[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -49,6 +55,7 @@ const Clientes = () => {
     email: string;
     termino_credito: "contado" | "8_dias" | "15_dias" | "30_dias";
     limite_credito: string;
+    zona_id: string;
   }>({
     codigo: "",
     nombre: "",
@@ -59,17 +66,22 @@ const Clientes = () => {
     email: "",
     termino_credito: "contado",
     limite_credito: "",
+    zona_id: "",
   });
 
   useEffect(() => {
     loadClientes();
+    loadZonas();
   }, []);
 
   const loadClientes = async () => {
     try {
       const { data, error } = await supabase
         .from("clientes")
-        .select("*")
+        .select(`
+          *,
+          zona:zona_id (id, nombre)
+        `)
         .order("nombre");
 
       if (error) throw error;
@@ -85,13 +97,36 @@ const Clientes = () => {
     }
   };
 
+  const loadZonas = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("zonas")
+        .select("id, nombre")
+        .eq("activo", true)
+        .order("nombre");
+
+      if (error) throw error;
+      setZonas(data || []);
+    } catch (error: any) {
+      console.error("Error loading zones:", error);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
       const clientData = {
-        ...formData,
+        codigo: formData.codigo,
+        nombre: formData.nombre,
+        razon_social: formData.razon_social || null,
+        rfc: formData.rfc || null,
+        direccion: formData.direccion || null,
+        telefono: formData.telefono || null,
+        email: formData.email || null,
+        termino_credito: formData.termino_credito,
         limite_credito: parseFloat(formData.limite_credito || "0"),
+        zona_id: formData.zona_id || null,
       };
 
       if (editingClient) {
@@ -135,6 +170,7 @@ const Clientes = () => {
       email: client.email || "",
       termino_credito: client.termino_credito,
       limite_credito: client.limite_credito.toString(),
+      zona_id: client.zona_id || "",
     });
     setDialogOpen(true);
   };
@@ -172,6 +208,7 @@ const Clientes = () => {
       email: "",
       termino_credito: "contado",
       limite_credito: "",
+      zona_id: "",
     });
   };
 
@@ -310,6 +347,24 @@ const Clientes = () => {
                     />
                   </div>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="zona_id">Zona de Entrega</Label>
+                  <Select
+                    value={formData.zona_id}
+                    onValueChange={(value) => setFormData({ ...formData, zona_id: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona una zona" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {zonas.map((zona) => (
+                        <SelectItem key={zona.id} value={zona.id}>
+                          {zona.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                     Cancelar
@@ -339,8 +394,8 @@ const Clientes = () => {
               <TableRow>
                 <TableHead>Código</TableHead>
                 <TableHead>Nombre</TableHead>
+                <TableHead>Zona</TableHead>
                 <TableHead>Teléfono</TableHead>
-                <TableHead>Email</TableHead>
                 <TableHead>Crédito</TableHead>
                 <TableHead>Límite</TableHead>
                 <TableHead>Saldo</TableHead>
@@ -356,7 +411,7 @@ const Clientes = () => {
                 </TableRow>
               ) : filteredClientes.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center">
+                  <TableCell colSpan={9} className="text-center">
                     No hay clientes registrados
                   </TableCell>
                 </TableRow>
@@ -365,8 +420,14 @@ const Clientes = () => {
                   <TableRow key={cliente.id}>
                     <TableCell className="font-medium">{cliente.codigo}</TableCell>
                     <TableCell>{cliente.nombre}</TableCell>
+                    <TableCell>
+                      {cliente.zona ? (
+                        <Badge variant="outline">{cliente.zona.nombre}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell>{cliente.telefono || "—"}</TableCell>
-                    <TableCell>{cliente.email || "—"}</TableCell>
                     <TableCell>
                       <Badge variant="secondary">
                         {getCreditLabel(cliente.termino_credito)}

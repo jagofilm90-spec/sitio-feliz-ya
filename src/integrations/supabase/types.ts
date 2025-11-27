@@ -65,6 +65,7 @@ export type Database = {
           updated_at: string
           user_id: string | null
           vendedor_asignado: string | null
+          zona_id: string | null
         }
         Insert: {
           activo?: boolean | null
@@ -83,6 +84,7 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
           vendedor_asignado?: string | null
+          zona_id?: string | null
         }
         Update: {
           activo?: boolean | null
@@ -101,6 +103,7 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
           vendedor_asignado?: string | null
+          zona_id?: string | null
         }
         Relationships: [
           {
@@ -108,6 +111,13 @@ export type Database = {
             columns: ["vendedor_asignado"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clientes_zona_id_fkey"
+            columns: ["zona_id"]
+            isOneToOne: false
+            referencedRelation: "zonas"
             referencedColumns: ["id"]
           },
         ]
@@ -841,6 +851,7 @@ export type Database = {
           id: string
           impuestos: number | null
           notas: string | null
+          peso_total_kg: number | null
           status: Database["public"]["Enums"]["order_status"]
           subtotal: number | null
           total: number | null
@@ -856,6 +867,7 @@ export type Database = {
           id?: string
           impuestos?: number | null
           notas?: string | null
+          peso_total_kg?: number | null
           status?: Database["public"]["Enums"]["order_status"]
           subtotal?: number | null
           total?: number | null
@@ -871,6 +883,7 @@ export type Database = {
           id?: string
           impuestos?: number | null
           notas?: string | null
+          peso_total_kg?: number | null
           status?: Database["public"]["Enums"]["order_status"]
           subtotal?: number | null
           total?: number | null
@@ -1109,8 +1122,10 @@ export type Database = {
           folio: string
           id: string
           notas: string | null
+          peso_total_kg: number | null
           status: string | null
           updated_at: string
+          vehiculo_id: string | null
         }
         Insert: {
           ayudante_id?: string | null
@@ -1120,8 +1135,10 @@ export type Database = {
           folio: string
           id?: string
           notas?: string | null
+          peso_total_kg?: number | null
           status?: string | null
           updated_at?: string
+          vehiculo_id?: string | null
         }
         Update: {
           ayudante_id?: string | null
@@ -1131,8 +1148,10 @@ export type Database = {
           folio?: string
           id?: string
           notas?: string | null
+          peso_total_kg?: number | null
           status?: string | null
           updated_at?: string
+          vehiculo_id?: string | null
         }
         Relationships: [
           {
@@ -1147,6 +1166,13 @@ export type Database = {
             columns: ["chofer_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rutas_vehiculo_id_fkey"
+            columns: ["vehiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vehiculos"
             referencedColumns: ["id"]
           },
         ]
@@ -1179,6 +1205,69 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      vehiculos: {
+        Row: {
+          activo: boolean
+          created_at: string
+          id: string
+          nombre: string
+          notas: string | null
+          peso_maximo_kg: number
+          placa: string | null
+          status: string
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          activo?: boolean
+          created_at?: string
+          id?: string
+          nombre: string
+          notas?: string | null
+          peso_maximo_kg?: number
+          placa?: string | null
+          status?: string
+          tipo?: string
+          updated_at?: string
+        }
+        Update: {
+          activo?: boolean
+          created_at?: string
+          id?: string
+          nombre?: string
+          notas?: string | null
+          peso_maximo_kg?: number
+          placa?: string | null
+          status?: string
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      zonas: {
+        Row: {
+          activo: boolean
+          created_at: string
+          descripcion: string | null
+          id: string
+          nombre: string
+        }
+        Insert: {
+          activo?: boolean
+          created_at?: string
+          descripcion?: string | null
+          id?: string
+          nombre: string
+        }
+        Update: {
+          activo?: boolean
+          created_at?: string
+          descripcion?: string | null
+          id?: string
+          nombre?: string
+        }
+        Relationships: []
       }
     }
     Views: {

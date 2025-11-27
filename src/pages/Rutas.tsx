@@ -10,10 +10,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Eye } from "lucide-react";
+import { Search, Eye, Truck, MapPin, Route } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import VehiculosTab from "@/components/rutas/VehiculosTab";
+import ZonasTab from "@/components/rutas/ZonasTab";
+import PlanificadorRutas from "@/components/rutas/PlanificadorRutas";
 
 const Rutas = () => {
   const [rutas, setRutas] = useState<any[]>([]);
@@ -32,7 +36,8 @@ const Rutas = () => {
         .select(`
           *,
           chofer:chofer_id (full_name),
-          ayudante:ayudante_id (full_name)
+          ayudante:ayudante_id (full_name),
+          vehiculo:vehiculo_id (nombre, peso_maximo_kg)
         `)
         .order("fecha_ruta", { ascending: false });
 
@@ -51,15 +56,16 @@ const Rutas = () => {
 
   const filteredRutas = rutas.filter(
     (r) =>
-      r.folio.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.chofer?.full_name.toLowerCase().includes(searchTerm.toLowerCase())
+      r.folio?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      r.chofer?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      r.vehiculo?.nombre?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const getStatusBadge = (status: string) => {
-    const variants: Record<string, any> = {
+    const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
       programada: "secondary",
       en_curso: "default",
-      completada: "default",
+      completada: "outline",
       cancelada: "destructive",
     };
 
@@ -80,75 +86,113 @@ const Rutas = () => {
   return (
     <Layout>
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold">Rutas y Entregas</h1>
-            <p className="text-muted-foreground">Control de rutas de entrega y seguimiento</p>
-          </div>
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            Nueva Ruta
-          </Button>
+        <div>
+          <h1 className="text-3xl font-bold">Rutas y Entregas</h1>
+          <p className="text-muted-foreground">Control de rutas de entrega, vehículos y zonas</p>
         </div>
 
-        <div className="flex gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por folio o chofer..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-        </div>
+        <Tabs defaultValue="planificar" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="planificar" className="flex items-center gap-2">
+              <Route className="h-4 w-4" />
+              Planificar
+            </TabsTrigger>
+            <TabsTrigger value="rutas" className="flex items-center gap-2">
+              <Truck className="h-4 w-4" />
+              Rutas
+            </TabsTrigger>
+            <TabsTrigger value="vehiculos" className="flex items-center gap-2">
+              <Truck className="h-4 w-4" />
+              Vehículos
+            </TabsTrigger>
+            <TabsTrigger value="zonas" className="flex items-center gap-2">
+              <MapPin className="h-4 w-4" />
+              Zonas
+            </TabsTrigger>
+          </TabsList>
 
-        <div className="border rounded-lg">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Folio</TableHead>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Chofer</TableHead>
-                <TableHead>Ayudante</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center">
-                    Cargando...
-                  </TableCell>
-                </TableRow>
-              ) : filteredRutas.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center">
-                    No hay rutas registradas
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredRutas.map((ruta) => (
-                  <TableRow key={ruta.id}>
-                    <TableCell className="font-medium">{ruta.folio}</TableCell>
-                    <TableCell>
-                      {new Date(ruta.fecha_ruta).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>{ruta.chofer?.full_name || "—"}</TableCell>
-                    <TableCell>{ruta.ayudante?.full_name || "—"}</TableCell>
-                    <TableCell>{getStatusBadge(ruta.status)}</TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="icon">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
+          <TabsContent value="planificar">
+            <PlanificadorRutas />
+          </TabsContent>
+
+          <TabsContent value="rutas" className="space-y-4">
+            <div className="flex gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por folio, chofer o vehículo..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            <div className="border rounded-lg">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Folio</TableHead>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Vehículo</TableHead>
+                    <TableHead>Chofer</TableHead>
+                    <TableHead>Peso</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Acciones</TableHead>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center">
+                        Cargando...
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredRutas.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center">
+                        No hay rutas registradas
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredRutas.map((ruta) => (
+                      <TableRow key={ruta.id}>
+                        <TableCell className="font-medium">{ruta.folio}</TableCell>
+                        <TableCell>
+                          {new Date(ruta.fecha_ruta).toLocaleDateString("es-MX")}
+                        </TableCell>
+                        <TableCell>{ruta.vehiculo?.nombre || "—"}</TableCell>
+                        <TableCell>{ruta.chofer?.full_name || "—"}</TableCell>
+                        <TableCell>
+                          {ruta.peso_total_kg?.toLocaleString() || 0} kg
+                          {ruta.vehiculo && (
+                            <span className="text-muted-foreground text-xs ml-1">
+                              / {ruta.vehiculo.peso_maximo_kg?.toLocaleString()} kg
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>{getStatusBadge(ruta.status)}</TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="icon">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="vehiculos">
+            <VehiculosTab />
+          </TabsContent>
+
+          <TabsContent value="zonas">
+            <ZonasTab />
+          </TabsContent>
+        </Tabs>
       </div>
     </Layout>
   );

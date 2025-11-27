@@ -455,7 +455,7 @@ const Productos = () => {
               ) : (
                 filteredProductos.map((producto) => {
                   const precioMostrar = producto.precio_por_kilo && producto.presentacion
-                    ? `$${producto.precio_venta.toFixed(2)}/kg (Total: $${(producto.precio_venta * parseFloat(producto.presentacion)).toFixed(2)})`
+                    ? `$${producto.precio_venta.toFixed(2)}/kg ($${(producto.precio_venta * parseFloat(producto.presentacion)).toFixed(2)})`
                     : `$${producto.precio_venta.toFixed(2)}`;
                   
                   return (

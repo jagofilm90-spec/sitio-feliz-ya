@@ -436,6 +436,63 @@ export type Database = {
           },
         ]
       }
+      inventario_lotes: {
+        Row: {
+          cantidad_disponible: number
+          created_at: string
+          fecha_caducidad: string | null
+          fecha_entrada: string
+          id: string
+          lote_referencia: string | null
+          notas: string | null
+          orden_compra_id: string | null
+          precio_compra: number
+          producto_id: string
+          updated_at: string
+        }
+        Insert: {
+          cantidad_disponible?: number
+          created_at?: string
+          fecha_caducidad?: string | null
+          fecha_entrada?: string
+          id?: string
+          lote_referencia?: string | null
+          notas?: string | null
+          orden_compra_id?: string | null
+          precio_compra: number
+          producto_id: string
+          updated_at?: string
+        }
+        Update: {
+          cantidad_disponible?: number
+          created_at?: string
+          fecha_caducidad?: string | null
+          fecha_entrada?: string
+          id?: string
+          lote_referencia?: string | null
+          notas?: string | null
+          orden_compra_id?: string | null
+          precio_compra?: number
+          producto_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventario_lotes_orden_compra_id_fkey"
+            columns: ["orden_compra_id"]
+            isOneToOne: false
+            referencedRelation: "ordenes_compra"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventario_lotes_producto_id_fkey"
+            columns: ["producto_id"]
+            isOneToOne: false
+            referencedRelation: "productos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventario_movimientos: {
         Row: {
           cantidad: number

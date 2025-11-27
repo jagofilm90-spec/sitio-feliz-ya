@@ -30,6 +30,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { LotesDesglose } from "@/components/productos/LotesDesglose";
 
 const Productos = () => {
   const [productos, setProductos] = useState<any[]>([]);
@@ -470,9 +471,16 @@ const Productos = () => {
                       <TableCell className="uppercase">{producto.unidad}</TableCell>
                       <TableCell className="font-medium">{precioMostrar}</TableCell>
                       <TableCell>
-                        <Badge variant={producto.stock_actual <= producto.stock_minimo ? "destructive" : "default"}>
-                          {producto.stock_actual}
-                        </Badge>
+                        <div className="space-y-2">
+                          <Badge variant={producto.stock_actual <= producto.stock_minimo ? "destructive" : "default"}>
+                            {producto.stock_actual}
+                          </Badge>
+                          <LotesDesglose
+                            productoId={producto.id}
+                            productoNombre={producto.nombre}
+                            stockTotal={producto.stock_actual}
+                          />
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">

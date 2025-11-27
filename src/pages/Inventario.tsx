@@ -41,6 +41,9 @@ const Inventario = () => {
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editingMovimiento, setEditingMovimiento] = useState<any | null>(null);
+  const [filterTipo, setFilterTipo] = useState<string>("todos");
+  const [filterFechaInicio, setFilterFechaInicio] = useState("");
+  const [filterFechaFin, setFilterFechaFin] = useState("");
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -210,12 +213,26 @@ const Inventario = () => {
     }
   };
 
-  const filteredMovimientos = movimientos.filter(
-    (m) =>
+  const filteredMovimientos = movimientos.filter((m) => {
+    // Filtro por búsqueda de texto
+    const matchesSearch = 
       m.productos?.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       m.productos?.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.lote?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+      m.lote?.toLowerCase().includes(searchTerm.toLowerCase());
+
+    // Filtro por tipo de movimiento
+    const matchesTipo = filterTipo === "todos" || m.tipo_movimiento === filterTipo;
+
+    // Filtro por rango de fechas
+    let matchesFecha = true;
+    if (filterFechaInicio || filterFechaFin) {
+      const movimientoFecha = new Date(m.created_at).toISOString().split('T')[0];
+      if (filterFechaInicio && movimientoFecha < filterFechaInicio) matchesFecha = false;
+      if (filterFechaFin && movimientoFecha > filterFechaFin) matchesFecha = false;
+    }
+
+    return matchesSearch && matchesTipo && matchesFecha;
+  });
 
   const getTipoMovimientoBadge = (tipo: string) => {
     const variants: Record<string, any> = {
@@ -372,15 +389,66 @@ const Inventario = () => {
           </Dialog>
         </div>
 
-        <div className="flex gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por producto, código o lote..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
+        <div className="space-y-4">
+          <div className="flex gap-4 flex-wrap">
+            <div className="relative flex-1 min-w-[250px]">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por producto, código o lote..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Select value={filterTipo} onValueChange={setFilterTipo}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Tipo de movimiento" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos los tipos</SelectItem>
+                <SelectItem value="entrada">Entradas</SelectItem>
+                <SelectItem value="salida">Salidas</SelectItem>
+                <SelectItem value="ajuste">Ajustes</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="flex gap-4 flex-wrap items-end">
+            <div className="space-y-2">
+              <Label htmlFor="fecha_inicio">Desde</Label>
+              <Input
+                id="fecha_inicio"
+                type="date"
+                value={filterFechaInicio}
+                onChange={(e) => setFilterFechaInicio(e.target.value)}
+                className="w-[180px]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="fecha_fin">Hasta</Label>
+              <Input
+                id="fecha_fin"
+                type="date"
+                value={filterFechaFin}
+                onChange={(e) => setFilterFechaFin(e.target.value)}
+                className="w-[180px]"
+              />
+            </div>
+            {(filterTipo !== "todos" || filterFechaInicio || filterFechaFin) && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setFilterTipo("todos");
+                  setFilterFechaInicio("");
+                  setFilterFechaFin("");
+                }}
+              >
+                Limpiar filtros
+              </Button>
+            )}
+            <div className="ml-auto text-sm text-muted-foreground">
+              Mostrando {filteredMovimientos.length} de {movimientos.length} movimientos
+            </div>
           </div>
         </div>
 
@@ -415,8 +483,11 @@ const Inventario = () => {
               ) : (
                 filteredMovimientos.map((movimiento) => (
                   <TableRow key={movimiento.id}>
-                    <TableCell>
-                      {new Date(movimiento.created_at).toLocaleString()}
+                    <TableCell className="font-mono text-xs">
+                      <div>{new Date(movimiento.created_at).toLocaleDateString('es-MX')}</div>
+                      <div className="text-muted-foreground">
+                        {new Date(movimiento.created_at).toLocaleTimeString('es-MX')}
+                      </div>
                     </TableCell>
                     <TableCell>
                       {movimiento.productos?.codigo} - {movimiento.productos?.nombre}

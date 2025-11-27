@@ -47,6 +47,39 @@ const Productos = () => {
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const { toast } = useToast();
 
+  // Función para obtener el siguiente código disponible
+  const getNextAvailableCode = (): string => {
+    if (productos.length === 0) return "001";
+    
+    // Extraer todos los números de los códigos existentes
+    const codeNumbers = productos
+      .map(p => {
+        const match = p.codigo.match(/^0*(\d+)$/);
+        return match ? parseInt(match[1], 10) : null;
+      })
+      .filter(n => n !== null) as number[];
+    
+    if (codeNumbers.length === 0) return "001";
+    
+    // Encontrar el padding (longitud) más común
+    const firstCode = productos[0]?.codigo || "001";
+    const padLength = firstCode.length;
+    
+    // Buscar el primer hueco o el siguiente número
+    const sortedNumbers = [...new Set(codeNumbers)].sort((a, b) => a - b);
+    
+    // Primero buscar huecos
+    for (let i = 1; i <= sortedNumbers[sortedNumbers.length - 1]; i++) {
+      if (!sortedNumbers.includes(i)) {
+        return i.toString().padStart(padLength, '0');
+      }
+    }
+    
+    // Si no hay huecos, usar el siguiente número
+    const nextNum = Math.max(...codeNumbers) + 1;
+    return nextNum.toString().padStart(padLength, '0');
+  };
+
   // Función para verificar huecos en la secuencia de códigos
   const checkCodigoGap = (codigo: string) => {
     if (!codigo) {
@@ -297,7 +330,7 @@ const Productos = () => {
     setCodigoGapWarning(null);
     setDuplicateWarning(null);
     setFormData({
-      codigo: "",
+      codigo: getNextAvailableCode(),
       nombre: "",
       marca: "",
       presentacion: "",

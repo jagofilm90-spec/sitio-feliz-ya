@@ -32,6 +32,7 @@ import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { LotesDesglose } from "@/components/productos/LotesDesglose";
 import { NotificacionesSistema } from "@/components/NotificacionesSistema";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const Productos = () => {
   const [productos, setProductos] = useState<any[]>([]);
@@ -430,85 +431,87 @@ const Productos = () => {
         </div>
 
         <div className="border rounded-lg">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Código</TableHead>
-                <TableHead>Descripción</TableHead>
-                <TableHead>Marca</TableHead>
-                <TableHead>Presentación</TableHead>
-                <TableHead>Unidad</TableHead>
-                <TableHead>Precio</TableHead>
-                <TableHead>Stock</TableHead>
-                <TableHead>Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
+          <ScrollArea className="h-[calc(100vh-280px)]">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center">
-                    Cargando...
-                  </TableCell>
+                  <TableHead>Código</TableHead>
+                  <TableHead>Descripción</TableHead>
+                  <TableHead>Marca</TableHead>
+                  <TableHead>Presentación</TableHead>
+                  <TableHead>Unidad</TableHead>
+                  <TableHead>Precio</TableHead>
+                  <TableHead>Stock</TableHead>
+                  <TableHead>Acciones</TableHead>
                 </TableRow>
-              ) : filteredProductos.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center">
-                    No hay productos registrados
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredProductos.map((producto) => {
-                  const precioMostrar = producto.precio_por_kilo && producto.presentacion
-                    ? `$${producto.precio_venta.toFixed(2)}/kg ($${(producto.precio_venta * parseFloat(producto.presentacion)).toFixed(2)})`
-                    : `$${producto.precio_venta.toFixed(2)}`;
-                  
-                  return (
-                    <TableRow key={producto.id}>
-                      <TableCell className="font-medium">{producto.codigo}</TableCell>
-                      <TableCell>
-                        {producto.nombre}
-                        {producto.maneja_caducidad && " 📅"}
-                      </TableCell>
-                      <TableCell>{producto.marca || "-"}</TableCell>
-                      <TableCell>{producto.presentacion ? `${producto.presentacion} kg` : "-"}</TableCell>
-                      <TableCell className="uppercase">{producto.unidad}</TableCell>
-                      <TableCell className="font-medium">{precioMostrar}</TableCell>
-                      <TableCell>
-                        <div className="space-y-2">
-                          <Badge variant={producto.stock_actual <= producto.stock_minimo ? "destructive" : "default"}>
-                            {producto.stock_actual}
-                          </Badge>
-                          <LotesDesglose
-                            productoId={producto.id}
-                            productoNombre={producto.nombre}
-                            stockTotal={producto.stock_actual}
-                          />
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(producto)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(producto.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center">
+                      Cargando...
+                    </TableCell>
+                  </TableRow>
+                ) : filteredProductos.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center">
+                      No hay productos registrados
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredProductos.map((producto) => {
+                    const precioMostrar = producto.precio_por_kilo && producto.presentacion
+                      ? `$${producto.precio_venta.toFixed(2)}/kg ($${(producto.precio_venta * parseFloat(producto.presentacion)).toFixed(2)})`
+                      : `$${producto.precio_venta.toFixed(2)}`;
+                    
+                    return (
+                      <TableRow key={producto.id}>
+                        <TableCell className="font-medium">{producto.codigo}</TableCell>
+                        <TableCell>
+                          {producto.nombre}
+                          {producto.maneja_caducidad && " 📅"}
+                        </TableCell>
+                        <TableCell>{producto.marca || "-"}</TableCell>
+                        <TableCell>{producto.presentacion ? `${producto.presentacion} kg` : "-"}</TableCell>
+                        <TableCell className="uppercase">{producto.unidad}</TableCell>
+                        <TableCell className="font-medium">{precioMostrar}</TableCell>
+                        <TableCell>
+                          <div className="space-y-2">
+                            <Badge variant={producto.stock_actual <= producto.stock_minimo ? "destructive" : "default"}>
+                              {producto.stock_actual}
+                            </Badge>
+                            <LotesDesglose
+                              productoId={producto.id}
+                              productoNombre={producto.nombre}
+                              stockTotal={producto.stock_actual}
+                            />
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleEdit(producto)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDelete(producto.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </ScrollArea>
         </div>
       </div>
     </Layout>

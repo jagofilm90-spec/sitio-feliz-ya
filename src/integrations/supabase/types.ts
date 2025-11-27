@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      bodegas: {
+        Row: {
+          activo: boolean
+          costo_por_kilo: number | null
+          created_at: string
+          direccion: string | null
+          es_externa: boolean
+          id: string
+          nombre: string
+          updated_at: string
+        }
+        Insert: {
+          activo?: boolean
+          costo_por_kilo?: number | null
+          created_at?: string
+          direccion?: string | null
+          es_externa?: boolean
+          id?: string
+          nombre: string
+          updated_at?: string
+        }
+        Update: {
+          activo?: boolean
+          costo_por_kilo?: number | null
+          created_at?: string
+          direccion?: string | null
+          es_externa?: boolean
+          id?: string
+          nombre?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       clientes: {
         Row: {
           activo: boolean | null
@@ -438,10 +471,12 @@ export type Database = {
       }
       inventario_lotes: {
         Row: {
+          bodega_id: string | null
           cantidad_disponible: number
           created_at: string
           fecha_caducidad: string | null
           fecha_entrada: string
+          fecha_ultima_fumigacion: string | null
           id: string
           lote_referencia: string | null
           notas: string | null
@@ -451,10 +486,12 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          bodega_id?: string | null
           cantidad_disponible?: number
           created_at?: string
           fecha_caducidad?: string | null
           fecha_entrada?: string
+          fecha_ultima_fumigacion?: string | null
           id?: string
           lote_referencia?: string | null
           notas?: string | null
@@ -464,10 +501,12 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          bodega_id?: string | null
           cantidad_disponible?: number
           created_at?: string
           fecha_caducidad?: string | null
           fecha_entrada?: string
+          fecha_ultima_fumigacion?: string | null
           id?: string
           lote_referencia?: string | null
           notas?: string | null
@@ -477,6 +516,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "inventario_lotes_bodega_id_fkey"
+            columns: ["bodega_id"]
+            isOneToOne: false
+            referencedRelation: "bodegas"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "inventario_lotes_orden_compra_id_fkey"
             columns: ["orden_compra_id"]
@@ -495,7 +541,10 @@ export type Database = {
       }
       inventario_movimientos: {
         Row: {
+          bodega_destino_id: string | null
+          bodega_origen_id: string | null
           cantidad: number
+          cliente_destino_id: string | null
           created_at: string
           fecha_caducidad: string | null
           id: string
@@ -509,7 +558,10 @@ export type Database = {
           usuario_id: string
         }
         Insert: {
+          bodega_destino_id?: string | null
+          bodega_origen_id?: string | null
           cantidad: number
+          cliente_destino_id?: string | null
           created_at?: string
           fecha_caducidad?: string | null
           id?: string
@@ -523,7 +575,10 @@ export type Database = {
           usuario_id: string
         }
         Update: {
+          bodega_destino_id?: string | null
+          bodega_origen_id?: string | null
           cantidad?: number
+          cliente_destino_id?: string | null
           created_at?: string
           fecha_caducidad?: string | null
           id?: string
@@ -537,6 +592,27 @@ export type Database = {
           usuario_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "inventario_movimientos_bodega_destino_id_fkey"
+            columns: ["bodega_destino_id"]
+            isOneToOne: false
+            referencedRelation: "bodegas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventario_movimientos_bodega_origen_id_fkey"
+            columns: ["bodega_origen_id"]
+            isOneToOne: false
+            referencedRelation: "bodegas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventario_movimientos_cliente_destino_id_fkey"
+            columns: ["cliente_destino_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "inventario_movimientos_producto_id_fkey"
             columns: ["producto_id"]

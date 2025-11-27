@@ -83,7 +83,7 @@ const Productos = () => {
             nombre
           )
         `)
-        .order("nombre");
+        .order("codigo");
 
       if (error) throw error;
       setProductos(data || []);

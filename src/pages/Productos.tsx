@@ -231,7 +231,7 @@ const Productos = () => {
       (p.marca && p.marca.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (p.presentacion && p.presentacion.toLowerCase().includes(searchTerm.toLowerCase()));
     
-    const matchesActiveFilter = mostrarInactivos ? true : p.activo !== false;
+    const matchesActiveFilter = mostrarInactivos ? p.activo === false : p.activo !== false;
     
     return matchesSearch && matchesActiveFilter;
   });

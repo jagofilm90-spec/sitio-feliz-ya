@@ -45,7 +45,7 @@ const Productos = () => {
   const [tabActivo, setTabActivo] = useState<"activos" | "inactivos">("activos");
   const [codigoGapWarning, setCodigoGapWarning] = useState<string | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
-  const [similarNameWarning, setSimilarNameWarning] = useState<string | null>(null);
+  const [similarNameSuggestion, setSimilarNameSuggestion] = useState<{ suggestedName: string; codigo: string } | null>(null);
   const { toast } = useToast();
 
   // Función para normalizar texto (quitar acentos y convertir a minúsculas)
@@ -58,7 +58,7 @@ const Productos = () => {
   };
 
   // Función para verificar si existe un producto con nombre similar (ignorando acentos)
-  const checkSimilarProductName = (nombre: string): string | null => {
+  const checkSimilarProductName = (nombre: string): { suggestedName: string; codigo: string } | null => {
     if (!nombre || nombre.trim().length < 3) return null;
     
     const normalizedInput = normalizeText(nombre);
@@ -72,9 +72,22 @@ const Productos = () => {
     });
 
     if (similar) {
-      return `¿Quisiste decir "${similar.nombre}"? (${similar.codigo})`;
+      return { suggestedName: similar.nombre, codigo: similar.codigo };
     }
     return null;
+  };
+
+  // Aplicar la sugerencia de nombre
+  const applySuggestedName = () => {
+    if (similarNameSuggestion) {
+      setFormData({ ...formData, nombre: similarNameSuggestion.suggestedName });
+      setSimilarNameSuggestion(null);
+    }
+  };
+
+  // Descartar la sugerencia (el usuario confirma que su escritura es correcta)
+  const dismissSuggestion = () => {
+    setSimilarNameSuggestion(null);
   };
 
   // Función para obtener el siguiente código disponible basado en un prefijo
@@ -372,7 +385,7 @@ const Productos = () => {
     setEditingProduct(null);
     setCodigoGapWarning(null);
     setDuplicateWarning(null);
-    setSimilarNameWarning(null);
+    setSimilarNameSuggestion(null);
     setFormData({
       codigo: "",
       nombre: "",
@@ -520,7 +533,7 @@ const Productos = () => {
                       const nombre = e.target.value;
                       setFormData({ ...formData, nombre });
                       setDuplicateWarning(checkDuplicateProduct(nombre, formData.marca, formData.presentacion, formData.unidad));
-                      setSimilarNameWarning(checkSimilarProductName(nombre));
+                      setSimilarNameSuggestion(checkSimilarProductName(nombre));
                     }}
                     required
                     autoComplete="off"
@@ -534,10 +547,30 @@ const Productos = () => {
                       <option key={nom} value={nom} />
                     ))}
                   </datalist>
-                  {similarNameWarning && (
-                    <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
-                      💡 {similarNameWarning}
-                    </p>
+                  {similarNameSuggestion && (
+                    <div className="flex items-center justify-between text-xs bg-amber-50 p-2 rounded border border-amber-200">
+                      <span className="text-amber-700">
+                        💡 ¿Quisiste decir "<strong>{similarNameSuggestion.suggestedName}</strong>"? ({similarNameSuggestion.codigo})
+                      </span>
+                      <div className="flex gap-2 ml-2">
+                        <button
+                          type="button"
+                          onClick={applySuggestedName}
+                          className="text-green-600 hover:text-green-800 hover:bg-green-100 p-1 rounded"
+                          title="Usar esta sugerencia"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          type="button"
+                          onClick={dismissSuggestion}
+                          className="text-red-600 hover:text-red-800 hover:bg-red-100 p-1 rounded"
+                          title="Ignorar, mi escritura es correcta"
+                        >
+                          ✗
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-4">

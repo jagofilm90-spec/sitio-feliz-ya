@@ -517,8 +517,13 @@ const Productos = () => {
                       value={formData.categoria}
                       onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
                       placeholder="Ej: Arándano, Uva Pasa, Arroz"
-                      autoComplete="off"
+                      list="categorias-existentes"
                     />
+                    <datalist id="categorias-existentes">
+                      {[...new Set(productos.map(p => p.categoria).filter(Boolean))].sort().map((cat) => (
+                        <option key={cat} value={cat} />
+                      ))}
+                    </datalist>
                     <p className="text-xs text-muted-foreground">
                       Agrupa productos de diferentes marcas
                     </p>

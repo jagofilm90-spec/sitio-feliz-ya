@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -26,7 +28,7 @@ import {
 } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Edit, Trash2, MapPin } from "lucide-react";
+import { Plus, Edit, Trash2, MapPin, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface ClienteSucursalesDialogProps {
@@ -45,6 +47,10 @@ interface Sucursal {
   notas: string | null;
   activo: boolean;
   zona?: { nombre: string } | null;
+  horario_entrega: string | null;
+  restricciones_vehiculo: string | null;
+  dias_sin_entrega: string | null;
+  no_combinar_pedidos: boolean;
 }
 
 interface Zona {
@@ -71,6 +77,10 @@ const ClienteSucursalesDialog = ({
     telefono: "",
     contacto: "",
     notas: "",
+    horario_entrega: "",
+    restricciones_vehiculo: "",
+    dias_sin_entrega: "",
+    no_combinar_pedidos: false,
   });
 
   useEffect(() => {
@@ -127,13 +137,17 @@ const ClienteSucursalesDialog = ({
 
     try {
       const sucursalData = {
-        cliente_id: cliente.id,
+      cliente_id: cliente.id,
         nombre: formData.nombre,
         direccion: formData.direccion,
         zona_id: formData.zona_id || null,
         telefono: formData.telefono || null,
         contacto: formData.contacto || null,
         notas: formData.notas || null,
+        horario_entrega: formData.horario_entrega || null,
+        restricciones_vehiculo: formData.restricciones_vehiculo || null,
+        dias_sin_entrega: formData.dias_sin_entrega || null,
+        no_combinar_pedidos: formData.no_combinar_pedidos,
       };
 
       if (editingSucursal) {
@@ -174,6 +188,10 @@ const ClienteSucursalesDialog = ({
       telefono: sucursal.telefono || "",
       contacto: sucursal.contacto || "",
       notas: sucursal.notas || "",
+      horario_entrega: sucursal.horario_entrega || "",
+      restricciones_vehiculo: sucursal.restricciones_vehiculo || "",
+      dias_sin_entrega: sucursal.dias_sin_entrega || "",
+      no_combinar_pedidos: sucursal.no_combinar_pedidos || false,
     });
     setFormOpen(true);
   };
@@ -208,6 +226,10 @@ const ClienteSucursalesDialog = ({
       telefono: "",
       contacto: "",
       notas: "",
+      horario_entrega: "",
+      restricciones_vehiculo: "",
+      dias_sin_entrega: "",
+      no_combinar_pedidos: false,
     });
   };
 
@@ -304,14 +326,64 @@ const ClienteSucursalesDialog = ({
                   />
                 </div>
               </div>
+              <div className="border-t pt-4 mt-4">
+                <h4 className="font-medium mb-3 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-500" />
+                  Restricciones de Entrega
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="suc_horario">Horario de Entrega</Label>
+                    <Input
+                      id="suc_horario"
+                      value={formData.horario_entrega}
+                      onChange={(e) => setFormData({ ...formData, horario_entrega: e.target.value })}
+                      placeholder="Ej: 8am - 2pm"
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="suc_dias_sin">Días sin Entrega</Label>
+                    <Input
+                      id="suc_dias_sin"
+                      value={formData.dias_sin_entrega}
+                      onChange={(e) => setFormData({ ...formData, dias_sin_entrega: e.target.value })}
+                      placeholder="Ej: Miércoles (hay mercado)"
+                      autoComplete="off"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2 mt-4">
+                  <Label htmlFor="suc_restricciones">Restricciones de Vehículo</Label>
+                  <Input
+                    id="suc_restricciones"
+                    value={formData.restricciones_vehiculo}
+                    onChange={(e) => setFormData({ ...formData, restricciones_vehiculo: e.target.value })}
+                    placeholder="Ej: No tortón (no entra), solo camioneta"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="flex items-center space-x-2 mt-4">
+                  <Checkbox
+                    id="suc_no_combinar"
+                    checked={formData.no_combinar_pedidos}
+                    onCheckedChange={(checked) => 
+                      setFormData({ ...formData, no_combinar_pedidos: checked === true })
+                    }
+                  />
+                  <Label htmlFor="suc_no_combinar" className="text-sm font-normal">
+                    No combinar pedidos con otros clientes (requiere autorización)
+                  </Label>
+                </div>
+              </div>
               <div className="space-y-2">
-                <Label htmlFor="suc_notas">Notas</Label>
-                <Input
+                <Label htmlFor="suc_notas">Notas Adicionales</Label>
+                <Textarea
                   id="suc_notas"
                   value={formData.notas}
                   onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
-                  placeholder="Notas adicionales (ej: no combinar pedidos)"
-                  autoComplete="off"
+                  placeholder="Otras observaciones importantes..."
+                  rows={2}
                 />
               </div>
               <div className="flex justify-end gap-2">
@@ -364,7 +436,15 @@ const ClienteSucursalesDialog = ({
                         )}
                       </TableCell>
                       <TableCell>
-                        {sucursal.contacto || sucursal.telefono || "—"}
+                        <div className="flex flex-col gap-1">
+                          {sucursal.contacto || sucursal.telefono || "—"}
+                          {sucursal.no_combinar_pedidos && (
+                            <Badge variant="secondary" className="text-xs w-fit">
+                              <AlertTriangle className="h-3 w-3 mr-1" />
+                              No combinar
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1">

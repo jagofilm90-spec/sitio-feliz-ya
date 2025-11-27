@@ -4,7 +4,6 @@ import { ChevronDown, ChevronUp, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-import { es } from "date-fns/locale";
 
 interface Lote {
   id: string;
@@ -131,11 +130,11 @@ export const LotesDesglose = ({ productoId, productoNombre, stockTotal }: LotesD
                   </div>
                   <div className="text-xs text-muted-foreground space-y-0.5">
                     <p>
-                      Entrada: {format(new Date(lote.fecha_entrada), "dd MMM yyyy", { locale: es })}
+                      Entrada: {format(new Date(lote.fecha_entrada), "dd MMM yyyy")}
                     </p>
                     {lote.fecha_caducidad && (
                       <p>
-                        Caducidad: {format(new Date(lote.fecha_caducidad), "dd MMM yyyy", { locale: es })}
+                        Caducidad: {format(new Date(lote.fecha_caducidad), "dd MMM yyyy")}
                       </p>
                     )}
                   </div>

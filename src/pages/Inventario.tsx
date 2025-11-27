@@ -51,6 +51,7 @@ const Inventario = () => {
     tipo_movimiento: "entrada",
     cantidad: "",
     fecha_caducidad: "",
+    fecha_ultima_fumigacion: "",
     lote: "",
     referencia: "",
     notas: "",
@@ -74,7 +75,7 @@ const Inventario = () => {
           .limit(100),
         supabase
           .from("productos")
-          .select("id, codigo, nombre, stock_actual, maneja_caducidad")
+          .select("id, codigo, nombre, stock_actual, maneja_caducidad, requiere_fumigacion, fecha_ultima_fumigacion")
           .eq("activo", true)
           .order("nombre"),
       ]);
@@ -103,6 +104,16 @@ const Inventario = () => {
       toast({
         title: "Error",
         description: "Este producto requiere fecha de caducidad",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validar fecha de fumigación si el producto la requiere y es una entrada
+    if (formData.tipo_movimiento === "entrada" && selectedProduct?.requiere_fumigacion && !formData.fecha_ultima_fumigacion) {
+      toast({
+        title: "Error",
+        description: "Este producto requiere fecha de última fumigación",
         variant: "destructive",
       });
       return;
@@ -138,6 +149,18 @@ const Inventario = () => {
 
       if (error) throw error;
 
+      // Si es una entrada y el producto requiere fumigación, actualizar la fecha en el producto
+      if (formData.tipo_movimiento === "entrada" && selectedProduct?.requiere_fumigacion && formData.fecha_ultima_fumigacion) {
+        const { error: updateError } = await supabase
+          .from("productos")
+          .update({ fecha_ultima_fumigacion: formData.fecha_ultima_fumigacion })
+          .eq("id", formData.producto_id);
+        
+        if (updateError) {
+          console.error("Error actualizando fecha de fumigación:", updateError);
+        }
+      }
+
       toast({ title: isEditing ? "Movimiento actualizado" : "Movimiento registrado correctamente" });
       setDialogOpen(false);
       resetForm();
@@ -160,6 +183,7 @@ const Inventario = () => {
       tipo_movimiento: "entrada",
       cantidad: "",
       fecha_caducidad: "",
+      fecha_ultima_fumigacion: "",
       lote: "",
       referencia: "",
       notas: "",
@@ -181,6 +205,7 @@ const Inventario = () => {
       tipo_movimiento: movimiento.tipo_movimiento,
       cantidad: String(movimiento.cantidad),
       fecha_caducidad: movimiento.fecha_caducidad || "",
+      fecha_ultima_fumigacion: "",
       lote: movimiento.lote || "",
       referencia: movimiento.referencia || "",
       notas: movimiento.notas || "",
@@ -380,7 +405,22 @@ const Inventario = () => {
                       </p>
                     </div>
                   )}
-                </div>
+                 </div>
+                {formData.tipo_movimiento === "entrada" && selectedProduct?.requiere_fumigacion && (
+                  <div className="space-y-2 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                    <Label htmlFor="fecha_ultima_fumigacion">Fecha de última fumigación *</Label>
+                    <Input
+                      id="fecha_ultima_fumigacion"
+                      type="date"
+                      value={formData.fecha_ultima_fumigacion}
+                      onChange={(e) => setFormData({ ...formData, fecha_ultima_fumigacion: e.target.value })}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Este producto requiere registro de fumigación
+                    </p>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="lote">Lote</Label>

@@ -47,37 +47,46 @@ const Productos = () => {
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Función para obtener el siguiente código disponible
-  const getNextAvailableCode = (): string => {
-    if (productos.length === 0) return "001";
+  // Función para obtener el siguiente código disponible basado en un prefijo
+  const getNextAvailableCodeForPrefix = (prefix: string): string | null => {
+    if (!prefix) return null;
     
-    // Extraer todos los números de los códigos existentes
-    const codeNumbers = productos
+    // Normalizar el prefijo (remover guiones/espacios al final para la búsqueda)
+    const cleanPrefix = prefix.replace(/[-_\s]+$/, '');
+    const separator = prefix.match(/[-_\s]+$/)?.[0] || '-';
+    
+    // Buscar todos los códigos que empiezan con este prefijo
+    const matchingCodes = productos
       .map(p => {
-        const match = p.codigo.match(/^0*(\d+)$/);
+        // Buscar patrón: PREFIJO-XXX o PREFIJO_XXX donde XXX son números
+        const regex = new RegExp(`^${cleanPrefix}[-_\\s]*(\\d+)$`, 'i');
+        const match = p.codigo.match(regex);
         return match ? parseInt(match[1], 10) : null;
       })
       .filter(n => n !== null) as number[];
     
-    if (codeNumbers.length === 0) return "001";
+    if (matchingCodes.length === 0) {
+      // Es el primer producto con este prefijo
+      return `${cleanPrefix}${separator}001`;
+    }
     
-    // Encontrar el padding (longitud) más común
-    const firstCode = productos[0]?.codigo || "001";
-    const padLength = firstCode.length;
+    // Determinar el padding basado en códigos existentes
+    const existingCode = productos.find(p => p.codigo.toLowerCase().startsWith(cleanPrefix.toLowerCase()));
+    const numMatch = existingCode?.codigo.match(/(\d+)$/);
+    const padLength = numMatch ? numMatch[1].length : 3;
     
-    // Buscar el primer hueco o el siguiente número
-    const sortedNumbers = [...new Set(codeNumbers)].sort((a, b) => a - b);
+    // Buscar huecos en la secuencia
+    const sortedNumbers = [...new Set(matchingCodes)].sort((a, b) => a - b);
     
-    // Primero buscar huecos
     for (let i = 1; i <= sortedNumbers[sortedNumbers.length - 1]; i++) {
       if (!sortedNumbers.includes(i)) {
-        return i.toString().padStart(padLength, '0');
+        return `${cleanPrefix}${separator}${i.toString().padStart(padLength, '0')}`;
       }
     }
     
     // Si no hay huecos, usar el siguiente número
-    const nextNum = Math.max(...codeNumbers) + 1;
-    return nextNum.toString().padStart(padLength, '0');
+    const nextNum = Math.max(...matchingCodes) + 1;
+    return `${cleanPrefix}${separator}${nextNum.toString().padStart(padLength, '0')}`;
   };
 
   // Función para verificar huecos en la secuencia de códigos
@@ -330,7 +339,7 @@ const Productos = () => {
     setCodigoGapWarning(null);
     setDuplicateWarning(null);
     setFormData({
-      codigo: getNextAvailableCode(),
+      codigo: "",
       nombre: "",
       marca: "",
       presentacion: "",
@@ -420,11 +429,24 @@ const Productos = () => {
                       id="codigo"
                       value={formData.codigo}
                       onChange={(e) => {
-                        setFormData({ ...formData, codigo: e.target.value });
-                        checkCodigoGap(e.target.value);
+                        const value = e.target.value;
+                        
+                        // Si el usuario escribe un prefijo seguido de guión/espacio, sugerir el siguiente código
+                        if (value.match(/^[a-zA-Z]+[-_\s]$/) && !editingProduct) {
+                          const suggestion = getNextAvailableCodeForPrefix(value);
+                          if (suggestion) {
+                            setFormData({ ...formData, codigo: suggestion });
+                            checkCodigoGap(suggestion);
+                            return;
+                          }
+                        }
+                        
+                        setFormData({ ...formData, codigo: value });
+                        checkCodigoGap(value);
                       }}
                       required
                       autoComplete="off"
+                      placeholder="Ej: NFS-001, VEL-001"
                     />
                     {codigoGapWarning && !editingProduct && (
                       <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">

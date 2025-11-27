@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { CentroNotificaciones } from "@/components/CentroNotificaciones";
 import {
   Package,
   Users,
@@ -105,7 +106,8 @@ const Layout = ({ children }: LayoutProps) => {
             </Button>
             <h1 className="text-xl font-bold">Abarrotes La Manita</h1>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <CentroNotificaciones />
             <span className="text-sm text-muted-foreground hidden md:inline">
               {user?.email}
             </span>

@@ -44,6 +44,7 @@ const Productos = () => {
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [tabActivo, setTabActivo] = useState<"activos" | "inactivos">("activos");
   const [codigoGapWarning, setCodigoGapWarning] = useState<string | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Función para verificar huecos en la secuencia de códigos
@@ -89,6 +90,35 @@ const Productos = () => {
     } else {
       setCodigoGapWarning(null);
     }
+  };
+
+  // Función para verificar productos duplicados
+  const checkDuplicateProduct = (nombre: string, marca: string, presentacion: string, unidad: string): string | null => {
+    const normalizedNombre = nombre.trim().toLowerCase();
+    const normalizedMarca = (marca || '').trim().toLowerCase();
+    const normalizedPresentacion = (presentacion || '').trim();
+    const normalizedUnidad = unidad;
+
+    const duplicate = productos.find(p => {
+      // Si estamos editando, excluir el producto actual
+      if (editingProduct && p.id === editingProduct.id) return false;
+
+      const pNombre = (p.nombre || '').trim().toLowerCase();
+      const pMarca = (p.marca || '').trim().toLowerCase();
+      const pPresentacion = (p.presentacion || '').trim();
+      const pUnidad = p.unidad;
+
+      // Es duplicado si coinciden nombre, marca, presentación Y unidad
+      return pNombre === normalizedNombre &&
+             pMarca === normalizedMarca &&
+             pPresentacion === normalizedPresentacion &&
+             pUnidad === normalizedUnidad;
+    });
+
+    if (duplicate) {
+      return `Ya existe un producto con estas características: "${duplicate.nombre}" (${duplicate.codigo})`;
+    }
+    return null;
   };
 
   const [formData, setFormData] = useState<{
@@ -158,6 +188,18 @@ const Productos = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Verificar producto duplicado
+    const duplicateError = checkDuplicateProduct(formData.nombre, formData.marca, formData.presentacion, formData.unidad);
+    if (duplicateError) {
+      setDuplicateWarning(duplicateError);
+      toast({
+        title: "Producto duplicado",
+        description: duplicateError,
+        variant: "destructive",
+      });
+      return;
+    }
     
     try {
       const productData = {
@@ -253,6 +295,7 @@ const Productos = () => {
   const resetForm = () => {
     setEditingProduct(null);
     setCodigoGapWarning(null);
+    setDuplicateWarning(null);
     setFormData({
       codigo: "",
       nombre: "",
@@ -360,7 +403,11 @@ const Productos = () => {
                     <Label htmlFor="unidad">Unidad *</Label>
                     <Select
                       value={formData.unidad}
-                      onValueChange={(value: "bulto" | "caja" | "churla") => setFormData({ ...formData, unidad: value })}
+                      onValueChange={(value: "bulto" | "caja" | "churla") => {
+                        const newFormData = { ...formData, unidad: value };
+                        setFormData(newFormData);
+                        setDuplicateWarning(checkDuplicateProduct(newFormData.nombre, newFormData.marca, newFormData.presentacion, value));
+                      }}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -378,7 +425,11 @@ const Productos = () => {
                   <Input
                     id="nombre"
                     value={formData.nombre}
-                    onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                    onChange={(e) => {
+                      const nombre = e.target.value;
+                      setFormData({ ...formData, nombre });
+                      setDuplicateWarning(checkDuplicateProduct(nombre, formData.marca, formData.presentacion, formData.unidad));
+                    }}
                     required
                     autoComplete="off"
                     placeholder="Ej: Alpiste, Azúcar, Frijol"
@@ -390,7 +441,11 @@ const Productos = () => {
                     <Input
                       id="marca"
                       value={formData.marca}
-                      onChange={(e) => setFormData({ ...formData, marca: e.target.value })}
+                      onChange={(e) => {
+                        const marca = e.target.value;
+                        setFormData({ ...formData, marca });
+                        setDuplicateWarning(checkDuplicateProduct(formData.nombre, marca, formData.presentacion, formData.unidad));
+                      }}
                       placeholder="Ej: Morelos, Purina"
                       autoComplete="off"
                     />
@@ -402,13 +457,24 @@ const Productos = () => {
                       type="number"
                       step="0.01"
                       value={formData.presentacion}
-                      onChange={(e) => setFormData({ ...formData, presentacion: e.target.value })}
+                      onChange={(e) => {
+                        const presentacion = e.target.value;
+                        setFormData({ ...formData, presentacion });
+                        setDuplicateWarning(checkDuplicateProduct(formData.nombre, formData.marca, presentacion, formData.unidad));
+                      }}
                       placeholder="Ej: 25, 50"
                       autoComplete="off"
                       required
                     />
                   </div>
                 </div>
+                
+                {duplicateWarning && (
+                  <p className="text-xs text-red-600 bg-red-50 p-2 rounded border border-red-200">
+                    ❌ {duplicateWarning}
+                  </p>
+                )}
+                
                 <div className="flex items-center space-x-2 p-3 bg-muted rounded-md">
                   <input
                     type="checkbox"

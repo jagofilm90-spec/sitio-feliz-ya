@@ -1124,6 +1124,7 @@ export type Database = {
           notas: string | null
           peso_total_kg: number | null
           status: string | null
+          tipo_ruta: string
           updated_at: string
           vehiculo_id: string | null
         }
@@ -1137,6 +1138,7 @@ export type Database = {
           notas?: string | null
           peso_total_kg?: number | null
           status?: string | null
+          tipo_ruta?: string
           updated_at?: string
           vehiculo_id?: string | null
         }
@@ -1150,6 +1152,7 @@ export type Database = {
           notas?: string | null
           peso_total_kg?: number | null
           status?: string | null
+          tipo_ruta?: string
           updated_at?: string
           vehiculo_id?: string | null
         }
@@ -1213,7 +1216,8 @@ export type Database = {
           id: string
           nombre: string
           notas: string | null
-          peso_maximo_kg: number
+          peso_maximo_foraneo_kg: number
+          peso_maximo_local_kg: number
           placa: string | null
           status: string
           tipo: string
@@ -1225,7 +1229,8 @@ export type Database = {
           id?: string
           nombre: string
           notas?: string | null
-          peso_maximo_kg?: number
+          peso_maximo_foraneo_kg?: number
+          peso_maximo_local_kg?: number
           placa?: string | null
           status?: string
           tipo?: string
@@ -1237,7 +1242,8 @@ export type Database = {
           id?: string
           nombre?: string
           notas?: string | null
-          peso_maximo_kg?: number
+          peso_maximo_foraneo_kg?: number
+          peso_maximo_local_kg?: number
           placa?: string | null
           status?: string
           tipo?: string

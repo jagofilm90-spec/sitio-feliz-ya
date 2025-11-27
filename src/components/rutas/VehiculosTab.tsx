@@ -35,7 +35,8 @@ interface Vehiculo {
   nombre: string;
   tipo: string;
   placa: string | null;
-  peso_maximo_kg: number;
+  peso_maximo_local_kg: number;
+  peso_maximo_foraneo_kg: number;
   status: string;
   notas: string | null;
   activo: boolean;
@@ -52,7 +53,8 @@ const VehiculosTab = () => {
     nombre: "",
     tipo: "camioneta",
     placa: "",
-    peso_maximo_kg: "7800",
+    peso_maximo_local_kg: "7800",
+    peso_maximo_foraneo_kg: "7000",
     status: "disponible",
     notas: "",
   });
@@ -90,7 +92,8 @@ const VehiculosTab = () => {
         nombre: formData.nombre,
         tipo: formData.tipo,
         placa: formData.placa || null,
-        peso_maximo_kg: parseFloat(formData.peso_maximo_kg),
+        peso_maximo_local_kg: parseFloat(formData.peso_maximo_local_kg),
+        peso_maximo_foraneo_kg: parseFloat(formData.peso_maximo_foraneo_kg),
         status: formData.status,
         notas: formData.notas || null,
       };
@@ -130,7 +133,8 @@ const VehiculosTab = () => {
       nombre: vehiculo.nombre,
       tipo: vehiculo.tipo,
       placa: vehiculo.placa || "",
-      peso_maximo_kg: vehiculo.peso_maximo_kg.toString(),
+      peso_maximo_local_kg: vehiculo.peso_maximo_local_kg.toString(),
+      peso_maximo_foraneo_kg: vehiculo.peso_maximo_foraneo_kg.toString(),
       status: vehiculo.status,
       notas: vehiculo.notas || "",
     });
@@ -164,7 +168,8 @@ const VehiculosTab = () => {
       nombre: "",
       tipo: "camioneta",
       placa: "",
-      peso_maximo_kg: "7800",
+      peso_maximo_local_kg: "7800",
+      peso_maximo_foraneo_kg: "7000",
       status: "disponible",
       notas: "",
     });
@@ -237,27 +242,40 @@ const VehiculosTab = () => {
                   </Select>
                 </div>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="placa">Placa</Label>
+                <Input
+                  id="placa"
+                  value={formData.placa}
+                  onChange={(e) => setFormData({ ...formData, placa: e.target.value })}
+                  placeholder="ABC-123"
+                  autoComplete="off"
+                />
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="placa">Placa</Label>
+                  <Label htmlFor="peso_maximo_local_kg">Capacidad Local (kg) *</Label>
                   <Input
-                    id="placa"
-                    value={formData.placa}
-                    onChange={(e) => setFormData({ ...formData, placa: e.target.value })}
-                    placeholder="ABC-123"
-                    autoComplete="off"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="peso_maximo_kg">Capacidad Máxima (kg) *</Label>
-                  <Input
-                    id="peso_maximo_kg"
+                    id="peso_maximo_local_kg"
                     type="number"
-                    value={formData.peso_maximo_kg}
-                    onChange={(e) => setFormData({ ...formData, peso_maximo_kg: e.target.value })}
+                    value={formData.peso_maximo_local_kg}
+                    onChange={(e) => setFormData({ ...formData, peso_maximo_local_kg: e.target.value })}
                     required
                     autoComplete="off"
                   />
+                  <p className="text-xs text-muted-foreground">CDMX y zona metropolitana</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="peso_maximo_foraneo_kg">Capacidad Foránea (kg) *</Label>
+                  <Input
+                    id="peso_maximo_foraneo_kg"
+                    type="number"
+                    value={formData.peso_maximo_foraneo_kg}
+                    onChange={(e) => setFormData({ ...formData, peso_maximo_foraneo_kg: e.target.value })}
+                    required
+                    autoComplete="off"
+                  />
+                  <p className="text-xs text-muted-foreground">Estados fuera de CDMX</p>
                 </div>
               </div>
               <div className="space-y-2">
@@ -298,13 +316,14 @@ const VehiculosTab = () => {
       </div>
 
       <div className="border rounded-lg">
-        <Table>
+          <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Nombre</TableHead>
               <TableHead>Tipo</TableHead>
               <TableHead>Placa</TableHead>
-              <TableHead>Capacidad</TableHead>
+              <TableHead>Local (kg)</TableHead>
+              <TableHead>Foránea (kg)</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead>Acciones</TableHead>
             </TableRow>
@@ -334,7 +353,8 @@ const VehiculosTab = () => {
                   <TableCell className="font-medium">{vehiculo.nombre}</TableCell>
                   <TableCell className="capitalize">{vehiculo.tipo}</TableCell>
                   <TableCell>{vehiculo.placa || "—"}</TableCell>
-                  <TableCell>{vehiculo.peso_maximo_kg.toLocaleString()} kg</TableCell>
+                  <TableCell>{vehiculo.peso_maximo_local_kg.toLocaleString()}</TableCell>
+                  <TableCell>{vehiculo.peso_maximo_foraneo_kg.toLocaleString()}</TableCell>
                   <TableCell>{getStatusBadge(vehiculo.status)}</TableCell>
                   <TableCell>
                     <div className="flex gap-2">

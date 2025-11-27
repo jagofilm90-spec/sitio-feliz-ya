@@ -29,7 +29,8 @@ interface Vehiculo {
   id: string;
   nombre: string;
   tipo: string;
-  peso_maximo_kg: number;
+  peso_maximo_local_kg: number;
+  peso_maximo_foraneo_kg: number;
   status: string;
 }
 
@@ -60,6 +61,7 @@ const PlanificadorRutas = () => {
   // Form state
   const [selectedVehiculo, setSelectedVehiculo] = useState<string>("");
   const [fechaRuta, setFechaRuta] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  const [tipoRuta, setTipoRuta] = useState<"local" | "foranea">("local");
   const [pedidosSeleccionados, setPedidosSeleccionados] = useState<PedidoSeleccionado[]>([]);
   const [notas, setNotas] = useState("");
 
@@ -121,7 +123,9 @@ const PlanificadorRutas = () => {
   const vehiculoSeleccionado = vehiculos.find(v => v.id === selectedVehiculo);
   
   const pesoTotal = pedidosSeleccionados.reduce((sum, p) => sum + (p.peso_total_kg || 0), 0);
-  const capacidadMaxima = vehiculoSeleccionado?.peso_maximo_kg || 0;
+  const capacidadMaxima = vehiculoSeleccionado 
+    ? (tipoRuta === "local" ? vehiculoSeleccionado.peso_maximo_local_kg : vehiculoSeleccionado.peso_maximo_foraneo_kg)
+    : 0;
   const porcentajeCapacidad = capacidadMaxima > 0 ? (pesoTotal / capacidadMaxima) * 100 : 0;
   const excedido = pesoTotal > capacidadMaxima;
 
@@ -183,6 +187,7 @@ const PlanificadorRutas = () => {
           chofer_id: user.id, // Temporary - should be selected
           vehiculo_id: selectedVehiculo,
           peso_total_kg: pesoTotal,
+          tipo_ruta: tipoRuta,
           status: "programada",
           notas: notas || null,
         }])
@@ -236,6 +241,7 @@ const PlanificadorRutas = () => {
   const resetForm = () => {
     setSelectedVehiculo("");
     setFechaRuta(format(new Date(), "yyyy-MM-dd"));
+    setTipoRuta("local");
     setPedidosSeleccionados([]);
     setNotas("");
   };
@@ -271,13 +277,27 @@ const PlanificadorRutas = () => {
           <div className="grid grid-cols-2 gap-6">
             {/* Left column - Vehicle & Capacity */}
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Fecha de Ruta *</Label>
-                <Input
-                  type="date"
-                  value={fechaRuta}
-                  onChange={(e) => setFechaRuta(e.target.value)}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Fecha de Ruta *</Label>
+                  <Input
+                    type="date"
+                    value={fechaRuta}
+                    onChange={(e) => setFechaRuta(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Tipo de Ruta *</Label>
+                  <Select value={tipoRuta} onValueChange={(v: "local" | "foranea") => setTipoRuta(v)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="local">Local (CDMX)</SelectItem>
+                      <SelectItem value="foranea">Foránea</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -291,7 +311,7 @@ const PlanificadorRutas = () => {
                       <SelectItem key={v.id} value={v.id}>
                         <div className="flex items-center gap-2">
                           <Truck className="h-4 w-4" />
-                          {v.nombre} - {v.peso_maximo_kg.toLocaleString()} kg
+                          {v.nombre} - L:{v.peso_maximo_local_kg.toLocaleString()}kg / F:{v.peso_maximo_foraneo_kg.toLocaleString()}kg
                         </div>
                       </SelectItem>
                     ))}

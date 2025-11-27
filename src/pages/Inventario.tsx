@@ -365,23 +365,21 @@ const Inventario = () => {
                       required
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="fecha_caducidad">
-                      Fecha de Caducidad {selectedProduct?.maneja_caducidad && "*"}
-                    </Label>
-                    <Input
-                      id="fecha_caducidad"
-                      type="date"
-                      value={formData.fecha_caducidad}
-                      onChange={(e) => setFormData({ ...formData, fecha_caducidad: e.target.value })}
-                      required={selectedProduct?.maneja_caducidad}
-                    />
-                    {selectedProduct?.maneja_caducidad && (
+                  {selectedProduct?.maneja_caducidad && (
+                    <div className="space-y-2">
+                      <Label htmlFor="fecha_caducidad">Fecha de Caducidad *</Label>
+                      <Input
+                        id="fecha_caducidad"
+                        type="date"
+                        value={formData.fecha_caducidad}
+                        onChange={(e) => setFormData({ ...formData, fecha_caducidad: e.target.value })}
+                        required
+                      />
                       <p className="text-xs text-muted-foreground">
                         Este producto requiere fecha de caducidad
                       </p>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">

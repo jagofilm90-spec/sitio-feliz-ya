@@ -1222,6 +1222,7 @@ export type Database = {
         | "costal"
         | "litro"
         | "churla"
+        | "cubeta"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1365,7 +1366,16 @@ export const Constants = {
       ],
       credit_term: ["contado", "8_dias", "15_dias", "30_dias"],
       order_status: ["pendiente", "en_ruta", "entregado", "cancelado"],
-      unit_type: ["kg", "pieza", "caja", "bulto", "costal", "litro", "churla"],
+      unit_type: [
+        "kg",
+        "pieza",
+        "caja",
+        "bulto",
+        "costal",
+        "litro",
+        "churla",
+        "cubeta",
+      ],
     },
   },
 } as const

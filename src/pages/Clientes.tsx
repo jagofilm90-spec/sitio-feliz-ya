@@ -28,8 +28,9 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Edit, Trash2 } from "lucide-react";
+import { Plus, Search, Edit, Trash2, MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import ClienteSucursalesDialog from "@/components/clientes/ClienteSucursalesDialog";
 
 interface Zona {
   id: string;
@@ -41,8 +42,10 @@ const Clientes = () => {
   const [zonas, setZonas] = useState<Zona[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [dialogOpen, setDialogOpen] = useState(false);
+const [dialogOpen, setDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<any>(null);
+  const [sucursalesDialogOpen, setSucursalesDialogOpen] = useState(false);
+  const [selectedClienteForSucursales, setSelectedClienteForSucursales] = useState<{ id: string; nombre: string } | null>(null);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState<{
@@ -440,7 +443,18 @@ const Clientes = () => {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-2">
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Sucursales"
+                          onClick={() => {
+                            setSelectedClienteForSucursales({ id: cliente.id, nombre: cliente.nombre });
+                            setSucursalesDialogOpen(true);
+                          }}
+                        >
+                          <MapPin className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -464,6 +478,12 @@ const Clientes = () => {
           </Table>
         </div>
       </div>
+
+      <ClienteSucursalesDialog
+        open={sucursalesDialogOpen}
+        onOpenChange={setSucursalesDialogOpen}
+        cliente={selectedClienteForSucursales}
+      />
     </Layout>
   );
 };

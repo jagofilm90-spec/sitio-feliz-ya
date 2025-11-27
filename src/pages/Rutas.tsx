@@ -13,13 +13,14 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Eye, Truck, MapPin, Route, Play, Square, Gauge } from "lucide-react";
+import { Search, Eye, Truck, MapPin, Route, Play, Square, Gauge, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import VehiculosTab from "@/components/rutas/VehiculosTab";
 import ZonasTab from "@/components/rutas/ZonasTab";
 import PlanificadorRutas from "@/components/rutas/PlanificadorRutas";
 import RutaKilometrajeDialog from "@/components/rutas/RutaKilometrajeDialog";
+import EditarRutaDialog from "@/components/rutas/EditarRutaDialog";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -28,6 +29,7 @@ const Rutas = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [kmDialogOpen, setKmDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedRuta, setSelectedRuta] = useState<any>(null);
   const [kmMode, setKmMode] = useState<"iniciar" | "finalizar">("iniciar");
   const { toast } = useToast();
@@ -100,6 +102,11 @@ const Rutas = () => {
     setSelectedRuta(ruta);
     setKmMode("finalizar");
     setKmDialogOpen(true);
+  };
+
+  const handleEditarRuta = (ruta: any) => {
+    setSelectedRuta(ruta);
+    setEditDialogOpen(true);
   };
 
   return (
@@ -237,21 +244,37 @@ const Rutas = () => {
                         <TableCell>
                           <div className="flex items-center gap-1">
                             {ruta.status === "programada" && (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="text-green-600 hover:text-green-700 hover:bg-green-100"
-                                      onClick={() => handleIniciarRuta(ruta)}
-                                    >
-                                      <Play className="h-4 w-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Iniciar ruta (registrar km inicial)</TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
+                              <>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => handleEditarRuta(ruta)}
+                                      >
+                                        <Pencil className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Editar ruta (cambiar chofer/vehículo)</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="text-green-600 hover:text-green-700 hover:bg-green-100"
+                                        onClick={() => handleIniciarRuta(ruta)}
+                                      >
+                                        <Play className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Iniciar ruta (registrar km inicial)</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </>
                             )}
                             {ruta.status === "en_curso" && (
                               <TooltipProvider>
@@ -298,6 +321,13 @@ const Rutas = () => {
           onOpenChange={setKmDialogOpen}
           onSuccess={loadRutas}
           mode={kmMode}
+        />
+
+        <EditarRutaDialog
+          ruta={selectedRuta}
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          onSuccess={loadRutas}
         />
       </div>
     </Layout>

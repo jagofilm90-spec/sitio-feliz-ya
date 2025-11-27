@@ -22,6 +22,7 @@ import {
   MessageCircle,
   ShoppingBag,
   PieChart,
+  Bug,
 } from "lucide-react";
 
 interface LayoutProps {
@@ -69,6 +70,7 @@ const Layout = ({ children }: LayoutProps) => {
   const menuItems = [
     { icon: Home, label: "Dashboard", path: "/dashboard" },
     { icon: Package, label: "Productos", path: "/productos" },
+    { icon: Bug, label: "Fumigaciones", path: "/fumigaciones" },
     { icon: Users, label: "Clientes", path: "/clientes" },
     { icon: ShoppingCart, label: "Pedidos", path: "/pedidos" },
     { icon: ShoppingBag, label: "Compras", path: "/compras" },

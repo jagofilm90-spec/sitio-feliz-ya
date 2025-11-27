@@ -15,6 +15,19 @@ export const CentroNotificaciones = () => {
   const { alertasCaducidad, notificacionesStock, alertasLicencias, totalCount, loading, marcarComoLeida } = useNotificaciones();
   const navigate = useNavigate();
 
+  const handleLicenciaClick = (puesto: string) => {
+    const tabMap: Record<string, string> = {
+      "Chofer": "chofer",
+      "Vendedor": "vendedor"
+    };
+    const tab = tabMap[puesto] || "todos";
+    navigate(`/empleados?tab=${tab}`);
+  };
+
+  const handleCaducidadClick = () => {
+    navigate("/inventario");
+  };
+
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -95,15 +108,17 @@ export const CentroNotificaciones = () => {
                   {alertasLicencias.map((alerta) => (
                     <div
                       key={alerta.id}
-                      className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
-                      onClick={() => navigate("/empleados")}
+                      className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors group"
                     >
                       <IdCard 
                         className={`h-5 w-5 mt-0.5 flex-shrink-0 ${
                           alerta.vencida ? "text-red-500" : "text-yellow-500"
                         }`}
                       />
-                      <div className="flex-1 min-w-0">
+                      <div 
+                        className="flex-1 min-w-0 cursor-pointer"
+                        onClick={() => handleLicenciaClick(alerta.empleado_puesto)}
+                      >
                         <p className="text-sm font-medium">
                           {alerta.empleado_nombre}
                         </p>
@@ -122,6 +137,17 @@ export const CentroNotificaciones = () => {
                           })}
                         </p>
                       </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Aquí se podría implementar lógica para descartar temporalmente
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
                     </div>
                   ))}
                   {alertasCaducidad.length > 0 && <Separator className="my-2" />}
@@ -137,15 +163,17 @@ export const CentroNotificaciones = () => {
                   {alertasCaducidad.map((alerta) => (
                     <div
                       key={alerta.id}
-                      className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
-                      onClick={() => navigate("/inventario")}
+                      className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors group"
                     >
                       <AlertCircle 
                         className={`h-5 w-5 mt-0.5 flex-shrink-0 ${
                           alerta.dias_restantes <= 7 ? "text-red-500" : "text-yellow-500"
                         }`}
                       />
-                      <div className="flex-1 min-w-0">
+                      <div 
+                        className="flex-1 min-w-0 cursor-pointer"
+                        onClick={handleCaducidadClick}
+                      >
                         <p className="text-sm font-medium">
                           {alerta.producto_codigo} - {alerta.producto_nombre}
                         </p>
@@ -161,6 +189,17 @@ export const CentroNotificaciones = () => {
                           })}
                         </p>
                       </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Aquí se podría implementar lógica para descartar temporalmente
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
                     </div>
                   ))}
                 </div>

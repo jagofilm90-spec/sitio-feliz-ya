@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -140,6 +141,7 @@ interface Notificacion {
 }
 
 const Empleados = () => {
+  const [searchParams] = useSearchParams();
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [usuarios, setUsuarios] = useState<UserProfile[]>([]);
   const [documentos, setDocumentos] = useState<Record<string, EmpleadoDocumento[]>>({});
@@ -154,6 +156,7 @@ const Empleados = () => {
   const [selectedEmpleado, setSelectedEmpleado] = useState<string | null>(null);
   const [editingLicenseDoc, setEditingLicenseDoc] = useState<EmpleadoDocumento | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>("todos");
   const [filtroPuesto, setFiltroPuesto] = useState<"todos" | "secretaria" | "vendedor" | "chofer" | "almacenista">("todos");
   const [filtroActivo, setFiltroActivo] = useState<"todos" | "activos" | "inactivos">("todos");
   const { toast } = useToast();
@@ -226,7 +229,24 @@ const Empleados = () => {
     loadEmpleados();
     loadUsuarios();
     loadNotificaciones();
-  }, []);
+
+    // Read tab from URL query params
+    const tabParam = searchParams.get("tab");
+    if (tabParam) {
+      setActiveTab(tabParam);
+      // Map tab param to filtroPuesto
+      const tabMap: Record<string, any> = {
+        "chofer": "chofer",
+        "vendedor": "vendedor",
+        "secretaria": "secretaria",
+        "almacenista": "almacenista",
+        "todos": "todos"
+      };
+      if (tabMap[tabParam]) {
+        setFiltroPuesto(tabMap[tabParam]);
+      }
+    }
+  }, [searchParams]);
 
   // Resetear el formulario de documento cuando se abre el diálogo
   useEffect(() => {
@@ -1739,7 +1759,10 @@ const Empleados = () => {
             </div>
           </div>
 
-          <Tabs defaultValue="todos" className="space-y-4" onValueChange={(v) => setFiltroPuesto(v as any)}>
+          <Tabs value={activeTab} className="space-y-4" onValueChange={(v) => {
+            setActiveTab(v);
+            setFiltroPuesto(v as any);
+          }}>
             <TabsList>
               <TabsTrigger value="todos">
                 Todos ({empleados.length})

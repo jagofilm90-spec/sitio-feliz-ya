@@ -549,9 +549,21 @@ const Productos = () => {
                           )}
                         </TableCell>
                         <TableCell>
-                          {producto.nombre}
-                          {producto.maneja_caducidad && " 📅"}
-                          {producto.requiere_fumigacion && " 🦠"}
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <span>{producto.nombre}</span>
+                            {producto.aplica_iva && (
+                              <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-blue-50 text-blue-700 border-blue-200">
+                                IVA
+                              </Badge>
+                            )}
+                            {producto.aplica_ieps && (
+                              <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-amber-50 text-amber-700 border-amber-200">
+                                IEPS
+                              </Badge>
+                            )}
+                            {producto.maneja_caducidad && <span className="ml-1">📅</span>}
+                            {producto.requiere_fumigacion && <span>🦠</span>}
+                          </div>
                         </TableCell>
                         <TableCell>{producto.marca || "-"}</TableCell>
                         <TableCell>{producto.presentacion ? `${producto.presentacion} kg` : "-"}</TableCell>

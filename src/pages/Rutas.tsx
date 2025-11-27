@@ -37,7 +37,7 @@ const Rutas = () => {
           *,
           chofer:chofer_id (full_name),
           ayudante:ayudante_id (full_name),
-          vehiculo:vehiculo_id (nombre, peso_maximo_kg)
+          vehiculo:vehiculo_id (nombre, peso_maximo_local_kg, peso_maximo_foraneo_kg)
         `)
         .order("fecha_ruta", { ascending: false });
 
@@ -116,7 +116,7 @@ const Rutas = () => {
           </TabsContent>
 
           <TabsContent value="rutas" className="space-y-4">
-            <div className="flex gap-4">
+        <div className="flex gap-4">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -134,6 +134,7 @@ const Rutas = () => {
                   <TableRow>
                     <TableHead>Folio</TableHead>
                     <TableHead>Fecha</TableHead>
+                    <TableHead>Tipo</TableHead>
                     <TableHead>Vehículo</TableHead>
                     <TableHead>Chofer</TableHead>
                     <TableHead>Peso</TableHead>
@@ -144,13 +145,13 @@ const Rutas = () => {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center">
+                      <TableCell colSpan={8} className="text-center">
                         Cargando...
                       </TableCell>
                     </TableRow>
                   ) : filteredRutas.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center">
+                      <TableCell colSpan={8} className="text-center">
                         No hay rutas registradas
                       </TableCell>
                     </TableRow>
@@ -161,13 +162,20 @@ const Rutas = () => {
                         <TableCell>
                           {new Date(ruta.fecha_ruta).toLocaleDateString("es-MX")}
                         </TableCell>
+                        <TableCell>
+                          <Badge variant={ruta.tipo_ruta === "local" ? "secondary" : "outline"}>
+                            {ruta.tipo_ruta === "local" ? "Local" : "Foránea"}
+                          </Badge>
+                        </TableCell>
                         <TableCell>{ruta.vehiculo?.nombre || "—"}</TableCell>
                         <TableCell>{ruta.chofer?.full_name || "—"}</TableCell>
                         <TableCell>
                           {ruta.peso_total_kg?.toLocaleString() || 0} kg
                           {ruta.vehiculo && (
                             <span className="text-muted-foreground text-xs ml-1">
-                              / {ruta.vehiculo.peso_maximo_kg?.toLocaleString()} kg
+                              / {(ruta.tipo_ruta === "local" 
+                                ? ruta.vehiculo.peso_maximo_local_kg 
+                                : ruta.vehiculo.peso_maximo_foraneo_kg)?.toLocaleString()} kg
                             </span>
                           )}
                         </TableCell>

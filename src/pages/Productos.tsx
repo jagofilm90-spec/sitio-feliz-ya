@@ -41,6 +41,7 @@ const Productos = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [mostrarInactivos, setMostrarInactivos] = useState(false);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState<{
@@ -56,6 +57,7 @@ const Productos = () => {
     maneja_caducidad: boolean;
     aplica_iva: boolean;
     aplica_ieps: boolean;
+    activo: boolean;
   }>({
     codigo: "",
     nombre: "",
@@ -69,6 +71,7 @@ const Productos = () => {
     maneja_caducidad: false,
     aplica_iva: false,
     aplica_ieps: false,
+    activo: true,
   });
 
   useEffect(() => {
@@ -119,6 +122,7 @@ const Productos = () => {
         maneja_caducidad: formData.maneja_caducidad,
         aplica_iva: formData.aplica_iva,
         aplica_ieps: formData.aplica_ieps,
+        activo: formData.activo,
       };
 
       if (editingProduct) {
@@ -165,6 +169,7 @@ const Productos = () => {
       maneja_caducidad: product.maneja_caducidad,
       aplica_iva: product.aplica_iva || false,
       aplica_ieps: product.aplica_ieps || false,
+      activo: product.activo !== false,
     });
     setDialogOpen(true);
   };
@@ -205,16 +210,21 @@ const Productos = () => {
       maneja_caducidad: false,
       aplica_iva: false,
       aplica_ieps: false,
+      activo: true,
     });
   };
 
-  const filteredProductos = productos.filter(
-    (p) =>
+  const filteredProductos = productos.filter((p) => {
+    const matchesSearch = 
       p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (p.marca && p.marca.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (p.presentacion && p.presentacion.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+      (p.presentacion && p.presentacion.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    const matchesActiveFilter = mostrarInactivos ? true : p.activo !== false;
+    
+    return matchesSearch && matchesActiveFilter;
+  });
 
   const calcularPrecioTotal = () => {
     if (!formData.precio_por_kilo || !formData.precio_venta || !formData.presentacion) {
@@ -253,6 +263,19 @@ const Productos = () => {
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSave} className="space-y-4">
+                <div className="flex items-center space-x-2 p-3 bg-muted rounded-lg">
+                  <input
+                    type="checkbox"
+                    id="activo"
+                    checked={formData.activo}
+                    onChange={(e) => setFormData({ ...formData, activo: e.target.checked })}
+                    className="rounded"
+                  />
+                  <Label htmlFor="activo" className="cursor-pointer">
+                    Producto activo
+                  </Label>
+                </div>
+                
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="codigo">Código *</Label>
@@ -418,7 +441,7 @@ const Productos = () => {
           </Dialog>
         </div>
 
-        <div className="flex gap-4">
+        <div className="flex gap-4 items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
@@ -428,6 +451,15 @@ const Productos = () => {
               className="pl-10"
             />
           </div>
+          <label className="flex items-center gap-2 text-sm whitespace-nowrap">
+            <input
+              type="checkbox"
+              checked={mostrarInactivos}
+              onChange={(e) => setMostrarInactivos(e.target.checked)}
+              className="rounded"
+            />
+            Mostrar inactivos
+          </label>
         </div>
 
         <div className="border rounded-lg">
@@ -465,8 +497,13 @@ const Productos = () => {
                       : `$${producto.precio_venta.toFixed(2)}`;
                     
                     return (
-                      <TableRow key={producto.id}>
-                        <TableCell className="font-medium">{producto.codigo}</TableCell>
+                      <TableRow key={producto.id} className={producto.activo === false ? "opacity-50" : ""}>
+                        <TableCell className="font-medium">
+                          {producto.codigo}
+                          {producto.activo === false && (
+                            <Badge variant="secondary" className="ml-2 text-xs">Inactivo</Badge>
+                          )}
+                        </TableCell>
                         <TableCell>
                           {producto.nombre}
                           {producto.maneja_caducidad && " 📅"}

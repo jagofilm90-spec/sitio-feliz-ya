@@ -50,7 +50,7 @@ const Productos = () => {
     nombre: string;
     marca: string;
     presentacion: string;
-    unidad: "bulto" | "caja";
+    unidad: "bulto" | "caja" | "churla";
     precio_por_kilo: boolean;
     precio_venta: string;
     precio_compra: string;
@@ -305,7 +305,7 @@ const Productos = () => {
                     <Label htmlFor="unidad">Unidad *</Label>
                     <Select
                       value={formData.unidad}
-                      onValueChange={(value: "bulto" | "caja") => setFormData({ ...formData, unidad: value })}
+                      onValueChange={(value: "bulto" | "caja" | "churla") => setFormData({ ...formData, unidad: value })}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -313,6 +313,7 @@ const Productos = () => {
                       <SelectContent>
                         <SelectItem value="bulto">Bulto</SelectItem>
                         <SelectItem value="caja">Caja</SelectItem>
+                        <SelectItem value="churla">Churla</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

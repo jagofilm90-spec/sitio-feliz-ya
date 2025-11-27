@@ -1,4 +1,4 @@
-import { Bell, PackageX, AlertCircle, X } from "lucide-react";
+import { Bell, PackageX, AlertCircle, X, IdCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { useNotificaciones } from "@/hooks/useNotificaciones";
 
 export const CentroNotificaciones = () => {
-  const { alertasCaducidad, notificacionesStock, totalCount, loading, marcarComoLeida } = useNotificaciones();
+  const { alertasCaducidad, notificacionesStock, alertasLicencias, totalCount, loading, marcarComoLeida } = useNotificaciones();
 
   return (
     <Popover>
@@ -82,6 +82,47 @@ export const CentroNotificaciones = () => {
                       >
                         <X className="h-4 w-4" />
                       </Button>
+                    </div>
+                  ))}
+                  {alertasCaducidad.length > 0 && <Separator className="my-2" />}
+                </div>
+              )}
+
+              {/* Alertas de Licencias */}
+              {alertasLicencias.length > 0 && (
+                <div className="mb-2">
+                  <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">
+                    Licencias de Conductor
+                  </div>
+                  {alertasLicencias.map((alerta) => (
+                    <div
+                      key={alerta.id}
+                      className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors"
+                    >
+                      <IdCard 
+                        className={`h-5 w-5 mt-0.5 flex-shrink-0 ${
+                          alerta.vencida ? "text-red-500" : "text-yellow-500"
+                        }`}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">
+                          {alerta.empleado_nombre}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {alerta.empleado_puesto} • {" "}
+                          {alerta.vencida 
+                            ? `Vencida hace ${Math.abs(alerta.dias_restantes)} ${Math.abs(alerta.dias_restantes) === 1 ? "día" : "días"}`
+                            : `Vence en ${alerta.dias_restantes} ${alerta.dias_restantes === 1 ? "día" : "días"}`
+                          }
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {new Date(alerta.fecha_vencimiento).toLocaleDateString("es-MX", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </p>
+                      </div>
                     </div>
                   ))}
                   {alertasCaducidad.length > 0 && <Separator className="my-2" />}

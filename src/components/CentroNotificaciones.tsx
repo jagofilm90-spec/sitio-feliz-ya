@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Bell, PackageX, AlertCircle, X, IdCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,19 +12,67 @@ import { Separator } from "@/components/ui/separator";
 import { useNotificaciones } from "@/hooks/useNotificaciones";
 import { useNavigate } from "react-router-dom";
 
+interface DismissedNotification {
+  id: string;
+  dismissedAt: number;
+}
+
+const STORAGE_KEY = "dismissed-notifications";
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
 export const CentroNotificaciones = () => {
   const { alertasCaducidad, notificacionesStock, alertasLicencias, totalCount, loading, marcarComoLeida } = useNotificaciones();
   const navigate = useNavigate();
   const [dismissedLicencias, setDismissedLicencias] = useState<string[]>([]);
   const [dismissedCaducidad, setDismissedCaducidad] = useState<string[]>([]);
 
+  // Cargar notificaciones descartadas del localStorage al montar
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const dismissed: DismissedNotification[] = JSON.parse(stored);
+        const now = Date.now();
+        
+        // Filtrar las que aún no han pasado 24 horas
+        const stillValid = dismissed.filter(d => (now - d.dismissedAt) < ONE_DAY_MS);
+        
+        // Actualizar localStorage con las válidas
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(stillValid));
+        
+        // Separar por tipo (L = licencias, C = caducidad)
+        const licencias = stillValid.filter(d => d.id.startsWith("L-")).map(d => d.id);
+        const caducidad = stillValid.filter(d => d.id.startsWith("C-")).map(d => d.id);
+        
+        setDismissedLicencias(licencias);
+        setDismissedCaducidad(caducidad);
+      }
+    } catch (error) {
+      console.error("Error loading dismissed notifications:", error);
+    }
+  }, []);
+
+  // Guardar en localStorage cuando cambian las notificaciones descartadas
+  useEffect(() => {
+    try {
+      const now = Date.now();
+      const allDismissed: DismissedNotification[] = [
+        ...dismissedLicencias.map(id => ({ id, dismissedAt: now })),
+        ...dismissedCaducidad.map(id => ({ id, dismissedAt: now }))
+      ];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(allDismissed));
+    } catch (error) {
+      console.error("Error saving dismissed notifications:", error);
+    }
+  }, [dismissedLicencias, dismissedCaducidad]);
+
   const visibleAlertasLicencias = useMemo(
-    () => alertasLicencias.filter((a) => !dismissedLicencias.includes(a.id)),
+    () => alertasLicencias.filter((a) => !dismissedLicencias.includes(`L-${a.id}`)),
     [alertasLicencias, dismissedLicencias]
   );
 
   const visibleAlertasCaducidad = useMemo(
-    () => alertasCaducidad.filter((a) => !dismissedCaducidad.includes(a.id)),
+    () => alertasCaducidad.filter((a) => !dismissedCaducidad.includes(`C-${a.id}`)),
     [alertasCaducidad, dismissedCaducidad]
   );
 
@@ -158,7 +206,7 @@ export const CentroNotificaciones = () => {
                         className="h-6 w-6 p-0 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setDismissedLicencias((prev) => [...prev, alerta.id]);
+                          setDismissedLicencias((prev) => [...prev, `L-${alerta.id}`]);
                         }}
                       >
                         <X className="h-4 w-4" />
@@ -210,7 +258,7 @@ export const CentroNotificaciones = () => {
                         className="h-6 w-6 p-0 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setDismissedCaducidad((prev) => [...prev, alerta.id]);
+                          setDismissedCaducidad((prev) => [...prev, `C-${alerta.id}`]);
                         }}
                       >
                         <X className="h-4 w-4" />

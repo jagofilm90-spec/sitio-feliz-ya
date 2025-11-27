@@ -53,10 +53,14 @@ export type Database = {
           cliente_id: string
           contacto: string | null
           created_at: string
+          dias_sin_entrega: string | null
           direccion: string
+          horario_entrega: string | null
           id: string
+          no_combinar_pedidos: boolean | null
           nombre: string
           notas: string | null
+          restricciones_vehiculo: string | null
           telefono: string | null
           updated_at: string
           zona_id: string | null
@@ -66,10 +70,14 @@ export type Database = {
           cliente_id: string
           contacto?: string | null
           created_at?: string
+          dias_sin_entrega?: string | null
           direccion: string
+          horario_entrega?: string | null
           id?: string
+          no_combinar_pedidos?: boolean | null
           nombre: string
           notas?: string | null
+          restricciones_vehiculo?: string | null
           telefono?: string | null
           updated_at?: string
           zona_id?: string | null
@@ -79,10 +87,14 @@ export type Database = {
           cliente_id?: string
           contacto?: string | null
           created_at?: string
+          dias_sin_entrega?: string | null
           direccion?: string
+          horario_entrega?: string | null
           id?: string
+          no_combinar_pedidos?: boolean | null
           nombre?: string
           notas?: string | null
+          restricciones_vehiculo?: string | null
           telefono?: string | null
           updated_at?: string
           zona_id?: string | null

@@ -873,6 +873,7 @@ export type Database = {
           created_at: string
           descripcion: string | null
           fecha_ultima_compra: string | null
+          fecha_ultima_fumigacion: string | null
           id: string
           maneja_caducidad: boolean | null
           marca: string | null
@@ -882,6 +883,7 @@ export type Database = {
           precio_venta: number
           presentacion: string | null
           proveedor_preferido_id: string | null
+          requiere_fumigacion: boolean
           stock_actual: number
           stock_minimo: number
           ultimo_costo_compra: number | null
@@ -897,6 +899,7 @@ export type Database = {
           created_at?: string
           descripcion?: string | null
           fecha_ultima_compra?: string | null
+          fecha_ultima_fumigacion?: string | null
           id?: string
           maneja_caducidad?: boolean | null
           marca?: string | null
@@ -906,6 +909,7 @@ export type Database = {
           precio_venta?: number
           presentacion?: string | null
           proveedor_preferido_id?: string | null
+          requiere_fumigacion?: boolean
           stock_actual?: number
           stock_minimo?: number
           ultimo_costo_compra?: number | null
@@ -921,6 +925,7 @@ export type Database = {
           created_at?: string
           descripcion?: string | null
           fecha_ultima_compra?: string | null
+          fecha_ultima_fumigacion?: string | null
           id?: string
           maneja_caducidad?: boolean | null
           marca?: string | null
@@ -930,6 +935,7 @@ export type Database = {
           precio_venta?: number
           presentacion?: string | null
           proveedor_preferido_id?: string | null
+          requiere_fumigacion?: boolean
           stock_actual?: number
           stock_minimo?: number
           ultimo_costo_compra?: number | null
@@ -1107,6 +1113,7 @@ export type Database = {
         Args: { _conversacion_id: string; _user_id: string }
         Returns: boolean
       }
+      generar_notificaciones_fumigacion: { Args: never; Returns: undefined }
       get_cliente_id_for_user: { Args: { user_uuid: string }; Returns: string }
       has_role: {
         Args: {

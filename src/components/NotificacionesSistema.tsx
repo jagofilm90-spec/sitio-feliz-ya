@@ -24,9 +24,19 @@ interface NotificacionStockBajo {
   leida: boolean;
 }
 
+interface NotificacionFumigacion {
+  id: string;
+  tipo: string;
+  titulo: string;
+  descripcion: string;
+  created_at: string;
+  leida: boolean;
+}
+
 export const NotificacionesSistema = () => {
   const [alertasCaducidad, setAlertasCaducidad] = useState<ProductoCaducidad[]>([]);
   const [notificacionesStock, setNotificacionesStock] = useState<NotificacionStockBajo[]>([]);
+  const [notificacionesFumigacion, setNotificacionesFumigacion] = useState<NotificacionFumigacion[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -38,9 +48,17 @@ export const NotificacionesSistema = () => {
   }, []);
 
   const cargarNotificaciones = async () => {
+    // Primero generar notificaciones de fumigación
+    try {
+      await supabase.rpc('generar_notificaciones_fumigacion');
+    } catch (error) {
+      console.error("Error generando notificaciones de fumigación:", error);
+    }
+    
     await Promise.all([
       cargarAlertasCaducidad(),
-      cargarNotificacionesStock()
+      cargarNotificacionesStock(),
+      cargarNotificacionesFumigacion()
     ]);
     setLoading(false);
   };
@@ -127,6 +145,22 @@ export const NotificacionesSistema = () => {
     }
   };
 
+  const cargarNotificacionesFumigacion = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("notificaciones")
+        .select("*")
+        .eq("tipo", "fumigacion_proxima")
+        .eq("leida", false)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setNotificacionesFumigacion(data || []);
+    } catch (error) {
+      console.error("Error cargando notificaciones de fumigación:", error);
+    }
+  };
+
   const marcarComoLeida = async (notificacionId: string) => {
     try {
       const { error } = await supabase
@@ -143,7 +177,7 @@ export const NotificacionesSistema = () => {
     }
   };
 
-  if (loading || (alertasCaducidad.length === 0 && notificacionesStock.length === 0)) {
+  if (loading || (alertasCaducidad.length === 0 && notificacionesStock.length === 0 && notificacionesFumigacion.length === 0)) {
     return null;
   }
 
@@ -153,6 +187,25 @@ export const NotificacionesSistema = () => {
       {notificacionesStock.map((notif) => (
         <Alert key={notif.id} variant="destructive">
           <PackageX className="h-4 w-4" />
+          <AlertTitle className="flex items-center justify-between">
+            <span>{notif.titulo}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => marcarComoLeida(notif.id)}
+              className="h-6 w-6 p-0"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </AlertTitle>
+          <AlertDescription>{notif.descripcion}</AlertDescription>
+        </Alert>
+      ))}
+
+      {/* Alertas de fumigación */}
+      {notificacionesFumigacion.map((notif) => (
+        <Alert key={notif.id} variant="default" className="border-orange-500">
+          <AlertCircle className="h-4 w-4" />
           <AlertTitle className="flex items-center justify-between">
             <span>{notif.titulo}</span>
             <Button

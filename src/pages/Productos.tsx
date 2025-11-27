@@ -58,6 +58,8 @@ const Productos = () => {
     aplica_iva: boolean;
     aplica_ieps: boolean;
     activo: boolean;
+    requiere_fumigacion: boolean;
+    fecha_ultima_fumigacion: string;
   }>({
     codigo: "",
     nombre: "",
@@ -72,6 +74,8 @@ const Productos = () => {
     aplica_iva: false,
     aplica_ieps: false,
     activo: true,
+    requiere_fumigacion: false,
+    fecha_ultima_fumigacion: "",
   });
 
   useEffect(() => {
@@ -123,6 +127,8 @@ const Productos = () => {
         aplica_iva: formData.aplica_iva,
         aplica_ieps: formData.aplica_ieps,
         activo: formData.activo,
+        requiere_fumigacion: formData.requiere_fumigacion,
+        fecha_ultima_fumigacion: formData.fecha_ultima_fumigacion || null,
       };
 
       if (editingProduct) {
@@ -170,6 +176,8 @@ const Productos = () => {
       aplica_iva: product.aplica_iva || false,
       aplica_ieps: product.aplica_ieps || false,
       activo: product.activo !== false,
+      requiere_fumigacion: product.requiere_fumigacion || false,
+      fecha_ultima_fumigacion: product.fecha_ultima_fumigacion || "",
     });
     setDialogOpen(true);
   };
@@ -211,6 +219,8 @@ const Productos = () => {
       aplica_iva: false,
       aplica_ieps: false,
       activo: true,
+      requiere_fumigacion: false,
+      fecha_ultima_fumigacion: "",
     });
   };
 
@@ -407,6 +417,34 @@ const Productos = () => {
                     className="rounded"
                   />
                   <Label htmlFor="maneja_caducidad">Maneja fecha de caducidad</Label>
+                </div>
+                <div className="space-y-3 p-3 bg-muted/50 rounded-lg border">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="requiere_fumigacion"
+                      checked={formData.requiere_fumigacion}
+                      onChange={(e) => setFormData({ ...formData, requiere_fumigacion: e.target.checked })}
+                      className="rounded"
+                    />
+                    <Label htmlFor="requiere_fumigacion">Requiere fumigación cada 6 meses</Label>
+                  </div>
+                  {formData.requiere_fumigacion && (
+                    <div className="space-y-2 ml-6">
+                      <Label htmlFor="fecha_ultima_fumigacion">Fecha de última fumigación *</Label>
+                      <Input
+                        id="fecha_ultima_fumigacion"
+                        type="date"
+                        value={formData.fecha_ultima_fumigacion}
+                        onChange={(e) => setFormData({ ...formData, fecha_ultima_fumigacion: e.target.value })}
+                        required={formData.requiere_fumigacion}
+                        autoComplete="off"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Se notificará 2 semanas antes de cumplir 6 meses
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex items-center space-x-2">

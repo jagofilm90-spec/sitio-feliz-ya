@@ -503,6 +503,8 @@ export type Database = {
           notas: string | null
           producto_id: string
           referencia: string | null
+          stock_anterior: number | null
+          stock_nuevo: number | null
           tipo_movimiento: string
           usuario_id: string
         }
@@ -515,6 +517,8 @@ export type Database = {
           notas?: string | null
           producto_id: string
           referencia?: string | null
+          stock_anterior?: number | null
+          stock_nuevo?: number | null
           tipo_movimiento: string
           usuario_id: string
         }
@@ -527,6 +531,8 @@ export type Database = {
           notas?: string | null
           producto_id?: string
           referencia?: string | null
+          stock_anterior?: number | null
+          stock_nuevo?: number | null
           tipo_movimiento?: string
           usuario_id?: string
         }

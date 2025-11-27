@@ -26,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
@@ -41,7 +42,7 @@ const Productos = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
-  const [mostrarInactivos, setMostrarInactivos] = useState(false);
+  const [tabActivo, setTabActivo] = useState<"activos" | "inactivos">("activos");
   const { toast } = useToast();
 
   const [formData, setFormData] = useState<{
@@ -231,10 +232,13 @@ const Productos = () => {
       (p.marca && p.marca.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (p.presentacion && p.presentacion.toLowerCase().includes(searchTerm.toLowerCase()));
     
-    const matchesActiveFilter = mostrarInactivos ? p.activo === false : p.activo !== false;
+    const matchesActiveFilter = tabActivo === "inactivos" ? p.activo === false : p.activo !== false;
     
     return matchesSearch && matchesActiveFilter;
   });
+
+  const productosActivos = productos.filter(p => p.activo !== false).length;
+  const productosInactivos = productos.filter(p => p.activo === false).length;
 
   const calcularPrecioTotal = () => {
     if (!formData.precio_por_kilo || !formData.precio_venta || !formData.presentacion) {
@@ -478,7 +482,7 @@ const Productos = () => {
           </Dialog>
         </div>
 
-        <div className="flex gap-4 items-center">
+        <div className="flex gap-4 items-center mb-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
@@ -488,19 +492,21 @@ const Productos = () => {
               className="pl-10"
             />
           </div>
-          <label className="flex items-center gap-2 text-sm whitespace-nowrap">
-            <input
-              type="checkbox"
-              checked={mostrarInactivos}
-              onChange={(e) => setMostrarInactivos(e.target.checked)}
-              className="rounded"
-            />
-            Mostrar inactivos
-          </label>
         </div>
 
-        <div className="border rounded-lg">
-          <ScrollArea className="h-[calc(100vh-280px)]">
+        <Tabs value={tabActivo} onValueChange={(value) => setTabActivo(value as "activos" | "inactivos")}>
+          <TabsList>
+            <TabsTrigger value="activos">
+              Activos ({productosActivos})
+            </TabsTrigger>
+            <TabsTrigger value="inactivos">
+              Inactivos ({productosInactivos})
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value={tabActivo} className="mt-4">
+            <div className="border rounded-lg">
+              <ScrollArea className="h-[calc(100vh-330px)]">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -592,8 +598,10 @@ const Productos = () => {
                 )}
               </TableBody>
             </Table>
-          </ScrollArea>
-        </div>
+              </ScrollArea>
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </Layout>
   );

@@ -431,17 +431,16 @@ const Productos = () => {
                   </div>
                   {formData.requiere_fumigacion && (
                     <div className="space-y-2 ml-6">
-                      <Label htmlFor="fecha_ultima_fumigacion">Fecha de última fumigación *</Label>
+                      <Label htmlFor="fecha_ultima_fumigacion">Fecha de última fumigación (opcional)</Label>
                       <Input
                         id="fecha_ultima_fumigacion"
                         type="date"
                         value={formData.fecha_ultima_fumigacion}
                         onChange={(e) => setFormData({ ...formData, fecha_ultima_fumigacion: e.target.value })}
-                        required={formData.requiere_fumigacion}
                         autoComplete="off"
                       />
                       <p className="text-xs text-muted-foreground">
-                        Se notificará 2 semanas antes de cumplir 6 meses
+                        Si no se sabe, se registrará al recibir el producto en inventario
                       </p>
                     </div>
                   )}

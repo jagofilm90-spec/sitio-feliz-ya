@@ -39,6 +39,8 @@ const Inventario = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingMovimiento, setEditingMovimiento] = useState<any | null>(null);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -118,13 +120,22 @@ const Inventario = () => {
         usuario_id: session.session.user.id,
       };
 
-      const { error } = await supabase
-        .from("inventario_movimientos")
-        .insert([movimientoData]);
+      let error;
+
+      if (isEditing && editingMovimiento) {
+        ({ error } = await supabase
+          .from("inventario_movimientos")
+          .update(movimientoData)
+          .eq("id", editingMovimiento.id));
+      } else {
+        ({ error } = await supabase
+          .from("inventario_movimientos")
+          .insert([movimientoData]));
+      }
 
       if (error) throw error;
 
-      toast({ title: "Movimiento registrado correctamente" });
+      toast({ title: isEditing ? "Movimiento actualizado" : "Movimiento registrado correctamente" });
       setDialogOpen(false);
       resetForm();
       loadData();
@@ -139,6 +150,8 @@ const Inventario = () => {
 
   const resetForm = () => {
     setSelectedProduct(null);
+    setIsEditing(false);
+    setEditingMovimiento(null);
     setFormData({
       producto_id: "",
       tipo_movimiento: "entrada",
@@ -151,9 +164,50 @@ const Inventario = () => {
   };
 
   const handleProductChange = (productoId: string) => {
-    const producto = productos.find(p => p.id === productoId);
+    const producto = productos.find((p) => p.id === productoId);
     setSelectedProduct(producto);
     setFormData({ ...formData, producto_id: productoId });
+  };
+
+  const handleEditMovimiento = (movimiento: any) => {
+    setIsEditing(true);
+    setEditingMovimiento(movimiento);
+    setSelectedProduct(productos.find((p) => p.id === movimiento.producto_id));
+    setFormData({
+      producto_id: movimiento.producto_id,
+      tipo_movimiento: movimiento.tipo_movimiento,
+      cantidad: String(movimiento.cantidad),
+      fecha_caducidad: movimiento.fecha_caducidad || "",
+      lote: movimiento.lote || "",
+      referencia: movimiento.referencia || "",
+      notas: movimiento.notas || "",
+    });
+    setDialogOpen(true);
+  };
+
+  const handleDeleteMovimiento = async (movimiento: any) => {
+    const confirmar = window.confirm(
+      "¿Seguro que quieres eliminar este movimiento de inventario? Esto afectará el stock."
+    );
+    if (!confirmar) return;
+
+    try {
+      const { error } = await supabase
+        .from("inventario_movimientos")
+        .delete()
+        .eq("id", movimiento.id);
+
+      if (error) throw error;
+
+      toast({ title: "Movimiento eliminado" });
+      loadData();
+    } catch (error: any) {
+      toast({
+        title: "Error al eliminar",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
 
   const filteredMovimientos = movimientos.filter(
@@ -187,16 +241,21 @@ const Inventario = () => {
             <h1 className="text-3xl font-bold">Inventario</h1>
             <p className="text-muted-foreground">Control de movimientos de inventario</p>
           </div>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <Dialog open={dialogOpen} onOpenChange={(open) => {
+            setDialogOpen(open);
+            if (!open) resetForm();
+          }}>
             <DialogTrigger asChild>
               <Button onClick={resetForm}>
                 <Plus className="h-4 w-4 mr-2" />
-                Registrar Movimiento
+                {isEditing ? "Editar movimiento" : "Registrar Movimiento"}
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl">
               <DialogHeader>
-                <DialogTitle>Registrar Movimiento de Inventario</DialogTitle>
+                <DialogTitle>
+                  {isEditing ? "Editar Movimiento de Inventario" : "Registrar Movimiento de Inventario"}
+                </DialogTitle>
                 <DialogDescription>
                   Registra entradas, salidas o ajustes de inventario
                 </DialogDescription>
@@ -296,10 +355,17 @@ const Inventario = () => {
                   />
                 </div>
                 <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setDialogOpen(false);
+                      resetForm();
+                    }}
+                  >
                     Cancelar
                   </Button>
-                  <Button type="submit">Registrar</Button>
+                  <Button type="submit">{isEditing ? "Guardar cambios" : "Registrar"}</Button>
                 </div>
               </form>
             </DialogContent>
@@ -330,6 +396,7 @@ const Inventario = () => {
                 <TableHead>Caducidad</TableHead>
                 <TableHead>Usuario</TableHead>
                 <TableHead>Referencia</TableHead>
+                <TableHead className="w-[140px] text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -364,6 +431,22 @@ const Inventario = () => {
                     </TableCell>
                     <TableCell>{movimiento.profiles?.full_name || "—"}</TableCell>
                     <TableCell>{movimiento.referencia || "—"}</TableCell>
+                    <TableCell className="text-right space-x-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleEditMovimiento(movimiento)}
+                      >
+                        Editar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleDeleteMovimiento(movimiento)}
+                      >
+                        Eliminar
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))
               )}

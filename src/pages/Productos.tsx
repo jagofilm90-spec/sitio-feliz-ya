@@ -492,6 +492,7 @@ const Productos = () => {
                     }}
                     required
                     autoComplete="off"
+                    spellCheck={true}
                     placeholder="Ej: Alpiste, Azúcar, Frijol"
                   />
                 </div>
@@ -508,6 +509,7 @@ const Productos = () => {
                       }}
                       placeholder="Ej: Morelos, Purina"
                       autoComplete="off"
+                      spellCheck={true}
                     />
                   </div>
                   <div className="space-y-2">
@@ -518,6 +520,7 @@ const Productos = () => {
                       onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
                       placeholder="Ej: Arándano, Uva Pasa, Arroz"
                       list="categorias-existentes"
+                      spellCheck={true}
                     />
                     <datalist id="categorias-existentes">
                       {[...new Set(productos.map(p => p.categoria).filter(Boolean))].sort().map((cat) => (

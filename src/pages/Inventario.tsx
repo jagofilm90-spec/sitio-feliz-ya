@@ -460,6 +460,8 @@ const Inventario = () => {
                 <TableHead>Producto</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Cantidad</TableHead>
+                <TableHead>Stock Anterior</TableHead>
+                <TableHead>Stock Nuevo</TableHead>
                 <TableHead>Lote</TableHead>
                 <TableHead>Caducidad</TableHead>
                 <TableHead>Usuario</TableHead>
@@ -470,13 +472,13 @@ const Inventario = () => {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center">
+                  <TableCell colSpan={11} className="text-center">
                     Cargando...
                   </TableCell>
                 </TableRow>
               ) : filteredMovimientos.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center">
+                  <TableCell colSpan={11} className="text-center">
                     No hay movimientos registrados
                   </TableCell>
                 </TableRow>
@@ -493,7 +495,9 @@ const Inventario = () => {
                       {movimiento.productos?.codigo} - {movimiento.productos?.nombre}
                     </TableCell>
                     <TableCell>{getTipoMovimientoBadge(movimiento.tipo_movimiento)}</TableCell>
-                    <TableCell>{movimiento.cantidad}</TableCell>
+                    <TableCell className="font-semibold">{movimiento.cantidad}</TableCell>
+                    <TableCell className="text-muted-foreground">{movimiento.stock_anterior ?? "—"}</TableCell>
+                    <TableCell className="font-semibold">{movimiento.stock_nuevo ?? "—"}</TableCell>
                     <TableCell>{movimiento.lote || "—"}</TableCell>
                     <TableCell>
                       {movimiento.fecha_caducidad

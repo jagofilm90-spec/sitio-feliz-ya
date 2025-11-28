@@ -22,9 +22,19 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Edit, Globe, Package } from "lucide-react";
+import { Plus, Search, Edit, Globe, Package, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import ProveedorProductosSelector from "./ProveedorProductosSelector";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Proveedor {
   id: string;
@@ -44,8 +54,10 @@ const ProveedoresTab = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isProductosDialogOpen, setIsProductosDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingProveedor, setEditingProveedor] = useState<Proveedor | null>(null);
   const [productosProveedor, setProductosProveedor] = useState<Proveedor | null>(null);
+  const [deletingProveedor, setDeletingProveedor] = useState<Proveedor | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [newProveedor, setNewProveedor] = useState({
     nombre: "",
@@ -139,6 +151,40 @@ const ProveedoresTab = () => {
         variant: "destructive",
         title: "Error",
         description: "No se pudo actualizar el proveedor",
+      });
+    },
+  });
+
+  const deleteProveedor = useMutation({
+    mutationFn: async (proveedorId: string) => {
+      // Primero eliminar relaciones con productos
+      await supabase
+        .from("proveedor_productos")
+        .delete()
+        .eq("proveedor_id", proveedorId);
+      
+      // Luego eliminar el proveedor
+      const { error } = await supabase
+        .from("proveedores")
+        .delete()
+        .eq("id", proveedorId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["proveedores"] });
+      setIsDeleteDialogOpen(false);
+      setDeletingProveedor(null);
+      toast({
+        title: "Proveedor eliminado",
+        description: "El proveedor ha sido eliminado exitosamente",
+      });
+    },
+    onError: () => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo eliminar el proveedor. Puede tener órdenes de compra asociadas.",
       });
     },
   });
@@ -356,6 +402,18 @@ const ProveedoresTab = () => {
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setDeletingProveedor(proveedor);
+                          setIsDeleteDialogOpen(true);
+                        }}
+                        title="Eliminar proveedor"
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -530,6 +588,28 @@ const ProveedoresTab = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar proveedor?</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Estás seguro de que deseas eliminar a "{deletingProveedor?.nombre}"? 
+              Esta acción no se puede deshacer y eliminará también las asociaciones con productos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deletingProveedor && deleteProveedor.mutate(deletingProveedor.id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 };

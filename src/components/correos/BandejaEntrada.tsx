@@ -489,17 +489,14 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
     );
 
     try {
-      await Promise.all(
-        selectedIdsArray.map(emailId =>
-          supabase.functions.invoke("gmail-api", {
-            body: {
-              action: "markAsRead",
-              email: selectedAccount,
-              messageId: emailId,
-            },
-          })
-        )
-      );
+      // Send all IDs in a single batch request instead of multiple calls
+      await supabase.functions.invoke("gmail-api", {
+        body: {
+          action: "markAsRead",
+          email: selectedAccount,
+          messageId: selectedIdsArray, // Send as array for batch processing
+        },
+      });
 
       toast.success(`${selectedEmailIds.size} correo(s) marcado(s) como leído(s)`);
       setSelectedEmailIds(new Set());

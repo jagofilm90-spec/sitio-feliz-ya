@@ -1129,6 +1129,8 @@ export type Database = {
           autorizado_por: string | null
           creado_por: string
           created_at: string
+          email_enviado_en: string | null
+          email_leido_en: string | null
           entregas_multiples: boolean | null
           fecha_autorizacion: string | null
           fecha_entrega_programada: string | null
@@ -1152,6 +1154,8 @@ export type Database = {
           autorizado_por?: string | null
           creado_por: string
           created_at?: string
+          email_enviado_en?: string | null
+          email_leido_en?: string | null
           entregas_multiples?: boolean | null
           fecha_autorizacion?: string | null
           fecha_entrega_programada?: string | null
@@ -1175,6 +1179,8 @@ export type Database = {
           autorizado_por?: string | null
           creado_por?: string
           created_at?: string
+          email_enviado_en?: string | null
+          email_leido_en?: string | null
           entregas_multiples?: boolean | null
           fecha_autorizacion?: string | null
           fecha_entrega_programada?: string | null
@@ -1214,6 +1220,41 @@ export type Database = {
             columns: ["rechazado_por"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ordenes_compra_confirmaciones: {
+        Row: {
+          confirmado_en: string | null
+          created_at: string
+          id: string
+          ip_address: string | null
+          orden_compra_id: string
+          user_agent: string | null
+        }
+        Insert: {
+          confirmado_en?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          orden_compra_id: string
+          user_agent?: string | null
+        }
+        Update: {
+          confirmado_en?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          orden_compra_id?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ordenes_compra_confirmaciones_orden_compra_id_fkey"
+            columns: ["orden_compra_id"]
+            isOneToOne: false
+            referencedRelation: "ordenes_compra"
             referencedColumns: ["id"]
           },
         ]

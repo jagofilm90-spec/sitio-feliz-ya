@@ -218,40 +218,77 @@ serve(async (req) => {
       );
     }
 
-    // MARK AS READ
+    // MARK AS READ - single or batch
     if (action === "markAsRead") {
+      const messageIds = messageId ? [messageId] : [];
+      
+      if (messageIds.length === 0) {
+        throw new Error("messageId requerido");
+      }
+
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const msgId of messageIds) {
+        try {
+          const modifyResponse = await fetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}/modify`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ removeLabelIds: ["UNREAD"] }),
+            }
+          );
+
+          if (modifyResponse.ok) {
+            successCount++;
+            console.log("Marked as read successfully:", msgId);
+          } else {
+            failCount++;
+            const errorText = await modifyResponse.text();
+            console.log("Mark as read failed for", msgId, ":", modifyResponse.status, errorText);
+          }
+        } catch (e) {
+          failCount++;
+          console.log("Mark as read error for", msgId, ":", e);
+        }
+      }
+
+      console.log(`Marked as read: ${successCount} success, ${failCount} failed`);
+
+      return new Response(
+        JSON.stringify({ success: true, successCount, failCount }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    // TRASH - Move to trash (alias for delete)
+    if (action === "trash") {
       if (!messageId) {
         throw new Error("messageId requerido");
       }
 
-      try {
-        const modifyResponse = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ removeLabelIds: ["UNREAD"] }),
-          }
-        );
-
-        if (!modifyResponse.ok) {
-          const errorText = await modifyResponse.text();
-          console.log("Mark as read response:", modifyResponse.status, errorText);
-          // Don't throw error - messages in trash or already read will fail silently
-          // This is expected behavior for trash messages
-        } else {
-          console.log("Marked as read successfully:", messageId);
+      const trashResponse = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/trash`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}` },
         }
-      } catch (e) {
-        console.log("Mark as read error (non-fatal):", e);
-        // Non-fatal error - continue without throwing
+      );
+
+      if (!trashResponse.ok) {
+        const errorText = await trashResponse.text();
+        console.error("Trash failed:", errorText);
+        throw new Error("Error al eliminar correo");
       }
 
+      console.log("Email moved to trash:", messageId);
+
       return new Response(
-        JSON.stringify({ success: true }),
+        JSON.stringify({ success: true, messageId }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

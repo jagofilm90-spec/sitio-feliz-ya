@@ -244,14 +244,19 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
     let entregasHTML = '';
     if (entregasProgramadas.length > 0) {
       const entregasRows = entregasProgramadas.map((e: any) => {
-        const fecha = e.fecha_programada 
-          ? new Date(e.fecha_programada).toLocaleDateString('es-MX', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            })
-          : '<span style="color: #ff9800; font-style: italic;">Pendiente de programar</span>';
+        let fecha = '<span style="color: #ff9800; font-style: italic;">Pendiente de programar</span>';
+        if (e.fecha_programada) {
+          // Parse date correctly to avoid timezone issues
+          // fecha_programada is stored as "YYYY-MM-DD", parse it as local time
+          const [year, month, day] = e.fecha_programada.split('-').map(Number);
+          const fechaLocal = new Date(year, month - 1, day);
+          fecha = fechaLocal.toLocaleDateString('es-MX', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          });
+        }
         return `<tr>
           <td style="padding: 8px; border: 1px solid #333; text-align: center;">${e.numero_entrega}</td>
           <td style="padding: 8px; border: 1px solid #333;">${fecha}</td>
@@ -284,14 +289,18 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
       day: 'numeric'
     });
 
-    const fechaEntrega = orden.fecha_entrega_programada 
-      ? new Date(orden.fecha_entrega_programada).toLocaleDateString('es-MX', { 
-          weekday: 'long', 
-          year: 'numeric', 
-          month: 'long', 
-          day: 'numeric' 
-        })
-      : 'Por confirmar';
+    let fechaEntrega = 'Por confirmar';
+    if (orden.fecha_entrega_programada) {
+      // Parse date correctly to avoid timezone issues
+      const [year, month, day] = orden.fecha_entrega_programada.split('-').map(Number);
+      const fechaLocal = new Date(year, month - 1, day);
+      fechaEntrega = fechaLocal.toLocaleDateString('es-MX', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+    }
 
     // Get creator and authorizer names
     const nombreCreador = creadorProfile?.full_name || 'Usuario';

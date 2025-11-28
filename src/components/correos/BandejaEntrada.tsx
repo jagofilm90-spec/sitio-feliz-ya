@@ -163,13 +163,15 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
         );
 
         // Request browser notification permission and show notification
-        if (Notification.permission === "granted") {
-          new Notification(`Nuevo correo en ${cuenta.nombre}`, {
-            body: `${newEmailsCount} correo${newEmailsCount > 1 ? 's' : ''} sin leer`,
-            icon: "/favicon.ico",
-          });
-        } else if (Notification.permission !== "denied") {
-          Notification.requestPermission();
+        if (typeof Notification !== 'undefined') {
+          if (Notification.permission === "granted") {
+            new Notification(`Nuevo correo en ${cuenta.nombre}`, {
+              body: `${newEmailsCount} correo${newEmailsCount > 1 ? 's' : ''} sin leer`,
+              icon: "/favicon.ico",
+            });
+          } else if (Notification.permission !== "denied") {
+            Notification.requestPermission();
+          }
         }
       }
     }

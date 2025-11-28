@@ -75,6 +75,8 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
   // Track previous unread counts to detect new emails
   const previousUnreadCountsRef = useRef<Record<string, number>>({});
   const isInitialLoadRef = useRef(true);
+  // Flag to suppress notifications during user-initiated actions
+  const suppressNotificationsRef = useRef(false);
 
   const selectedCuenta = cuentas.find((c) => c.email === selectedAccount);
 
@@ -109,6 +111,12 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
     if (isInitialLoadRef.current) {
       previousUnreadCountsRef.current = { ...unreadCounts };
       isInitialLoadRef.current = false;
+      return;
+    }
+
+    // Skip notifications if we're suppressing them (during user-initiated actions like marking as read)
+    if (suppressNotificationsRef.current) {
+      previousUnreadCountsRef.current = { ...unreadCounts };
       return;
     }
 
@@ -214,6 +222,9 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
   // Mark email as read when viewing - with optimistic update
   useEffect(() => {
     if (emailDetail?.isUnread && selectedEmailId && !isFromTrash) {
+      // Suppress notifications during this action
+      suppressNotificationsRef.current = true;
+      
       // Optimistic update: immediately update local cache
       queryClient.setQueryData(
         ["gmail-inbox", selectedAccount, activeSearch],
@@ -225,15 +236,17 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
         }
       );
       
-      // Optimistic update: decrement unread count
+      // Optimistic update: decrement unread count and sync the ref
       queryClient.setQueryData(
         ["gmail-unread-counts"],
         (oldData: Record<string, number> | undefined) => {
           if (!oldData) return oldData;
-          return {
+          const newCounts = {
             ...oldData,
             [selectedAccount]: Math.max(0, (oldData[selectedAccount] || 0) - 1),
           };
+          previousUnreadCountsRef.current = { ...newCounts };
+          return newCounts;
         }
       );
 
@@ -247,6 +260,10 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
       }).then(() => {
         // Refresh to ensure sync with server
         queryClient.invalidateQueries({ queryKey: ["gmail-unread-counts"] });
+        // Re-enable notifications after a short delay
+        setTimeout(() => {
+          suppressNotificationsRef.current = false;
+        }, 2000);
       });
     }
   }, [emailDetail?.isUnread, selectedEmailId, selectedAccount, isFromTrash, queryClient, activeSearch]);
@@ -295,6 +312,7 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
     const unreadSelectedCount = emails?.filter(e => selectedIdsArray.includes(e.id) && e.isUnread).length || 0;
 
     setDeletingSelected(true);
+    suppressNotificationsRef.current = true;
     
     // Optimistic update: remove emails from list
     queryClient.setQueryData(
@@ -305,15 +323,17 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
       }
     );
     
-    // Optimistic update: decrement unread count
+    // Optimistic update: decrement unread count and sync the ref
     queryClient.setQueryData(
       ["gmail-unread-counts"],
       (oldData: Record<string, number> | undefined) => {
         if (!oldData) return oldData;
-        return {
+        const newCounts = {
           ...oldData,
           [selectedAccount]: Math.max(0, (oldData[selectedAccount] || 0) - unreadSelectedCount),
         };
+        previousUnreadCountsRef.current = { ...newCounts };
+        return newCounts;
       }
     );
 
@@ -334,9 +354,9 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
       setSelectedEmailIds(new Set());
       setSelectionMode(false);
       
-      queryClient.invalidateQueries({ queryKey: ["gmail-unread-counts"] });
-      queryClient.invalidateQueries({ queryKey: ["gmail-inbox", selectedAccount] });
-      queryClient.invalidateQueries({ queryKey: ["gmail-trash", selectedAccount] });
+      await queryClient.invalidateQueries({ queryKey: ["gmail-unread-counts"] });
+      await queryClient.invalidateQueries({ queryKey: ["gmail-inbox", selectedAccount] });
+      await queryClient.invalidateQueries({ queryKey: ["gmail-trash", selectedAccount] });
     } catch (error) {
       console.error("Error deleting selected:", error);
       toast.error("Error al eliminar correos");
@@ -345,6 +365,9 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
       queryClient.invalidateQueries({ queryKey: ["gmail-unread-counts"] });
     } finally {
       setDeletingSelected(false);
+      setTimeout(() => {
+        suppressNotificationsRef.current = false;
+      }, 2000);
     }
   };
 
@@ -356,6 +379,8 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
     const unreadSelectedCount = emails?.filter(e => selectedIdsArray.includes(e.id) && e.isUnread).length || 0;
 
     setMarkingAllAsRead(true);
+    // Suppress notifications during this action
+    suppressNotificationsRef.current = true;
     
     // Optimistic update: immediately update local cache
     queryClient.setQueryData(
@@ -368,15 +393,18 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
       }
     );
     
-    // Optimistic update: decrement unread count
+    // Optimistic update: decrement unread count and sync the ref
     queryClient.setQueryData(
       ["gmail-unread-counts"],
       (oldData: Record<string, number> | undefined) => {
         if (!oldData) return oldData;
-        return {
+        const newCounts = {
           ...oldData,
           [selectedAccount]: Math.max(0, (oldData[selectedAccount] || 0) - unreadSelectedCount),
         };
+        // Update the ref to prevent false notifications
+        previousUnreadCountsRef.current = { ...newCounts };
+        return newCounts;
       }
     );
 
@@ -398,8 +426,8 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
       setSelectionMode(false);
       
       // Refresh to sync with server
-      queryClient.invalidateQueries({ queryKey: ["gmail-unread-counts"] });
-      queryClient.invalidateQueries({ queryKey: ["gmail-inbox", selectedAccount] });
+      await queryClient.invalidateQueries({ queryKey: ["gmail-unread-counts"] });
+      await queryClient.invalidateQueries({ queryKey: ["gmail-inbox", selectedAccount] });
     } catch (error) {
       console.error("Error marking selected as read:", error);
       toast.error("Error al marcar correos como leídos");
@@ -408,6 +436,10 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
       queryClient.invalidateQueries({ queryKey: ["gmail-inbox", selectedAccount] });
     } finally {
       setMarkingAllAsRead(false);
+      // Re-enable notifications after a short delay to let queries settle
+      setTimeout(() => {
+        suppressNotificationsRef.current = false;
+      }, 2000);
     }
   };
 
@@ -475,6 +507,8 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
     }
 
     setMarkingAllAsRead(true);
+    suppressNotificationsRef.current = true;
+    
     try {
       // Mark all unread emails as read
       await Promise.all(
@@ -492,13 +526,16 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
       toast.success(`${unreadEmails.length} correo(s) marcado(s) como leído(s)`);
       
       // Refresh data
-      queryClient.invalidateQueries({ queryKey: ["gmail-unread-counts"] });
-      queryClient.invalidateQueries({ queryKey: ["gmail-inbox", selectedAccount] });
+      await queryClient.invalidateQueries({ queryKey: ["gmail-unread-counts"] });
+      await queryClient.invalidateQueries({ queryKey: ["gmail-inbox", selectedAccount] });
     } catch (error) {
       console.error("Error marking all as read:", error);
       toast.error("Error al marcar correos como leídos");
     } finally {
       setMarkingAllAsRead(false);
+      setTimeout(() => {
+        suppressNotificationsRef.current = false;
+      }, 2000);
     }
   };
 

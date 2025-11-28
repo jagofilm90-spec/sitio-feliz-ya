@@ -560,6 +560,45 @@ export type Database = {
           },
         ]
       }
+      gmail_cuentas: {
+        Row: {
+          access_token: string | null
+          activo: boolean | null
+          created_at: string
+          email: string
+          id: string
+          nombre: string
+          proposito: string
+          refresh_token: string | null
+          token_expires_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_token?: string | null
+          activo?: boolean | null
+          created_at?: string
+          email: string
+          id?: string
+          nombre: string
+          proposito: string
+          refresh_token?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string | null
+          activo?: boolean | null
+          created_at?: string
+          email?: string
+          id?: string
+          nombre?: string
+          proposito?: string
+          refresh_token?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       inventario_lotes: {
         Row: {
           bodega_id: string | null

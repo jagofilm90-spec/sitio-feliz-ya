@@ -2,3 +2,24 @@ project_id = "vrcyjmfpteoccqdmdmqn"
 
 [functions.extract-license-expiry]
 verify_jwt = true
+
+[functions.gmail-auth]
+verify_jwt = true
+
+[functions.gmail-callback]
+verify_jwt = false
+
+[functions.gmail-api]
+verify_jwt = true
+
+[functions.google-places-autocomplete]
+verify_jwt = true
+
+[functions.create-user]
+verify_jwt = true
+
+[functions.delete-user]
+verify_jwt = true
+
+[functions.reset-user-password]
+verify_jwt = true

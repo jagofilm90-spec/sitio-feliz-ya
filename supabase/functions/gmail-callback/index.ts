@@ -53,20 +53,22 @@ serve(async (req) => {
     const tokens = await tokenResponse.json();
     console.log("Tokens received, verifying account...");
 
-    // Verify the actual email of the authorized account
-    const userInfoResponse = await fetch(
-      "https://www.googleapis.com/oauth2/v2/userinfo",
+    // Verify the actual email of the authorized account using Gmail API profile
+    const profileResponse = await fetch(
+      "https://gmail.googleapis.com/gmail/v1/users/me/profile",
       {
         headers: { Authorization: `Bearer ${tokens.access_token}` },
       }
     );
 
-    if (!userInfoResponse.ok) {
-      throw new Error("Error al verificar cuenta de Gmail");
+    if (!profileResponse.ok) {
+      const errorText = await profileResponse.text();
+      console.error("Profile verification failed:", errorText);
+      throw new Error("Error al verificar cuenta de Gmail: " + errorText);
     }
 
-    const userInfo = await userInfoResponse.json();
-    const authorizedEmail = userInfo.email;
+    const profile = await profileResponse.json();
+    const authorizedEmail = profile.emailAddress;
     
     console.log("Expected email:", email);
     console.log("Authorized email:", authorizedEmail);

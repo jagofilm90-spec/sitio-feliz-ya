@@ -41,6 +41,7 @@ const ROLES = [
   { value: "vendedor", label: "Vendedor", color: "secondary" },
   { value: "almacen", label: "Almacén", color: "outline" },
   { value: "chofer", label: "Chofer", color: "outline" },
+  { value: "contadora", label: "Contadora", color: "default" },
 ];
 
 export default function Usuarios() {

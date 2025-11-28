@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, List, MoreVertical, Truck, ChevronLeft, ChevronRight } from "lucide-react";
+import { Calendar as CalendarIcon, List, MoreVertical, Truck, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import OrdenAccionesDialog from "./OrdenAccionesDialog";
 import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -93,6 +93,11 @@ const CalendarioEntregasTab = () => {
     return colors[status] || "secondary";
   };
 
+  // Check if delivery was auto-rescheduled
+  const esReprogramada = (notas: string | null) => {
+    return notas?.includes("[AUTO]") || false;
+  };
+
   // Combine both data sources into unified format
   const todasLasEntregas = useMemo(() => [
     // Multiple delivery entries
@@ -108,6 +113,7 @@ const CalendarioEntregasTab = () => {
       numeroEntrega: entrega.numero_entrega,
       cantidadBultos: entrega.cantidad_bultos,
       esMultiple: true,
+      reprogramada: esReprogramada(entrega.notas),
     })),
     // Simple delivery entries
     ...ordenesSimples.map((orden: any) => ({
@@ -122,6 +128,7 @@ const CalendarioEntregasTab = () => {
       numeroEntrega: null,
       cantidadBultos: null,
       esMultiple: false,
+      reprogramada: esReprogramada(orden.notas),
     })),
   ], [entregasProgramadas, ordenesSimples]);
 
@@ -320,12 +327,18 @@ const CalendarioEntregasTab = () => {
                       {entregas.map((entrega) => (
                         <TableRow key={entrega.id}>
                           <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               {entrega.folio}
                               {entrega.esMultiple && (
                                 <Badge variant="outline" className="text-xs">
                                   <Truck className="h-3 w-3 mr-1" />
                                   #{entrega.numeroEntrega}
+                                </Badge>
+                              )}
+                              {entrega.reprogramada && (
+                                <Badge variant="outline" className="text-xs bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800">
+                                  <RotateCcw className="h-3 w-3 mr-1" />
+                                  Reprogramada
                                 </Badge>
                               )}
                             </div>
@@ -401,12 +414,18 @@ const CalendarioEntregasTab = () => {
                 }}
               >
                 <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold">{entrega.folio}</span>
                     {entrega.esMultiple && (
                       <Badge variant="outline" className="text-xs">
                         <Truck className="h-3 w-3 mr-1" />
                         Entrega #{entrega.numeroEntrega}
+                      </Badge>
+                    )}
+                    {entrega.reprogramada && (
+                      <Badge variant="outline" className="text-xs bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800">
+                        <RotateCcw className="h-3 w-3 mr-1" />
+                        Reprogramada
                       </Badge>
                     )}
                   </div>

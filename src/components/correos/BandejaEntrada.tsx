@@ -93,6 +93,20 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
   // Flag to suppress notifications during user-initiated actions
   const suppressNotificationsRef = useRef(false);
 
+  // Sync selectedAccount with URL param when it changes
+  useEffect(() => {
+    const cuentaParam = searchParams.get("cuenta");
+    if (cuentaParam) {
+      const found = cuentas.find(c => c.email === cuentaParam);
+      if (found && found.email !== selectedAccount) {
+        setSelectedAccount(found.email);
+        // Clear selection when switching accounts
+        setSelectedEmailId(null);
+        setSelectedEmailIndex(-1);
+      }
+    }
+  }, [searchParams, cuentas]);
+
   const selectedCuenta = cuentas.find((c) => c.email === selectedAccount);
 
   // Fetch unread counts for all accounts IN PARALLEL - much faster initial load
@@ -232,19 +246,29 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
     refetchOnWindowFocus: true, // Refresh when user returns
   });
 
-  // Update allEmails and nextPageToken when initial data loads
+  // Update allEmails and nextPageToken when data loads or account/search changes
+  // Track the current account/search to detect when they change
+  const lastAccountRef = useRef(selectedAccount);
+  const lastSearchRef = useRef(activeSearch);
+  
   useEffect(() => {
-    if (emailsData) {
+    // Check if account or search changed - reset state
+    const accountChanged = lastAccountRef.current !== selectedAccount;
+    const searchChanged = lastSearchRef.current !== activeSearch;
+    
+    if (accountChanged || searchChanged) {
+      lastAccountRef.current = selectedAccount;
+      lastSearchRef.current = activeSearch;
+      setAllEmails([]);
+      setNextPageToken(null);
+    }
+    
+    // Always update with new data when available
+    if (emailsData && emailsData.messages) {
       setAllEmails(emailsData.messages);
       setNextPageToken(emailsData.nextPageToken);
     }
-  }, [emailsData]);
-
-  // Reset pagination when account or search changes
-  useEffect(() => {
-    setAllEmails([]);
-    setNextPageToken(null);
-  }, [selectedAccount, activeSearch]);
+  }, [emailsData, selectedAccount, activeSearch]);
 
   // Load more emails
   const handleLoadMore = async () => {

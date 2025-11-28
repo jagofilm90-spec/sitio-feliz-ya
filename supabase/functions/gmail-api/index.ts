@@ -80,7 +80,7 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
-    const { action, email, to, cc, bcc, subject, body: emailBody, maxResults, messageId, searchQuery, attachmentId, filename, attachments: emailAttachments, pageToken } = await req.json();
+    const { action, email, to, cc, bcc, subject, body: emailBody, maxResults, messageId, searchQuery, attachmentId, filename, attachments: emailAttachments, pageToken, fileContent, fileName, mimeType: fileMimeType } = await req.json();
 
     // Get account credentials
     const { data: cuenta, error: cuentaError } = await supabase
@@ -695,6 +695,85 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({ success: true, messageId }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // UPLOAD TO DRIVE - Upload a file to Google Drive and return shareable link
+    if (action === "uploadToDrive") {
+      if (!fileContent || !fileName) {
+        throw new Error("fileContent y fileName requeridos");
+      }
+
+      console.log(`Uploading to Drive: ${fileName} (${fileMimeType || 'application/octet-stream'})`);
+
+      // Step 1: Create file metadata with resumable upload
+      const metadataResponse = await fetch(
+        "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "multipart/related; boundary=boundary_drive",
+          },
+          body: [
+            "--boundary_drive",
+            "Content-Type: application/json; charset=UTF-8",
+            "",
+            JSON.stringify({
+              name: fileName,
+              mimeType: fileMimeType || "application/octet-stream",
+            }),
+            "--boundary_drive",
+            `Content-Type: ${fileMimeType || "application/octet-stream"}`,
+            "Content-Transfer-Encoding: base64",
+            "",
+            fileContent,
+            "--boundary_drive--",
+          ].join("\r\n"),
+        }
+      );
+
+      if (!metadataResponse.ok) {
+        const errorText = await metadataResponse.text();
+        console.error("Drive upload failed:", errorText);
+        throw new Error("Error al subir archivo a Drive");
+      }
+
+      const fileData = await metadataResponse.json();
+      console.log("File uploaded to Drive:", fileData.id);
+
+      // Step 2: Set file permissions to anyone with link can view
+      const permResponse = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${fileData.id}/permissions`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            role: "reader",
+            type: "anyone",
+          }),
+        }
+      );
+
+      if (!permResponse.ok) {
+        console.error("Permission setting failed:", await permResponse.text());
+      }
+
+      // Step 3: Get shareable link
+      const shareLink = `https://drive.google.com/file/d/${fileData.id}/view?usp=sharing`;
+      console.log("Shareable link:", shareLink);
+
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          fileId: fileData.id,
+          shareLink,
+          fileName,
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

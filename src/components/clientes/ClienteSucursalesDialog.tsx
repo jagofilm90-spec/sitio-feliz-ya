@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Edit, Trash2, MapPin, AlertTriangle } from "lucide-react";
+import { Plus, Edit, Trash2, MapPin, AlertTriangle, FileText, ChevronDown, ChevronUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import GoogleMapsAddressAutocomplete from "@/components/GoogleMapsAddressAutocomplete";
 
@@ -52,6 +52,11 @@ interface Sucursal {
   restricciones_vehiculo: string | null;
   dias_sin_entrega: string | null;
   no_combinar_pedidos: boolean;
+  // Datos fiscales opcionales para facturación por sucursal
+  rfc: string | null;
+  razon_social: string | null;
+  direccion_fiscal: string | null;
+  email_facturacion: string | null;
 }
 
 interface Zona {
@@ -82,7 +87,13 @@ const ClienteSucursalesDialog = ({
     restricciones_vehiculo: "",
     dias_sin_entrega: "",
     no_combinar_pedidos: false,
+    // Datos fiscales opcionales
+    rfc: "",
+    razon_social: "",
+    direccion_fiscal: "",
+    email_facturacion: "",
   });
+  const [mostrarDatosFiscales, setMostrarDatosFiscales] = useState(false);
 
   useEffect(() => {
     if (open && cliente) {
@@ -138,7 +149,7 @@ const ClienteSucursalesDialog = ({
 
     try {
       const sucursalData = {
-      cliente_id: cliente.id,
+        cliente_id: cliente.id,
         nombre: formData.nombre,
         direccion: formData.direccion,
         zona_id: formData.zona_id || null,
@@ -149,6 +160,11 @@ const ClienteSucursalesDialog = ({
         restricciones_vehiculo: formData.restricciones_vehiculo || null,
         dias_sin_entrega: formData.dias_sin_entrega || null,
         no_combinar_pedidos: formData.no_combinar_pedidos,
+        // Datos fiscales opcionales
+        rfc: formData.rfc || null,
+        razon_social: formData.razon_social || null,
+        direccion_fiscal: formData.direccion_fiscal || null,
+        email_facturacion: formData.email_facturacion || null,
       };
 
       if (editingSucursal) {
@@ -193,7 +209,12 @@ const ClienteSucursalesDialog = ({
       restricciones_vehiculo: sucursal.restricciones_vehiculo || "",
       dias_sin_entrega: sucursal.dias_sin_entrega || "",
       no_combinar_pedidos: sucursal.no_combinar_pedidos || false,
+      rfc: sucursal.rfc || "",
+      razon_social: sucursal.razon_social || "",
+      direccion_fiscal: sucursal.direccion_fiscal || "",
+      email_facturacion: sucursal.email_facturacion || "",
     });
+    setMostrarDatosFiscales(!!(sucursal.rfc || sucursal.razon_social));
     setFormOpen(true);
   };
 
@@ -231,7 +252,12 @@ const ClienteSucursalesDialog = ({
       restricciones_vehiculo: "",
       dias_sin_entrega: "",
       no_combinar_pedidos: false,
+      rfc: "",
+      razon_social: "",
+      direccion_fiscal: "",
+      email_facturacion: "",
     });
+    setMostrarDatosFiscales(false);
   };
 
   return (
@@ -376,6 +402,75 @@ const ClienteSucursalesDialog = ({
                   </Label>
                 </div>
               </div>
+              
+              {/* Datos Fiscales Opcionales */}
+              <div className="border-t pt-4 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setMostrarDatosFiscales(!mostrarDatosFiscales)}
+                  className="flex items-center gap-2 font-medium text-sm hover:text-primary transition-colors"
+                >
+                  <FileText className="h-4 w-4" />
+                  Datos Fiscales de la Sucursal (opcional)
+                  {mostrarDatosFiscales ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                </button>
+                <p className="text-xs text-muted-foreground mt-1 mb-3">
+                  Solo si esta sucursal se factura por separado del grupo
+                </p>
+                
+                {mostrarDatosFiscales && (
+                  <div className="space-y-4 pl-2 border-l-2 border-primary/20">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="suc_rfc">RFC</Label>
+                        <Input
+                          id="suc_rfc"
+                          value={formData.rfc}
+                          onChange={(e) => setFormData({ ...formData, rfc: e.target.value.toUpperCase() })}
+                          placeholder="RFC de la sucursal"
+                          autoComplete="off"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="suc_razon_social">Razón Social</Label>
+                        <Input
+                          id="suc_razon_social"
+                          value={formData.razon_social}
+                          onChange={(e) => setFormData({ ...formData, razon_social: e.target.value })}
+                          placeholder="Razón social para facturación"
+                          autoComplete="off"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="suc_direccion_fiscal">Dirección Fiscal</Label>
+                      <Input
+                        id="suc_direccion_fiscal"
+                        value={formData.direccion_fiscal}
+                        onChange={(e) => setFormData({ ...formData, direccion_fiscal: e.target.value })}
+                        placeholder="Dirección fiscal para facturación"
+                        autoComplete="off"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="suc_email_facturacion">Email de Facturación</Label>
+                      <Input
+                        id="suc_email_facturacion"
+                        type="email"
+                        value={formData.email_facturacion}
+                        onChange={(e) => setFormData({ ...formData, email_facturacion: e.target.value })}
+                        placeholder="Email para envío de facturas"
+                        autoComplete="off"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+              
               <div className="space-y-2">
                 <Label htmlFor="suc_notas">Notas Adicionales</Label>
                 <Textarea
@@ -424,7 +519,17 @@ const ClienteSucursalesDialog = ({
                 ) : (
                   sucursales.map((sucursal) => (
                     <TableRow key={sucursal.id}>
-                      <TableCell className="font-medium">{sucursal.nombre}</TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex flex-col gap-1">
+                          {sucursal.nombre}
+                          {sucursal.rfc && (
+                            <Badge variant="outline" className="text-xs w-fit">
+                              <FileText className="h-3 w-3 mr-1" />
+                              Factura propia
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="max-w-[200px] truncate">
                         {sucursal.direccion}
                       </TableCell>

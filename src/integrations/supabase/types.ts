@@ -55,12 +55,16 @@ export type Database = {
           created_at: string
           dias_sin_entrega: string | null
           direccion: string
+          direccion_fiscal: string | null
+          email_facturacion: string | null
           horario_entrega: string | null
           id: string
           no_combinar_pedidos: boolean | null
           nombre: string
           notas: string | null
+          razon_social: string | null
           restricciones_vehiculo: string | null
+          rfc: string | null
           telefono: string | null
           updated_at: string
           zona_id: string | null
@@ -72,12 +76,16 @@ export type Database = {
           created_at?: string
           dias_sin_entrega?: string | null
           direccion: string
+          direccion_fiscal?: string | null
+          email_facturacion?: string | null
           horario_entrega?: string | null
           id?: string
           no_combinar_pedidos?: boolean | null
           nombre: string
           notas?: string | null
+          razon_social?: string | null
           restricciones_vehiculo?: string | null
+          rfc?: string | null
           telefono?: string | null
           updated_at?: string
           zona_id?: string | null
@@ -89,12 +97,16 @@ export type Database = {
           created_at?: string
           dias_sin_entrega?: string | null
           direccion?: string
+          direccion_fiscal?: string | null
+          email_facturacion?: string | null
           horario_entrega?: string | null
           id?: string
           no_combinar_pedidos?: boolean | null
           nombre?: string
           notas?: string | null
+          razon_social?: string | null
           restricciones_vehiculo?: string | null
+          rfc?: string | null
           telefono?: string | null
           updated_at?: string
           zona_id?: string | null

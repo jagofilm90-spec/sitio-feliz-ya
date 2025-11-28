@@ -31,6 +31,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Search, Edit, Trash2, MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import ClienteSucursalesDialog from "@/components/clientes/ClienteSucursalesDialog";
+import GoogleMapsAddressAutocomplete from "@/components/GoogleMapsAddressAutocomplete";
 
 interface Zona {
   id: string;
@@ -295,11 +296,12 @@ const [dialogOpen, setDialogOpen] = useState(false);
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="direccion">Dirección</Label>
-                  <Input
+                  <Label htmlFor="direccion">Dirección Fiscal</Label>
+                  <GoogleMapsAddressAutocomplete
                     id="direccion"
                     value={formData.direccion}
-                    onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
+                    onChange={(value) => setFormData({ ...formData, direccion: value })}
+                    placeholder="Buscar dirección..."
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">

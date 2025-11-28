@@ -4,18 +4,14 @@ import { corsHeaders } from '../_shared/cors.ts'
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-// Get next business day (skip weekends)
+// Get next business day (skip Sunday only - company works Mon-Sat)
 function getNextBusinessDay(date: Date): Date {
   const next = new Date(date)
   next.setDate(next.getDate() + 1)
   
-  // If Saturday, move to Monday
-  if (next.getDay() === 6) {
-    next.setDate(next.getDate() + 2)
-  }
-  // If Sunday, move to Monday
-  else if (next.getDay() === 0) {
-    next.setDate(next.getDate() + 1)
+  // Only skip Sunday (day 0), Saturday (day 6) is a working day
+  if (next.getDay() === 0) {
+    next.setDate(next.getDate() + 1) // Move to Monday
   }
   
   return next

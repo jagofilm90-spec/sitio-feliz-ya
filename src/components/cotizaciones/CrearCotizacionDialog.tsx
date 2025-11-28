@@ -29,6 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Plus, Trash2, Search, FileText } from "lucide-react";
 import { format, addDays } from "date-fns";
+import { es } from "date-fns/locale";
 
 interface DetalleProducto {
   producto_id: string;
@@ -38,6 +39,9 @@ interface DetalleProducto {
   precio_unitario: number;
   cantidad: number;
   subtotal: number;
+  precio_lista: number;
+  ultimo_precio_cliente: number | null;
+  fecha_ultima_compra: string | null;
 }
 
 interface Cliente {
@@ -153,7 +157,33 @@ const CrearCotizacionDialog = ({
       p.codigo.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const agregarProducto = (producto: Producto) => {
+  // Buscar el último precio que pagó este cliente por este producto
+  const buscarUltimoPrecioCliente = async (productoId: string): Promise<{precio: number | null, fecha: string | null}> => {
+    if (!selectedCliente) return { precio: null, fecha: null };
+
+    const { data, error } = await supabase
+      .from("pedidos_detalles")
+      .select(`
+        precio_unitario,
+        created_at,
+        pedido:pedidos!inner(cliente_id)
+      `)
+      .eq("producto_id", productoId)
+      .eq("pedido.cliente_id", selectedCliente)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (error || !data || data.length === 0) {
+      return { precio: null, fecha: null };
+    }
+
+    return { 
+      precio: data[0].precio_unitario, 
+      fecha: data[0].created_at 
+    };
+  };
+
+  const agregarProducto = async (producto: Producto) => {
     const existe = detalles.find((d) => d.producto_id === producto.id);
     if (existe) {
       toast({
@@ -164,6 +194,12 @@ const CrearCotizacionDialog = ({
       return;
     }
 
+    // Buscar historial de precios para este cliente
+    const historial = await buscarUltimoPrecioCliente(producto.id);
+    
+    // Si hay precio anterior, usarlo; si no, usar precio de lista
+    const precioAUsar = historial.precio || producto.precio_venta;
+
     setDetalles([
       ...detalles,
       {
@@ -171,9 +207,12 @@ const CrearCotizacionDialog = ({
         nombre: producto.nombre,
         codigo: producto.codigo,
         unidad: producto.unidad,
-        precio_unitario: producto.precio_venta,
+        precio_unitario: precioAUsar,
         cantidad: 1,
-        subtotal: producto.precio_venta,
+        subtotal: precioAUsar,
+        precio_lista: producto.precio_venta,
+        ultimo_precio_cliente: historial.precio,
+        fecha_ultima_compra: historial.fecha,
       },
     ]);
     setSearchTerm("");
@@ -431,7 +470,7 @@ const CrearCotizacionDialog = ({
                   <TableRow>
                     <TableHead>Producto</TableHead>
                     <TableHead className="w-24">Cantidad</TableHead>
-                    <TableHead className="w-32">Precio Unit.</TableHead>
+                    <TableHead className="w-44">Precio Unit.</TableHead>
                     <TableHead className="w-32 text-right">Subtotal</TableHead>
                     <TableHead className="w-12"></TableHead>
                   </TableRow>
@@ -459,15 +498,54 @@ const CrearCotizacionDialog = ({
                         />
                       </TableCell>
                       <TableCell>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={d.precio_unitario}
-                          onChange={(e) =>
-                            actualizarPrecio(index, parseFloat(e.target.value) || 0)
-                          }
-                          className="w-28"
-                        />
+                        <div className="space-y-1">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={d.precio_unitario}
+                            onChange={(e) =>
+                              actualizarPrecio(index, parseFloat(e.target.value) || 0)
+                            }
+                            className="w-28"
+                          />
+                          {/* Mostrar historial de precios */}
+                          <div className="text-xs space-y-0.5">
+                            <p className="text-muted-foreground">
+                              Lista: <span className="font-medium text-foreground">${d.precio_lista.toFixed(2)}</span>
+                              {d.precio_unitario !== d.precio_lista && (
+                                <button
+                                  type="button"
+                                  onClick={() => actualizarPrecio(index, d.precio_lista)}
+                                  className="ml-1 text-blue-600 hover:underline"
+                                >
+                                  usar
+                                </button>
+                              )}
+                            </p>
+                            {d.ultimo_precio_cliente !== null && (
+                              <p className="text-amber-600">
+                                Último: <span className="font-medium">${d.ultimo_precio_cliente.toFixed(2)}</span>
+                                {d.fecha_ultima_compra && (
+                                  <span className="text-muted-foreground ml-1">
+                                    ({format(new Date(d.fecha_ultima_compra), "MMM yyyy", { locale: es })})
+                                  </span>
+                                )}
+                                {d.precio_unitario !== d.ultimo_precio_cliente && (
+                                  <button
+                                    type="button"
+                                    onClick={() => actualizarPrecio(index, d.ultimo_precio_cliente!)}
+                                    className="ml-1 text-blue-600 hover:underline"
+                                  >
+                                    usar
+                                  </button>
+                                )}
+                              </p>
+                            )}
+                            {d.ultimo_precio_cliente === null && (
+                              <p className="text-green-600 italic">Primera compra de este cliente</p>
+                            )}
+                          </div>
+                        </div>
                       </TableCell>
                       <TableCell className="text-right font-medium">
                         ${d.subtotal.toFixed(2)}

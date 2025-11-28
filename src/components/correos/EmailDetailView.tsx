@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   ChevronLeft,
+  ChevronRight,
   Clock,
   User,
   Paperclip,
@@ -26,6 +27,7 @@ import {
   FileText,
   Image,
   File,
+  Forward,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -51,25 +53,43 @@ interface EmailDetail {
   isUnread?: boolean;
 }
 
+interface GmailCuenta {
+  id: string;
+  email: string;
+  nombre: string;
+  proposito: string;
+}
+
 interface EmailDetailViewProps {
   email: EmailDetail;
   cuentaEmail: string;
+  cuentas?: GmailCuenta[];
   onBack: () => void;
   onDeleted: () => void;
+  onNavigateNext?: () => void;
+  onNavigatePrev?: () => void;
+  hasNext?: boolean;
+  hasPrev?: boolean;
   isFromTrash?: boolean;
 }
 
 const EmailDetailView = ({
   email,
   cuentaEmail,
+  cuentas,
   onBack,
   onDeleted,
+  onNavigateNext,
+  onNavigatePrev,
+  hasNext = false,
+  hasPrev = false,
   isFromTrash = false,
 }: EmailDetailViewProps) => {
   const { toast } = useToast();
   const [deleting, setDeleting] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const [replyOpen, setReplyOpen] = useState(false);
+  const [forwardOpen, setForwardOpen] = useState(false);
   const [downloadingAttachment, setDownloadingAttachment] = useState<string | null>(null);
 
   const extractEmailAddress = (from: string) => {
@@ -227,17 +247,49 @@ const EmailDetailView = ({
     <>
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <Button variant="ghost" size="sm" onClick={onBack}>
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            Volver
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={onBack}>
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Volver
+            </Button>
+            
+            {/* Navigation arrows */}
+            {(hasPrev || hasNext) && (
+              <div className="flex items-center gap-1 ml-2">
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  onClick={onNavigatePrev}
+                  disabled={!hasPrev}
+                  title="Correo anterior"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  onClick={onNavigateNext}
+                  disabled={!hasNext}
+                  title="Siguiente correo"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </div>
 
           <div className="flex items-center gap-2">
             {!isFromTrash && (
-              <Button variant="outline" size="sm" onClick={() => setReplyOpen(true)}>
-                <Reply className="h-4 w-4 mr-2" />
-                Responder
-              </Button>
+              <>
+                <Button variant="outline" size="sm" onClick={() => setReplyOpen(true)}>
+                  <Reply className="h-4 w-4 mr-2" />
+                  Responder
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setForwardOpen(true)}>
+                  <Forward className="h-4 w-4 mr-2" />
+                  Reenviar
+                </Button>
+              </>
             )}
 
             {isFromTrash ? (
@@ -359,12 +411,27 @@ const EmailDetailView = ({
         </Card>
       </div>
 
+      {/* Reply dialog */}
       <ComposeEmailDialog
         open={replyOpen}
         onOpenChange={setReplyOpen}
         fromEmail={cuentaEmail}
+        cuentas={cuentas}
         replyTo={{
           to: extractEmailAddress(email.from),
+          subject: email.subject,
+          originalBody: email.body,
+        }}
+        onSuccess={onBack}
+      />
+
+      {/* Forward dialog */}
+      <ComposeEmailDialog
+        open={forwardOpen}
+        onOpenChange={setForwardOpen}
+        fromEmail={cuentaEmail}
+        cuentas={cuentas}
+        forwardData={{
           subject: email.subject,
           originalBody: email.body,
         }}

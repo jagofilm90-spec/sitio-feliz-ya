@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,6 +9,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Send, X, Loader2, Paperclip, FileText, Image, File, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,14 +27,27 @@ interface AttachmentFile {
   size: number;
 }
 
+interface GmailCuenta {
+  id: string;
+  email: string;
+  nombre: string;
+  proposito: string;
+}
+
 interface ComposeEmailDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   fromEmail: string;
+  cuentas?: GmailCuenta[];
   replyTo?: {
     to: string;
     subject: string;
     originalBody?: string;
+  };
+  forwardData?: {
+    subject: string;
+    originalBody: string;
+    attachments?: AttachmentFile[];
   };
   onSuccess?: () => void;
 }
@@ -51,18 +71,47 @@ const ComposeEmailDialog = ({
   open,
   onOpenChange,
   fromEmail,
+  cuentas,
   replyTo,
+  forwardData,
   onSuccess,
 }: ComposeEmailDialogProps) => {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sending, setSending] = useState(false);
+  const [selectedFromEmail, setSelectedFromEmail] = useState(fromEmail);
   const [to, setTo] = useState(replyTo?.to || "");
   const [subject, setSubject] = useState(
-    replyTo?.subject ? `Re: ${replyTo.subject.replace(/^Re:\s*/i, "")}` : ""
+    replyTo?.subject 
+      ? `Re: ${replyTo.subject.replace(/^Re:\s*/i, "").replace(/^Fwd:\s*/i, "")}` 
+      : forwardData?.subject 
+        ? `Fwd: ${forwardData.subject.replace(/^Fwd:\s*/i, "")}`
+        : ""
   );
   const [body, setBody] = useState("");
-  const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
+  const [attachments, setAttachments] = useState<AttachmentFile[]>(forwardData?.attachments || []);
+
+  // Update selectedFromEmail when fromEmail prop changes
+  useEffect(() => {
+    setSelectedFromEmail(fromEmail);
+  }, [fromEmail]);
+
+  // Reset form when dialog opens
+  useEffect(() => {
+    if (open) {
+      setSelectedFromEmail(fromEmail);
+      setTo(replyTo?.to || "");
+      setSubject(
+        replyTo?.subject 
+          ? `Re: ${replyTo.subject.replace(/^Re:\s*/i, "").replace(/^Fwd:\s*/i, "")}` 
+          : forwardData?.subject 
+            ? `Fwd: ${forwardData.subject.replace(/^Fwd:\s*/i, "")}`
+            : ""
+      );
+      setBody("");
+      setAttachments(forwardData?.attachments || []);
+    }
+  }, [open, fromEmail, replyTo, forwardData]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -174,11 +223,16 @@ const ComposeEmailDialog = ({
       if (replyTo?.originalBody) {
         emailBody += `<br><br>---<br><em>En respuesta a:</em><br>${replyTo.originalBody}`;
       }
+      
+      // If forwarding, add original message
+      if (forwardData?.originalBody) {
+        emailBody += `<br><br>---<br><em>Mensaje reenviado:</em><br>${forwardData.originalBody}`;
+      }
 
       const response = await supabase.functions.invoke("gmail-api", {
         body: {
           action: "send",
-          email: fromEmail,
+          email: selectedFromEmail,
           to: to.trim(),
           subject: subject.trim(),
           body: emailBody,
@@ -217,26 +271,50 @@ const ComposeEmailDialog = ({
   const handleClose = () => {
     if (!sending) {
       setTo(replyTo?.to || "");
-      setSubject(replyTo?.subject ? `Re: ${replyTo.subject.replace(/^Re:\s*/i, "")}` : "");
+      setSubject(
+        replyTo?.subject 
+          ? `Re: ${replyTo.subject.replace(/^Re:\s*/i, "").replace(/^Fwd:\s*/i, "")}` 
+          : forwardData?.subject 
+            ? `Fwd: ${forwardData.subject.replace(/^Fwd:\s*/i, "")}`
+            : ""
+      );
       setBody("");
-      setAttachments([]);
+      setAttachments(forwardData?.attachments || []);
       onOpenChange(false);
     }
   };
+
+  const dialogTitle = replyTo ? "Responder correo" : forwardData ? "Reenviar correo" : "Nuevo correo";
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <span>{replyTo ? "Responder correo" : "Nuevo correo"}</span>
-            <span className="text-sm font-normal text-muted-foreground">
-              Desde: {fromEmail}
-            </span>
-          </DialogTitle>
+          <DialogTitle>{dialogTitle}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 pt-4">
+          {/* From email selector */}
+          <div className="space-y-2">
+            <Label htmlFor="from">Desde</Label>
+            {cuentas && cuentas.length > 1 ? (
+              <Select value={selectedFromEmail} onValueChange={setSelectedFromEmail} disabled={sending}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar cuenta" />
+                </SelectTrigger>
+                <SelectContent>
+                  {cuentas.map((cuenta) => (
+                    <SelectItem key={cuenta.id} value={cuenta.email}>
+                      {cuenta.nombre} ({cuenta.email})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input value={selectedFromEmail} disabled className="bg-muted" />
+            )}
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="to">Para</Label>
             <Input

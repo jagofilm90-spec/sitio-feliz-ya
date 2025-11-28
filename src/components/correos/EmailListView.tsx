@@ -19,7 +19,7 @@ interface Email {
 interface EmailListViewProps {
   emails: Email[] | undefined;
   isLoading: boolean;
-  onSelectEmail: (id: string) => void;
+  onSelectEmail: (id: string, index: number) => void;
   onRefresh: () => void;
   isRefreshing: boolean;
 }
@@ -83,13 +83,13 @@ const EmailListView = ({
     <Card>
       <ScrollArea className="h-[600px]">
         <div className="divide-y">
-          {emails.map((email) => (
+          {emails.map((email, index) => (
             <button
               key={email.id}
               className={`w-full text-left p-4 hover:bg-muted/50 transition-colors ${
                 email.isUnread ? "bg-primary/5" : ""
               }`}
-              onClick={() => onSelectEmail(email.id)}
+              onClick={() => onSelectEmail(email.id, index)}
             >
               <div className="flex items-start gap-3">
                 <div className="flex-1 min-w-0">

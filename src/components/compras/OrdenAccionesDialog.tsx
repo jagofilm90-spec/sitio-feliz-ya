@@ -17,6 +17,7 @@ import { Calendar, CheckCircle, XCircle, Mail, Loader2, Pencil, Trash2, FileText
 import { Badge } from "@/components/ui/badge";
 import ProgramarEntregasDialog from "./ProgramarEntregasDialog";
 import RegistrarRecepcionDialog from "./RegistrarRecepcionDialog";
+import ConvertirEntregasMultiplesDialog from "./ConvertirEntregasMultiplesDialog";
 import logoAlmasa from "@/assets/logo-almasa.png";
 
 // Helper function to convert image to base64
@@ -57,6 +58,7 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
   const [isAdmin, setIsAdmin] = useState(false);
   const [programarEntregasOpen, setProgramarEntregasOpen] = useState(false);
   const [registrarRecepcionOpen, setRegistrarRecepcionOpen] = useState(false);
+  const [convertirEntregasOpen, setConvertirEntregasOpen] = useState(false);
   
   // Email CC functionality
   const [emailTo, setEmailTo] = useState("");
@@ -1396,7 +1398,7 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
               </Button>
             )}
 
-            {orden?.entregas_multiples && (
+            {orden?.entregas_multiples ? (
               <Button
                 variant="outline"
                 className={`w-full justify-start ${entregasPendientes > 0 ? "border-amber-300 text-amber-600 hover:bg-amber-50" : ""}`}
@@ -1409,6 +1411,15 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
                     {entregasPendientes} pendientes
                   </Badge>
                 )}
+              </Button>
+            ) : (orden?.status === "enviada" || orden?.status === "confirmada" || orden?.status === "parcial") && (
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => setConvertirEntregasOpen(true)}
+              >
+                <Truck className="mr-2 h-4 w-4" />
+                Dividir en Entregas Múltiples
               </Button>
             )}
 
@@ -1735,6 +1746,12 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
     <RegistrarRecepcionDialog
       open={registrarRecepcionOpen}
       onOpenChange={setRegistrarRecepcionOpen}
+      orden={orden}
+    />
+
+    <ConvertirEntregasMultiplesDialog
+      open={convertirEntregasOpen}
+      onOpenChange={setConvertirEntregasOpen}
       orden={orden}
     />
     </>

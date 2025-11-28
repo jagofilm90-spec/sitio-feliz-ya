@@ -35,6 +35,7 @@ import { format, isAfter, isBefore } from "date-fns";
 import { es } from "date-fns/locale";
 import CrearCotizacionDialog from "./CrearCotizacionDialog";
 import CotizacionDetalleDialog from "./CotizacionDetalleDialog";
+import { formatCurrency } from "@/lib/utils";
 
 interface Cotizacion {
   id: string;
@@ -180,8 +181,8 @@ const CotizacionesTab = () => {
                           locale: es,
                         })}
                       </TableCell>
-                      <TableCell className="font-medium">
-                        ${c.total.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                      <TableCell className="font-medium font-mono">
+                        ${formatCurrency(c.total)}
                       </TableCell>
                       <TableCell>
                         {getStatusBadge(c.status, c.fecha_vigencia)}

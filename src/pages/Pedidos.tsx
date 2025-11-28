@@ -17,6 +17,7 @@ import { Plus, Search, Eye, ShoppingCart, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 import CotizacionesTab from "@/components/cotizaciones/CotizacionesTab";
+import { formatCurrency } from "@/lib/utils";
 
 const Pedidos = () => {
   const [pedidos, setPedidos] = useState<any[]>([]);
@@ -156,7 +157,7 @@ const Pedidos = () => {
                         <TableCell>
                           {new Date(pedido.fecha_pedido).toLocaleDateString()}
                         </TableCell>
-                        <TableCell>${pedido.total.toFixed(2)}</TableCell>
+                        <TableCell className="font-mono">${formatCurrency(pedido.total)}</TableCell>
                         <TableCell>{getStatusBadge(pedido.status)}</TableCell>
                         <TableCell>
                           <Button variant="ghost" size="icon">

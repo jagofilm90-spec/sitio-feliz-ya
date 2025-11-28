@@ -7,7 +7,18 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Mail, CheckCircle, XCircle, RefreshCw, Link2, Unlink, ExternalLink, Copy, Inbox, Settings } from "lucide-react";
+import {
+  Mail,
+  CheckCircle,
+  XCircle,
+  RefreshCw,
+  Link2,
+  Unlink,
+  ExternalLink,
+  Copy,
+  Inbox,
+  Settings,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -43,15 +54,14 @@ const CorreosCorporativos = () => {
         .from("gmail_cuentas")
         .select("*")
         .order("nombre");
-      
+
       if (error) throw error;
       return data as GmailCuenta[];
     },
   });
 
   const isConnected = (cuenta: GmailCuenta) => {
-    if (!cuenta.access_token || !cuenta.refresh_token) return false;
-    return true;
+    return !!(cuenta.access_token && cuenta.refresh_token);
   };
 
   const isTokenExpired = (cuenta: GmailCuenta) => {
@@ -59,11 +69,16 @@ const CorreosCorporativos = () => {
     return new Date(cuenta.token_expires_at) < new Date();
   };
 
+  // Filter connected accounts for the inbox
+  const connectedCuentas = cuentas?.filter(
+    (c) => isConnected(c) && c.activo
+  ) || [];
+
   const handleConnect = async (email: string) => {
     setConnectingEmail(email);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (!session) {
         toast({
           title: "Error",
@@ -93,7 +108,8 @@ const CorreosCorporativos = () => {
       console.error("Error connecting Gmail:", error);
       toast({
         title: "Error al conectar",
-        description: error.message || "No se pudo iniciar el proceso de autorización",
+        description:
+          error.message || "No se pudo iniciar el proceso de autorización",
         variant: "destructive",
       });
       setConnectingEmail(null);
@@ -155,7 +171,9 @@ const CorreosCorporativos = () => {
       queryClient.invalidateQueries({ queryKey: ["gmail-cuentas"] });
       toast({
         title: cuenta.activo ? "Cuenta desactivada" : "Cuenta activada",
-        description: `${cuenta.email} ha sido ${cuenta.activo ? "desactivada" : "activada"}`,
+        description: `${cuenta.email} ha sido ${
+          cuenta.activo ? "desactivada" : "activada"
+        }`,
       });
     } catch (error: any) {
       toast({
@@ -175,10 +193,13 @@ const CorreosCorporativos = () => {
         </Badge>
       );
     }
-    
+
     if (isTokenExpired(cuenta)) {
       return (
-        <Badge variant="secondary" className="gap-1 bg-yellow-500/20 text-yellow-700">
+        <Badge
+          variant="secondary"
+          className="gap-1 bg-yellow-500/20 text-yellow-700"
+        >
           <RefreshCw className="h-3 w-3" />
           Token expirado
         </Badge>
@@ -186,7 +207,10 @@ const CorreosCorporativos = () => {
     }
 
     return (
-      <Badge variant="default" className="gap-1 bg-green-500/20 text-green-700">
+      <Badge
+        variant="default"
+        className="gap-1 bg-green-500/20 text-green-700"
+      >
         <CheckCircle className="h-3 w-3" />
         Conectado
       </Badge>
@@ -208,15 +232,14 @@ const CorreosCorporativos = () => {
     );
   };
 
-  // Find the pedidos account for the inbox
-  const pedidosCuenta = cuentas?.find(c => c.proposito === "pedidos" && isConnected(c));
-
   return (
     <Layout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Correos Corporativos</h1>
+            <h1 className="text-3xl font-bold tracking-tight">
+              Correos Corporativos
+            </h1>
             <p className="text-muted-foreground">
               Gestiona las cuentas de correo integradas al sistema
             </p>
@@ -236,20 +259,17 @@ const CorreosCorporativos = () => {
           </TabsList>
 
           <TabsContent value="bandeja" className="mt-6">
-            {pedidosCuenta ? (
-              <BandejaEntrada 
-                cuentaEmail={pedidosCuenta.email} 
-                cuentaNombre={pedidosCuenta.nombre}
-              />
+            {connectedCuentas.length > 0 ? (
+              <BandejaEntrada cuentas={connectedCuentas} />
             ) : (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12">
                   <Mail className="h-12 w-12 text-muted-foreground mb-4" />
                   <p className="text-muted-foreground mb-2">
-                    No hay cuenta de pedidos conectada
+                    No hay cuentas de correo conectadas
                   </p>
                   <p className="text-sm text-muted-foreground mb-4">
-                    Ve a la pestaña "Cuentas" para conectar pedidos@almasa.com.mx
+                    Ve a la pestaña "Cuentas" para conectar una cuenta de correo
                   </p>
                   <Button onClick={() => setActiveTab("cuentas")}>
                     Ir a Cuentas
@@ -274,7 +294,10 @@ const CorreosCorporativos = () => {
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
                 {cuentas?.map((cuenta) => (
-                  <Card key={cuenta.id} className={!cuenta.activo ? "opacity-60" : ""}>
+                  <Card
+                    key={cuenta.id}
+                    className={!cuenta.activo ? "opacity-60" : ""}
+                  >
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
@@ -282,7 +305,9 @@ const CorreosCorporativos = () => {
                             <Mail className="h-5 w-5 text-primary" />
                           </div>
                           <div>
-                            <CardTitle className="text-lg">{cuenta.nombre}</CardTitle>
+                            <CardTitle className="text-lg">
+                              {cuenta.nombre}
+                            </CardTitle>
                             <CardDescription>{cuenta.email}</CardDescription>
                           </div>
                         </div>
@@ -291,13 +316,18 @@ const CorreosCorporativos = () => {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">Propósito:</span>
+                        <span className="text-sm text-muted-foreground">
+                          Propósito:
+                        </span>
                         {getPropositoBadge(cuenta.proposito)}
                       </div>
 
                       {cuenta.token_expires_at && isConnected(cuenta) && (
                         <p className="text-xs text-muted-foreground">
-                          Token expira: {new Date(cuenta.token_expires_at).toLocaleString("es-MX")}
+                          Token expira:{" "}
+                          {new Date(cuenta.token_expires_at).toLocaleString(
+                            "es-MX"
+                          )}
                         </p>
                       )}
 
@@ -325,12 +355,16 @@ const CorreosCorporativos = () => {
                             Desconectar
                           </Button>
                         )}
-                        
+
                         <Button
                           variant="ghost"
                           size="icon"
                           onClick={() => toggleActive(cuenta)}
-                          title={cuenta.activo ? "Desactivar cuenta" : "Activar cuenta"}
+                          title={
+                            cuenta.activo
+                              ? "Desactivar cuenta"
+                              : "Activar cuenta"
+                          }
                         >
                           {cuenta.activo ? (
                             <CheckCircle className="h-4 w-4 text-green-600" />
@@ -347,7 +381,9 @@ const CorreosCorporativos = () => {
                   <Card className="col-span-full">
                     <CardContent className="flex flex-col items-center justify-center py-12">
                       <Mail className="h-12 w-12 text-muted-foreground mb-4" />
-                      <p className="text-muted-foreground">No hay cuentas de correo configuradas</p>
+                      <p className="text-muted-foreground">
+                        No hay cuentas de correo configuradas
+                      </p>
                     </CardContent>
                   </Card>
                 )}
@@ -358,20 +394,25 @@ const CorreosCorporativos = () => {
       </div>
 
       {/* Auth URL Dialog */}
-      <Dialog open={!!authUrl} onOpenChange={(open) => !open && handleCloseAuthDialog()}>
+      <Dialog
+        open={!!authUrl}
+        onOpenChange={(open) => !open && handleCloseAuthDialog()}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Autorizar {authEmail}</DialogTitle>
             <DialogDescription>
-              Haz clic en el botón para abrir Google y autorizar el acceso. Después regresa aquí y cierra este diálogo.
+              Haz clic en el botón para abrir Google y autorizar el acceso.
+              Después regresa aquí y cierra este diálogo.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-4">
-            <Button
-              className="w-full"
-              asChild
-            >
-              <a href={authUrl || "#"} target="_blank" rel="noopener noreferrer">
+            <Button className="w-full" asChild>
+              <a
+                href={authUrl || "#"}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 <ExternalLink className="h-4 w-4 mr-2" />
                 Abrir Google para autorizar
               </a>
@@ -391,7 +432,8 @@ const CorreosCorporativos = () => {
               Copiar URL
             </Button>
             <p className="text-xs text-muted-foreground text-center">
-              Después de autorizar en Google, haz clic en "Actualizar" para verificar la conexión.
+              Después de autorizar en Google, haz clic en "Actualizar" para
+              verificar la conexión.
             </p>
           </div>
         </DialogContent>

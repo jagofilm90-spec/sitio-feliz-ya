@@ -319,6 +319,36 @@ const Productos = () => {
           .eq("id", editingProduct.id);
 
         if (error) throw error;
+
+        // Si se agregó stock, crear un nuevo lote
+        const stockAgregar = parseInt(formData.stock_inicial) || 0;
+        if (stockAgregar > 0) {
+          const loteData: any = {
+            producto_id: editingProduct.id,
+            cantidad_disponible: stockAgregar,
+            precio_compra: parseFloat(formData.precio_compra) || 0,
+            lote_referencia: "Carga inicial",
+          };
+          
+          if (formData.maneja_caducidad && formData.fecha_caducidad_inicial) {
+            loteData.fecha_caducidad = formData.fecha_caducidad_inicial;
+          }
+
+          const { error: loteError } = await supabase
+            .from("inventario_lotes")
+            .insert([loteData]);
+
+          if (loteError) {
+            console.error("Error creando lote:", loteError);
+          } else {
+            // Actualizar stock_actual del producto
+            await supabase
+              .from("productos")
+              .update({ stock_actual: (editingProduct.stock_actual || 0) + stockAgregar })
+              .eq("id", editingProduct.id);
+          }
+        }
+
         toast({ title: "Producto actualizado correctamente" });
       } else {
         const { data: newProduct, error } = await supabase
@@ -754,39 +784,41 @@ const Productos = () => {
                     />
                     <Label htmlFor="maneja_caducidad">Maneja fecha de caducidad</Label>
                   </div>
-                  {editingProduct === null && (
-                    <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-border/50">
+                  <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-border/50">
+                    <div className="space-y-2">
+                      <Label htmlFor="stock_inicial">
+                        {editingProduct ? "Agregar stock" : "Stock inicial"}
+                      </Label>
+                      <Input
+                        id="stock_inicial"
+                        type="number"
+                        value={formData.stock_inicial}
+                        onChange={(e) => setFormData({ ...formData, stock_inicial: e.target.value })}
+                        placeholder="0"
+                        autoComplete="off"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {editingProduct 
+                          ? "Cantidad a agregar (creará un nuevo lote)" 
+                          : "Cantidad que ya tienes en bodega"}
+                      </p>
+                    </div>
+                    {formData.maneja_caducidad && (
                       <div className="space-y-2">
-                        <Label htmlFor="stock_inicial">Stock inicial</Label>
+                        <Label htmlFor="fecha_caducidad_inicial">Fecha de caducidad</Label>
                         <Input
-                          id="stock_inicial"
-                          type="number"
-                          value={formData.stock_inicial}
-                          onChange={(e) => setFormData({ ...formData, stock_inicial: e.target.value })}
-                          placeholder="0"
+                          id="fecha_caducidad_inicial"
+                          type="date"
+                          value={formData.fecha_caducidad_inicial}
+                          onChange={(e) => setFormData({ ...formData, fecha_caducidad_inicial: e.target.value })}
                           autoComplete="off"
                         />
                         <p className="text-xs text-muted-foreground">
-                          Cantidad que ya tienes en bodega
+                          Fecha de vencimiento del stock
                         </p>
                       </div>
-                      {formData.maneja_caducidad && (
-                        <div className="space-y-2">
-                          <Label htmlFor="fecha_caducidad_inicial">Fecha de caducidad</Label>
-                          <Input
-                            id="fecha_caducidad_inicial"
-                            type="date"
-                            value={formData.fecha_caducidad_inicial}
-                            onChange={(e) => setFormData({ ...formData, fecha_caducidad_inicial: e.target.value })}
-                            autoComplete="off"
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Fecha de vencimiento del stock actual
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-3 p-3 bg-muted/50 rounded-lg border">
                   <div className="flex items-center space-x-2">

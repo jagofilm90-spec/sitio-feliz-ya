@@ -4,9 +4,10 @@ import Layout from "@/components/Layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Mail, CheckCircle, XCircle, RefreshCw, Link2, Unlink, ExternalLink, Copy } from "lucide-react";
+import { Mail, CheckCircle, XCircle, RefreshCw, Link2, Unlink, ExternalLink, Copy, Inbox, Settings } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import BandejaEntrada from "@/components/correos/BandejaEntrada";
 
 interface GmailCuenta {
   id: string;
@@ -32,6 +34,7 @@ const CorreosCorporativos = () => {
   const [connectingEmail, setConnectingEmail] = useState<string | null>(null);
   const [authUrl, setAuthUrl] = useState<string | null>(null);
   const [authEmail, setAuthEmail] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("bandeja");
 
   const { data: cuentas, isLoading, refetch } = useQuery({
     queryKey: ["gmail-cuentas"],
@@ -71,20 +74,15 @@ const CorreosCorporativos = () => {
         return;
       }
 
-      console.log("Calling gmail-auth for:", email);
-      
       const response = await supabase.functions.invoke("gmail-auth", {
         body: { email },
       });
-
-      console.log("Response from gmail-auth:", response);
 
       if (response.error) {
         throw new Error(response.error.message);
       }
 
       if (response.data?.authUrl) {
-        // Store the URL and show dialog
         setAuthUrl(response.data.authUrl);
         setAuthEmail(email);
         setConnectingEmail(null);
@@ -115,7 +113,6 @@ const CorreosCorporativos = () => {
   const handleCloseAuthDialog = () => {
     setAuthUrl(null);
     setAuthEmail(null);
-    // Refresh the data to check for updates
     refetch();
   };
 
@@ -211,6 +208,9 @@ const CorreosCorporativos = () => {
     );
   };
 
+  // Find the pedidos account for the inbox
+  const pedidosCuenta = cuentas?.find(c => c.proposito === "pedidos" && isConnected(c));
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -221,98 +221,140 @@ const CorreosCorporativos = () => {
               Gestiona las cuentas de correo integradas al sistema
             </p>
           </div>
-          <Button variant="outline" onClick={() => refetch()}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Actualizar
-          </Button>
         </div>
 
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {cuentas?.map((cuenta) => (
-              <Card key={cuenta.id} className={!cuenta.activo ? "opacity-60" : ""}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-full bg-primary/10">
-                        <Mail className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-lg">{cuenta.nombre}</CardTitle>
-                        <CardDescription>{cuenta.email}</CardDescription>
-                      </div>
-                    </div>
-                    {getStatusBadge(cuenta)}
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">Propósito:</span>
-                    {getPropositoBadge(cuenta.proposito)}
-                  </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList>
+            <TabsTrigger value="bandeja" className="gap-2">
+              <Inbox className="h-4 w-4" />
+              Bandeja de Entrada
+            </TabsTrigger>
+            <TabsTrigger value="cuentas" className="gap-2">
+              <Settings className="h-4 w-4" />
+              Cuentas
+            </TabsTrigger>
+          </TabsList>
 
-                  {cuenta.token_expires_at && isConnected(cuenta) && (
-                    <p className="text-xs text-muted-foreground">
-                      Token expira: {new Date(cuenta.token_expires_at).toLocaleString("es-MX")}
-                    </p>
-                  )}
-
-                  <div className="flex gap-2 pt-2">
-                    {!isConnected(cuenta) || isTokenExpired(cuenta) ? (
-                      <Button
-                        onClick={() => handleConnect(cuenta.email)}
-                        disabled={connectingEmail === cuenta.email}
-                        className="flex-1"
-                      >
-                        {connectingEmail === cuenta.email ? (
-                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <Link2 className="h-4 w-4 mr-2" />
-                        )}
-                        {isTokenExpired(cuenta) ? "Reconectar" : "Conectar"}
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        onClick={() => handleDisconnect(cuenta)}
-                        className="flex-1"
-                      >
-                        <Unlink className="h-4 w-4 mr-2" />
-                        Desconectar
-                      </Button>
-                    )}
-                    
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => toggleActive(cuenta)}
-                      title={cuenta.activo ? "Desactivar cuenta" : "Activar cuenta"}
-                    >
-                      {cuenta.activo ? (
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                      ) : (
-                        <XCircle className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-
-            {cuentas?.length === 0 && (
-              <Card className="col-span-full">
+          <TabsContent value="bandeja" className="mt-6">
+            {pedidosCuenta ? (
+              <BandejaEntrada 
+                cuentaEmail={pedidosCuenta.email} 
+                cuentaNombre={pedidosCuenta.nombre}
+              />
+            ) : (
+              <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12">
                   <Mail className="h-12 w-12 text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">No hay cuentas de correo configuradas</p>
+                  <p className="text-muted-foreground mb-2">
+                    No hay cuenta de pedidos conectada
+                  </p>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Ve a la pestaña "Cuentas" para conectar pedidos@almasa.com.mx
+                  </p>
+                  <Button onClick={() => setActiveTab("cuentas")}>
+                    Ir a Cuentas
+                  </Button>
                 </CardContent>
               </Card>
             )}
-          </div>
-        )}
+          </TabsContent>
+
+          <TabsContent value="cuentas" className="mt-6">
+            <div className="flex justify-end mb-4">
+              <Button variant="outline" onClick={() => refetch()}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Actualizar
+              </Button>
+            </div>
+
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {cuentas?.map((cuenta) => (
+                  <Card key={cuenta.id} className={!cuenta.activo ? "opacity-60" : ""}>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-full bg-primary/10">
+                            <Mail className="h-5 w-5 text-primary" />
+                          </div>
+                          <div>
+                            <CardTitle className="text-lg">{cuenta.nombre}</CardTitle>
+                            <CardDescription>{cuenta.email}</CardDescription>
+                          </div>
+                        </div>
+                        {getStatusBadge(cuenta)}
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">Propósito:</span>
+                        {getPropositoBadge(cuenta.proposito)}
+                      </div>
+
+                      {cuenta.token_expires_at && isConnected(cuenta) && (
+                        <p className="text-xs text-muted-foreground">
+                          Token expira: {new Date(cuenta.token_expires_at).toLocaleString("es-MX")}
+                        </p>
+                      )}
+
+                      <div className="flex gap-2 pt-2">
+                        {!isConnected(cuenta) || isTokenExpired(cuenta) ? (
+                          <Button
+                            onClick={() => handleConnect(cuenta.email)}
+                            disabled={connectingEmail === cuenta.email}
+                            className="flex-1"
+                          >
+                            {connectingEmail === cuenta.email ? (
+                              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <Link2 className="h-4 w-4 mr-2" />
+                            )}
+                            {isTokenExpired(cuenta) ? "Reconectar" : "Conectar"}
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            onClick={() => handleDisconnect(cuenta)}
+                            className="flex-1"
+                          >
+                            <Unlink className="h-4 w-4 mr-2" />
+                            Desconectar
+                          </Button>
+                        )}
+                        
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => toggleActive(cuenta)}
+                          title={cuenta.activo ? "Desactivar cuenta" : "Activar cuenta"}
+                        >
+                          {cuenta.activo ? (
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <XCircle className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+
+                {cuentas?.length === 0 && (
+                  <Card className="col-span-full">
+                    <CardContent className="flex flex-col items-center justify-center py-12">
+                      <Mail className="h-12 w-12 text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground">No hay cuentas de correo configuradas</p>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Auth URL Dialog */}

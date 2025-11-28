@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { format, isBefore } from "date-fns";
 import { es } from "date-fns/locale";
+import { formatCurrency } from "@/lib/utils";
 
 interface CotizacionDetalleDialogProps {
   cotizacionId: string;
@@ -231,11 +232,11 @@ const CotizacionDetalleDialog = ({
                       </div>
                     </TableCell>
                     <TableCell className="text-center">{d.cantidad}</TableCell>
-                    <TableCell className="text-right">
-                      ${d.precio_unitario.toFixed(2)}
+                    <TableCell className="text-right font-mono">
+                      ${formatCurrency(d.precio_unitario)}
                     </TableCell>
-                    <TableCell className="text-right font-medium">
-                      ${d.subtotal.toFixed(2)}
+                    <TableCell className="text-right font-medium font-mono">
+                      ${formatCurrency(d.subtotal)}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -245,19 +246,19 @@ const CotizacionDetalleDialog = ({
 
           {/* Totals */}
           <div className="flex justify-end">
-            <div className="w-64 space-y-2 text-sm">
+            <div className="w-72 space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Subtotal:</span>
-                <span>${cotizacion.subtotal.toFixed(2)}</span>
+                <span className="font-mono">${formatCurrency(cotizacion.subtotal)}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">IVA (16%):</span>
-                <span>${cotizacion.impuestos.toFixed(2)}</span>
+              <div className="flex justify-between text-blue-600">
+                <span>Impuestos:</span>
+                <span className="font-mono">${formatCurrency(cotizacion.impuestos)}</span>
               </div>
               <Separator />
               <div className="flex justify-between font-bold text-lg">
                 <span>Total:</span>
-                <span>${cotizacion.total.toFixed(2)}</span>
+                <span className="font-mono">${formatCurrency(cotizacion.total)}</span>
               </div>
             </div>
           </div>

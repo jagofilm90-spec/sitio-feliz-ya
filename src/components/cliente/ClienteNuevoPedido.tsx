@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { formatCurrency, calcularDesgloseImpuestos } from "@/lib/utils";
 
 interface ClienteNuevoPedidoProps {
   clienteId: string;
@@ -37,6 +38,8 @@ interface DetalleProducto {
   precioUnitario: number;
   cantidad: number;
   subtotal: number;
+  aplica_iva: boolean;
+  aplica_ieps: boolean;
 }
 
 interface Sucursal {
@@ -66,7 +69,7 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
     try {
       const { data, error } = await supabase
         .from("productos")
-        .select("*")
+        .select("id, nombre, codigo, unidad, precio_venta, stock_actual, aplica_iva, aplica_ieps")
         .eq("activo", true)
         .gt("stock_actual", 0)
         .order("nombre");
@@ -135,6 +138,8 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
       precioUnitario: producto.precio_venta,
       cantidad: 1,
       subtotal: producto.precio_venta,
+      aplica_iva: producto.aplica_iva || false,
+      aplica_ieps: producto.aplica_ieps || false,
     };
 
     setDetalles([...detalles, nuevoDetalle]);
@@ -158,10 +163,30 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
   };
 
   const calcularTotales = () => {
-    const subtotal = detalles.reduce((sum, d) => sum + d.subtotal, 0);
-    const impuestos = subtotal * 0.16; // 16% IVA
-    const total = subtotal + impuestos;
-    return { subtotal, impuestos, total };
+    let subtotalNeto = 0;
+    let totalIva = 0;
+    let totalIeps = 0;
+
+    detalles.forEach((d) => {
+      const desglose = calcularDesgloseImpuestos(d.subtotal, d.aplica_iva, d.aplica_ieps);
+      subtotalNeto += desglose.base;
+      totalIva += desglose.iva;
+      totalIeps += desglose.ieps;
+    });
+
+    // Redondear a 2 decimales
+    subtotalNeto = Math.round(subtotalNeto * 100) / 100;
+    totalIva = Math.round(totalIva * 100) / 100;
+    totalIeps = Math.round(totalIeps * 100) / 100;
+    const total = Math.round((subtotalNeto + totalIva + totalIeps) * 100) / 100;
+
+    return { 
+      subtotal: subtotalNeto, 
+      iva: totalIva,
+      ieps: totalIeps,
+      impuestos: totalIva + totalIeps, 
+      total 
+    };
   };
 
   const validarCredito = () => {
@@ -206,7 +231,7 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
       const { data: user } = await supabase.auth.getUser();
       if (!user.user) throw new Error("Usuario no autenticado");
 
-      const { subtotal, impuestos, total } = calcularTotales();
+      const totalesGuardar = calcularTotales();
       
       // Generar folio único
       const timestamp = Date.now().toString().slice(-6);
@@ -221,9 +246,9 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
           vendedor_id: user.user.id,
           sucursal_id: selectedSucursalId || null,
           fecha_pedido: new Date().toISOString(),
-          subtotal,
-          impuestos,
-          total,
+          subtotal: totalesGuardar.subtotal,
+          impuestos: totalesGuardar.impuestos,
+          total: totalesGuardar.total,
           status: "pendiente",
           notas: notas || null,
         })
@@ -266,7 +291,8 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
     }
   };
 
-  const { subtotal, impuestos, total } = calcularTotales();
+  const totales = calcularTotales();
+  const { subtotal, iva, ieps, total } = totales;
   const creditoDisponible = limiteCredito - saldoPendiente;
   const selectedSucursal = sucursales.find(s => s.id === selectedSucursalId);
 
@@ -409,7 +435,7 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
                       <TableRow key={detalle.productoId}>
                         <TableCell>{detalle.nombre}</TableCell>
                         <TableCell>{detalle.codigo}</TableCell>
-                        <TableCell>${detalle.precioUnitario.toFixed(2)}</TableCell>
+                        <TableCell>${formatCurrency(detalle.precioUnitario)}</TableCell>
                         <TableCell>
                           <Input
                             type="number"
@@ -424,8 +450,8 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
                             className="w-20"
                           />
                         </TableCell>
-                        <TableCell className="text-right font-medium">
-                          ${detalle.subtotal.toFixed(2)}
+                        <TableCell className="text-right font-medium font-mono">
+                          ${formatCurrency(detalle.subtotal)}
                         </TableCell>
                         <TableCell>
                           <Button
@@ -454,15 +480,23 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
               <div className="space-y-2 pt-4 border-t">
                 <div className="flex justify-between text-sm">
                   <span>Subtotal:</span>
-                  <span>${subtotal.toFixed(2)}</span>
+                  <span className="font-mono">${formatCurrency(subtotal)}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span>IVA (16%):</span>
-                  <span>${impuestos.toFixed(2)}</span>
-                </div>
+                {iva > 0 && (
+                  <div className="flex justify-between text-sm text-blue-600">
+                    <span>IVA (16%):</span>
+                    <span className="font-mono">${formatCurrency(iva)}</span>
+                  </div>
+                )}
+                {ieps > 0 && (
+                  <div className="flex justify-between text-sm text-orange-600">
+                    <span>IEPS (8%):</span>
+                    <span className="font-mono">${formatCurrency(ieps)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-lg font-bold">
                   <span>Total:</span>
-                  <span>${total.toFixed(2)}</span>
+                  <span className="font-mono">${formatCurrency(total)}</span>
                 </div>
                 {total > creditoDisponible && (
                   <p className="text-sm text-destructive">

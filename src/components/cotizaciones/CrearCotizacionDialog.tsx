@@ -30,6 +30,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Plus, Trash2, Search, FileText } from "lucide-react";
 import { format, addDays } from "date-fns";
 import { es } from "date-fns/locale";
+import { formatCurrency, calcularDesgloseImpuestos, validarTotales } from "@/lib/utils";
 
 interface DetalleProducto {
   producto_id: string;
@@ -251,31 +252,29 @@ const CrearCotizacionDialog = ({
     let totalIeps = 0;
 
     detalles.forEach((d) => {
-      const precioConImpuestos = d.subtotal;
-      
-      // Calcular divisor según impuestos aplicables
-      let divisor = 1;
-      if (d.aplica_iva) divisor += 0.16;
-      if (d.aplica_ieps) divisor += 0.08;
-      
-      // Precio base sin impuestos
-      const precioBase = precioConImpuestos / divisor;
-      
-      // Calcular impuestos
-      const iva = d.aplica_iva ? precioBase * 0.16 : 0;
-      const ieps = d.aplica_ieps ? precioBase * 0.08 : 0;
-      
-      subtotalNeto += precioBase;
-      totalIva += iva;
-      totalIeps += ieps;
+      const desglose = calcularDesgloseImpuestos(d.subtotal, d.aplica_iva, d.aplica_ieps);
+      subtotalNeto += desglose.base;
+      totalIva += desglose.iva;
+      totalIeps += desglose.ieps;
     });
+
+    // Redondear a 2 decimales
+    subtotalNeto = Math.round(subtotalNeto * 100) / 100;
+    totalIva = Math.round(totalIva * 100) / 100;
+    totalIeps = Math.round(totalIeps * 100) / 100;
+    const total = Math.round((subtotalNeto + totalIva + totalIeps) * 100) / 100;
+
+    // Validar consistencia
+    if (!validarTotales(subtotalNeto, totalIva, totalIeps, total)) {
+      console.warn('Inconsistencia en cálculo de totales detectada');
+    }
 
     return { 
       subtotal: subtotalNeto, 
       iva: totalIva,
       ieps: totalIeps,
       impuestos: totalIva + totalIeps, 
-      total: subtotalNeto + totalIva + totalIeps 
+      total
     };
   };
 
@@ -593,7 +592,7 @@ const CrearCotizacionDialog = ({
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        ${d.subtotal.toFixed(2)}
+                        ${formatCurrency(d.subtotal)}
                       </TableCell>
                       <TableCell>
                         <Button
@@ -625,26 +624,26 @@ const CrearCotizacionDialog = ({
           {/* Totals */}
           {detalles.length > 0 && (
             <div className="flex justify-end">
-              <div className="w-64 space-y-2 text-sm">
+              <div className="w-72 space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span>Subtotal:</span>
-                  <span>${totales.subtotal.toFixed(2)}</span>
+                  <span className="font-mono">${formatCurrency(totales.subtotal)}</span>
                 </div>
                 {totales.iva > 0 && (
                   <div className="flex justify-between text-blue-600">
                     <span>IVA (16%):</span>
-                    <span>${totales.iva.toFixed(2)}</span>
+                    <span className="font-mono">${formatCurrency(totales.iva)}</span>
                   </div>
                 )}
                 {totales.ieps > 0 && (
                   <div className="flex justify-between text-orange-600">
                     <span>IEPS (8%):</span>
-                    <span>${totales.ieps.toFixed(2)}</span>
+                    <span className="font-mono">${formatCurrency(totales.ieps)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-bold text-lg border-t pt-2">
                   <span>Total:</span>
-                  <span>${totales.total.toFixed(2)}</span>
+                  <span className="font-mono">${formatCurrency(totales.total)}</span>
                 </div>
               </div>
             </div>

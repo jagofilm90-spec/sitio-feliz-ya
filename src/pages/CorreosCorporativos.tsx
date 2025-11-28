@@ -20,6 +20,7 @@ import {
   Inbox,
   Settings,
   Shield,
+  PenLine,
 } from "lucide-react";
 import {
   Dialog,
@@ -30,6 +31,7 @@ import {
 } from "@/components/ui/dialog";
 import BandejaEntrada from "@/components/correos/BandejaEntrada";
 import GmailPermisosManager from "@/components/correos/GmailPermisosManager";
+import GmailFirmasManager from "@/components/correos/GmailFirmasManager";
 
 interface GmailCuenta {
   id: string;
@@ -269,6 +271,10 @@ const CorreosCorporativos = () => {
                   <Shield className="h-4 w-4" />
                   Permisos
                 </TabsTrigger>
+                <TabsTrigger value="firmas" className="gap-2">
+                  <PenLine className="h-4 w-4" />
+                  Firmas
+                </TabsTrigger>
               </>
             )}
           </TabsList>
@@ -409,6 +415,12 @@ const CorreosCorporativos = () => {
           {isAdmin && (
             <TabsContent value="permisos" className="mt-6">
               <GmailPermisosManager />
+            </TabsContent>
+          )}
+
+          {isAdmin && (
+            <TabsContent value="firmas" className="mt-6">
+              <GmailFirmasManager cuentas={allConnectedCuentas} />
             </TabsContent>
           )}
         </Tabs>

@@ -110,8 +110,8 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
       });
       return counts;
     },
-    staleTime: 1000 * 60,
-    refetchInterval: 1000 * 60,
+    staleTime: 1000 * 15, // 15 seconds
+    refetchInterval: 1000 * 30, // Every 30 seconds - TIEMPO REAL
   });
 
   // Detect new emails and show notifications
@@ -215,10 +215,10 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
       };
     },
     enabled: !!selectedAccount && activeTab === "inbox",
-    staleTime: 1000 * 60 * 2, // 2 minutes - data considered fresh longer
+    staleTime: 1000 * 15, // 15 seconds - data considered fresh
     gcTime: 1000 * 60 * 10, // Keep in cache for 10 minutes
-    refetchInterval: 1000 * 60, // Refetch every 60 seconds
-    refetchOnWindowFocus: false,
+    refetchInterval: 1000 * 30, // Refetch every 30 seconds - TIEMPO REAL
+    refetchOnWindowFocus: true, // Refresh when user returns
   });
 
   // Update allEmails and nextPageToken when initial data loads

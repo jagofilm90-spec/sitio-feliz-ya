@@ -20,6 +20,7 @@ import {
   User,
   Paperclip,
   Reply,
+  ReplyAll,
   Trash2,
   Loader2,
   Download,
@@ -89,12 +90,13 @@ const EmailDetailView = ({
   const [deleting, setDeleting] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const [replyOpen, setReplyOpen] = useState(false);
+  const [replyAllOpen, setReplyAllOpen] = useState(false);
   const [forwardOpen, setForwardOpen] = useState(false);
   const [downloadingAttachment, setDownloadingAttachment] = useState<string | null>(null);
 
   // Keyboard navigation with arrow keys
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (replyOpen || forwardOpen) return; // Don't navigate when dialogs are open
+    if (replyOpen || replyAllOpen || forwardOpen) return; // Don't navigate when dialogs are open
     
     if (e.key === "ArrowRight" && hasNext && onNavigateNext) {
       e.preventDefault();
@@ -103,7 +105,7 @@ const EmailDetailView = ({
       e.preventDefault();
       onNavigatePrev();
     }
-  }, [hasNext, hasPrev, onNavigateNext, onNavigatePrev, replyOpen, forwardOpen]);
+  }, [hasNext, hasPrev, onNavigateNext, onNavigatePrev, replyOpen, replyAllOpen, forwardOpen]);
 
   useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
@@ -303,6 +305,10 @@ const EmailDetailView = ({
                   <Reply className="h-4 w-4 mr-2" />
                   Responder
                 </Button>
+                <Button variant="outline" size="sm" onClick={() => setReplyAllOpen(true)}>
+                  <ReplyAll className="h-4 w-4 mr-2" />
+                  Responder a todos
+                </Button>
                 <Button variant="outline" size="sm" onClick={() => setForwardOpen(true)}>
                   <Forward className="h-4 w-4 mr-2" />
                   Reenviar
@@ -437,6 +443,21 @@ const EmailDetailView = ({
         cuentas={cuentas}
         replyTo={{
           to: extractEmailAddress(email.from),
+          subject: email.subject,
+          originalBody: email.body,
+        }}
+        onSuccess={onBack}
+      />
+
+      {/* Reply All dialog */}
+      <ComposeEmailDialog
+        open={replyAllOpen}
+        onOpenChange={setReplyAllOpen}
+        fromEmail={cuentaEmail}
+        cuentas={cuentas}
+        replyAll={{
+          to: extractEmailAddress(email.from),
+          cc: email.to || "",
           subject: email.subject,
           originalBody: email.body,
         }}

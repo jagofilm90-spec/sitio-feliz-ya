@@ -754,8 +754,8 @@ const Productos = () => {
                     />
                     <Label htmlFor="maneja_caducidad">Maneja fecha de caducidad</Label>
                   </div>
-                  {!editingProduct && (
-                    <div className="grid grid-cols-2 gap-4 ml-6">
+                  {editingProduct === null && (
+                    <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-border/50">
                       <div className="space-y-2">
                         <Label htmlFor="stock_inicial">Stock inicial</Label>
                         <Input

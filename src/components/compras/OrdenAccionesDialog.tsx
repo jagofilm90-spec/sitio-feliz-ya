@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar, CheckCircle, XCircle, Mail, Loader2, Pencil } from "lucide-react";
+import { Calendar, CheckCircle, XCircle, Mail, Loader2, Pencil, Trash2 } from "lucide-react";
 
 interface OrdenAccionesDialogProps {
   open: boolean;
@@ -25,7 +25,7 @@ interface OrdenAccionesDialogProps {
 const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccionesDialogProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [accion, setAccion] = useState<"cambiar_fecha" | "recibir" | "devolver" | "enviar_email" | null>(null);
+  const [accion, setAccion] = useState<"cambiar_fecha" | "recibir" | "devolver" | "enviar_email" | "eliminar" | null>(null);
   const [nuevaFecha, setNuevaFecha] = useState("");
   const [motivoDevolucion, setMotivoDevolucion] = useState("");
   const [enviandoEmail, setEnviandoEmail] = useState(false);
@@ -44,6 +44,41 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
       toast({
         title: "Orden actualizada",
         description: "La orden se ha actualizado correctamente",
+      });
+      onOpenChange(false);
+      resetForm();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteOrden = useMutation({
+    mutationFn: async () => {
+      // First delete order details
+      const { error: detallesError } = await supabase
+        .from("ordenes_compra_detalles")
+        .delete()
+        .eq("orden_compra_id", orden.id);
+      if (detallesError) throw detallesError;
+
+      // Then delete the order
+      const { error } = await supabase
+        .from("ordenes_compra")
+        .delete()
+        .eq("id", orden.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ordenes_compra"] });
+      queryClient.invalidateQueries({ queryKey: ["ordenes_calendario"] });
+      toast({
+        title: "Orden eliminada",
+        description: "La orden de compra se ha eliminado correctamente",
       });
       onOpenChange(false);
       resetForm();
@@ -188,6 +223,14 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
 
       if (error) throw error;
 
+      // Update order status to "enviada"
+      await supabase
+        .from("ordenes_compra")
+        .update({ status: "enviada" })
+        .eq("id", orden.id);
+
+      queryClient.invalidateQueries({ queryKey: ["ordenes_compra"] });
+
       toast({
         title: "Orden enviada",
         description: `La orden se envió correctamente a ${orden.proveedores.email}`,
@@ -265,6 +308,42 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
               <XCircle className="mr-2 h-4 w-4" />
               Marcar como Devuelta
             </Button>
+            {orden?.status === "pendiente" && (
+              <Button
+                variant="outline"
+                className="w-full justify-start text-destructive hover:text-destructive"
+                onClick={() => setAccion("eliminar")}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Eliminar Orden
+              </Button>
+            )}
+          </div>
+        ) : accion === "eliminar" ? (
+          <div className="space-y-4">
+            <div className="bg-destructive/10 p-4 rounded-lg space-y-2">
+              <p className="font-medium text-destructive">¿Estás seguro de eliminar esta orden?</p>
+              <p className="text-sm text-muted-foreground">
+                Esta acción no se puede deshacer. Se eliminarán todos los detalles de la orden.
+              </p>
+              <div className="text-sm text-muted-foreground space-y-1 mt-2">
+                <p><strong>Folio:</strong> {orden?.folio}</p>
+                <p><strong>Proveedor:</strong> {orden?.proveedores?.nombre}</p>
+                <p><strong>Total:</strong> ${orden?.total?.toLocaleString()}</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                onClick={() => deleteOrden.mutate()} 
+                disabled={deleteOrden.isPending}
+                variant="destructive"
+              >
+                {deleteOrden.isPending ? "Eliminando..." : "Sí, eliminar"}
+              </Button>
+              <Button variant="ghost" onClick={() => setAccion(null)}>
+                No, cancelar
+              </Button>
+            </div>
           </div>
         ) : accion === "enviar_email" ? (
           <div className="space-y-4">

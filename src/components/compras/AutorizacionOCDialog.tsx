@@ -92,11 +92,30 @@ const AutorizacionOCDialog = ({ open, onOpenChange, orden }: AutorizacionOCDialo
         .eq("orden_compra_id", orden.id)
         .eq("tipo", "autorizacion_oc");
 
+      // Get authorizer name
+      const { data: adminProfile } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", currentUser?.id)
+        .single();
+
+      // Create notification for the creator
+      await supabase
+        .from("notificaciones")
+        .insert({
+          tipo: "oc_autorizada",
+          titulo: `Orden ${orden.folio} autorizada`,
+          descripcion: `Tu orden de compra a ${orden.proveedores?.nombre || 'proveedor'} ha sido autorizada por ${adminProfile?.full_name || 'Administrador'}. Ya puedes enviarla al proveedor.`,
+          orden_compra_id: orden.id,
+          leida: false,
+        });
+
       queryClient.invalidateQueries({ queryKey: ["ordenes_compra"] });
+      queryClient.invalidateQueries({ queryKey: ["notificaciones"] });
 
       toast({
         title: "Orden autorizada",
-        description: `La orden ${orden.folio} ha sido autorizada exitosamente`,
+        description: `La orden ${orden.folio} ha sido autorizada. El creador puede enviarla al proveedor.`,
       });
       
       onOpenChange(false);

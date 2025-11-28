@@ -36,12 +36,15 @@ interface DetalleProducto {
   nombre: string;
   codigo: string;
   unidad: string;
+  marca: string | null;
   precio_unitario: number;
   cantidad: number;
   subtotal: number;
   precio_lista: number;
   ultimo_precio_cliente: number | null;
   fecha_ultima_compra: string | null;
+  aplica_iva: boolean;
+  aplica_ieps: boolean;
 }
 
 interface Cliente {
@@ -61,6 +64,7 @@ interface Producto {
   nombre: string;
   codigo: string;
   unidad: string;
+  marca: string | null;
   precio_venta: number;
   stock_actual: number;
   aplica_iva: boolean;
@@ -142,7 +146,7 @@ const CrearCotizacionDialog = ({
   const loadProductos = async () => {
     const { data, error } = await supabase
       .from("productos")
-      .select("id, nombre, codigo, unidad, precio_venta, stock_actual, aplica_iva, aplica_ieps")
+      .select("id, nombre, codigo, unidad, marca, precio_venta, stock_actual, aplica_iva, aplica_ieps")
       .eq("activo", true)
       .order("nombre");
 
@@ -207,12 +211,15 @@ const CrearCotizacionDialog = ({
         nombre: producto.nombre,
         codigo: producto.codigo,
         unidad: producto.unidad,
+        marca: producto.marca,
         precio_unitario: precioAUsar,
         cantidad: 1,
         subtotal: precioAUsar,
         precio_lista: producto.precio_venta,
         ultimo_precio_cliente: historial.precio,
         fecha_ultima_compra: historial.fecha,
+        aplica_iva: producto.aplica_iva,
+        aplica_ieps: producto.aplica_ieps,
       },
     ]);
     setSearchTerm("");
@@ -237,11 +244,39 @@ const CrearCotizacionDialog = ({
     setDetalles(detalles.filter((_, i) => i !== index));
   };
 
+  // Calcular totales desglosando IVA e IEPS de precios que YA incluyen impuestos
   const calcularTotales = () => {
-    const subtotal = detalles.reduce((acc, d) => acc + d.subtotal, 0);
-    const impuestos = subtotal * 0.16; // IVA 16%
-    const total = subtotal + impuestos;
-    return { subtotal, impuestos, total };
+    let subtotalNeto = 0;
+    let totalIva = 0;
+    let totalIeps = 0;
+
+    detalles.forEach((d) => {
+      const precioConImpuestos = d.subtotal;
+      
+      // Calcular divisor según impuestos aplicables
+      let divisor = 1;
+      if (d.aplica_iva) divisor += 0.16;
+      if (d.aplica_ieps) divisor += 0.08;
+      
+      // Precio base sin impuestos
+      const precioBase = precioConImpuestos / divisor;
+      
+      // Calcular impuestos
+      const iva = d.aplica_iva ? precioBase * 0.16 : 0;
+      const ieps = d.aplica_ieps ? precioBase * 0.08 : 0;
+      
+      subtotalNeto += precioBase;
+      totalIva += iva;
+      totalIeps += ieps;
+    });
+
+    return { 
+      subtotal: subtotalNeto, 
+      iva: totalIva,
+      ieps: totalIeps,
+      impuestos: totalIva + totalIeps, 
+      total: subtotalNeto + totalIva + totalIeps 
+    };
   };
 
   const handleCrear = async () => {
@@ -449,6 +484,11 @@ const CrearCotizacionDialog = ({
                   >
                     <div>
                       <span className="font-medium">{p.nombre}</span>
+                      {p.marca && (
+                        <span className="text-primary text-sm ml-1">
+                          {p.marca}
+                        </span>
+                      )}
                       <span className="text-muted-foreground text-sm ml-2">
                         ({p.codigo})
                       </span>
@@ -480,9 +520,14 @@ const CrearCotizacionDialog = ({
                     <TableRow key={d.producto_id}>
                       <TableCell>
                         <div>
-                          <p className="font-medium">{d.nombre}</p>
+                          <p className="font-medium">
+                            {d.nombre}
+                            {d.marca && <span className="text-primary ml-1">{d.marca}</span>}
+                          </p>
                           <p className="text-xs text-muted-foreground">
                             {d.codigo} • {d.unidad}
+                            {d.aplica_iva && <span className="ml-1 text-blue-600">IVA</span>}
+                            {d.aplica_ieps && <span className="ml-1 text-orange-600">IEPS</span>}
                           </p>
                         </div>
                       </TableCell>
@@ -585,10 +630,18 @@ const CrearCotizacionDialog = ({
                   <span>Subtotal:</span>
                   <span>${totales.subtotal.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span>IVA (16%):</span>
-                  <span>${totales.impuestos.toFixed(2)}</span>
-                </div>
+                {totales.iva > 0 && (
+                  <div className="flex justify-between text-blue-600">
+                    <span>IVA (16%):</span>
+                    <span>${totales.iva.toFixed(2)}</span>
+                  </div>
+                )}
+                {totales.ieps > 0 && (
+                  <div className="flex justify-between text-orange-600">
+                    <span>IEPS (8%):</span>
+                    <span>${totales.ieps.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between font-bold text-lg border-t pt-2">
                   <span>Total:</span>
                   <span>${totales.total.toFixed(2)}</span>

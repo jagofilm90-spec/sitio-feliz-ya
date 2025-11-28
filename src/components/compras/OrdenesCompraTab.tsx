@@ -35,6 +35,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import OrdenAccionesDialog from "./OrdenAccionesDialog";
 import AutorizacionOCDialog from "./AutorizacionOCDialog";
+import OCAutorizadaAlert from "./OCAutorizadaAlert";
 import { formatCurrency } from "@/lib/utils";
 
 interface ProductoEnOrden {
@@ -568,6 +569,17 @@ const OrdenesCompraTab = () => {
           Nueva Orden de Compra
         </Button>
       </div>
+
+      {/* Alert for authorized OCs ready to send */}
+      <OCAutorizadaAlert 
+        onNavigateToOC={(ordenId) => {
+          const orden = ordenes.find(o => o.id === ordenId);
+          if (orden) {
+            setOrdenSeleccionada(orden);
+            setAccionesDialogOpen(true);
+          }
+        }}
+      />
 
       <div className="mb-4">
         <div className="relative">

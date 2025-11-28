@@ -20,6 +20,7 @@ import Chat from "./pages/Chat";
 import Compras from "./pages/Compras";
 import Rentabilidad from "./pages/Rentabilidad";
 import Fumigaciones from "./pages/Fumigaciones";
+import CorreosCorporativos from "./pages/CorreosCorporativos";
 
 const queryClient = new QueryClient();
 
@@ -46,6 +47,7 @@ const App = () => (
           <Route path="/compras" element={<Compras />} />
           <Route path="/rentabilidad" element={<Rentabilidad />} />
           <Route path="/fumigaciones" element={<Fumigaciones />} />
+          <Route path="/correos" element={<CorreosCorporativos />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

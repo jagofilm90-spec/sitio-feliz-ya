@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
-import { Inbox, RefreshCw, PenSquare, Loader2, ChevronDown, Search, Trash2, Mail, Bell, CheckCheck, CheckSquare, Square } from "lucide-react";
+import { Inbox, RefreshCw, PenSquare, Loader2, ChevronDown, Search, Trash2, Mail, Bell, CheckCheck, CheckSquare, Square, Filter } from "lucide-react";
 import { toast } from "sonner";
 import EmailListView from "./EmailListView";
 import EmailDetailView from "./EmailDetailView";
@@ -71,6 +71,7 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedEmailIds, setSelectedEmailIds] = useState<Set<string>>(new Set());
   const [deletingSelected, setDeletingSelected] = useState(false);
+  const [showOnlyUnread, setShowOnlyUnread] = useState(false);
   // Flag to open first unread email after account switch from notification
   const [pendingOpenUnread, setPendingOpenUnread] = useState<string | null>(null);
   
@@ -765,9 +766,18 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
               </TabsTrigger>
             </TabsList>
 
-            {/* Selection controls */}
+            {/* Filter and Selection controls */}
             {activeTab === "inbox" && (
               <div className="flex items-center gap-2">
+                <Button
+                  variant={showOnlyUnread ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setShowOnlyUnread(!showOnlyUnread)}
+                  title="Mostrar solo no leídos"
+                >
+                  <Filter className="h-4 w-4 mr-2" />
+                  No leídos
+                </Button>
                 {!selectionMode ? (
                   <Button
                     variant="outline"
@@ -835,7 +845,7 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
 
           <TabsContent value="inbox" className="mt-4">
             <EmailListView
-              emails={emails}
+              emails={showOnlyUnread ? emails.filter(e => e.isUnread) : emails}
               isLoading={isLoading}
               onSelectEmail={(id, index) => handleSelectEmail(id, false, index)}
               onRefresh={() => refetch()}

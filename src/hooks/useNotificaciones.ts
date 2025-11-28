@@ -187,9 +187,12 @@ export const useNotificaciones = () => {
         .not("orden_compra_id", "is", null)
         .order("created_at", { ascending: false });
 
-      if (error) return [];
+      if (error) {
+        console.error("Error fetching autorizaciones:", error);
+        return [];
+      }
       
-      // Fetch folio for each OC
+      // Fetch folio for each OC - show all pending regardless of OC status
       const autorizaciones: AutorizacionOC[] = [];
       for (const notif of data || []) {
         if (notif.orden_compra_id) {
@@ -199,8 +202,8 @@ export const useNotificaciones = () => {
             .eq("id", notif.orden_compra_id)
             .maybeSingle();
           
-          // Only show if OC is still pending authorization
-          if (oc && oc.status === "pendiente_autorizacion") {
+          // Show notification if OC exists and is not already authorized/rejected
+          if (oc && !["autorizada", "enviada", "rechazada", "recibida"].includes(oc.status)) {
             autorizaciones.push({
               ...notif,
               orden_compra_id: notif.orden_compra_id,

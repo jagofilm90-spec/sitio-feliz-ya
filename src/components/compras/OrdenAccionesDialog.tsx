@@ -512,10 +512,15 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
       }
 
       // Update order status first
-      await supabase
+      const { error: statusError } = await supabase
         .from("ordenes_compra")
         .update({ status: "pendiente_autorizacion" })
         .eq("id", orden.id);
+      
+      if (statusError) {
+        console.error("Error updating order status:", statusError);
+        // Continue anyway to create notification
+      }
 
       // Create notification for admin (internal notification system)
       const { error: notifError } = await supabase

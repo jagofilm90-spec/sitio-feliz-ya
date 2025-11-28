@@ -47,6 +47,7 @@ interface ProductoEnOrden {
   subtotal: number;
   aplica_iva: boolean;
   aplica_ieps: boolean;
+  precio_incluye_iva: boolean;
 }
 
 interface EntregaProgramada {
@@ -75,6 +76,7 @@ const OrdenesCompraTab = () => {
   const [productoSeleccionado, setProductoSeleccionado] = useState("");
   const [cantidad, setCantidad] = useState("");
   const [precioUnitario, setPrecioUnitario] = useState("");
+  const [precioIncluyeIva, setPrecioIncluyeIva] = useState(false);
   const [generatingFolio, setGeneratingFolio] = useState(false);
   
   // Multiple deliveries state
@@ -235,13 +237,37 @@ const OrdenesCompraTab = () => {
       } = await supabase.auth.getUser();
       if (!user) throw new Error("No user");
 
-      const subtotal = productosEnOrden.reduce((sum, p) => sum + p.subtotal, 0);
-      const ivaAmount = productosEnOrden.reduce((sum, p) => 
-        sum + (p.aplica_iva ? p.subtotal * 0.16 : 0), 0);
-      const iepsAmount = productosEnOrden.reduce((sum, p) => 
-        sum + (p.aplica_ieps ? p.subtotal * 0.08 : 0), 0);
+      // Calculate totals with proper IVA handling
+      let subtotalBase = 0;
+      let ivaAmount = 0;
+      let iepsAmount = 0;
+
+      for (const p of productosEnOrden) {
+        if (p.aplica_iva && p.precio_incluye_iva) {
+          // Price includes IVA, extract base
+          const base = p.subtotal / 1.16;
+          subtotalBase += base;
+          ivaAmount += p.subtotal - base;
+        } else if (p.aplica_iva && !p.precio_incluye_iva) {
+          // Price doesn't include IVA, add it
+          subtotalBase += p.subtotal;
+          ivaAmount += p.subtotal * 0.16;
+        } else {
+          // No IVA applies
+          subtotalBase += p.subtotal;
+        }
+        
+        // IEPS calculation (always on base)
+        if (p.aplica_ieps) {
+          const baseForIeps = p.aplica_iva && p.precio_incluye_iva 
+            ? p.subtotal / 1.16 
+            : p.subtotal;
+          iepsAmount += baseForIeps * 0.08;
+        }
+      }
+
       const impuestos = ivaAmount + iepsAmount;
-      const total = subtotal + impuestos;
+      const total = subtotalBase + impuestos;
 
       // Create orden
       const { data: orden, error: ordenError } = await supabase
@@ -250,7 +276,7 @@ const OrdenesCompraTab = () => {
           folio,
           proveedor_id: proveedorId,
           fecha_entrega_programada: entregasMultiples ? null : (fechaEntrega || null),
-          subtotal,
+          subtotal: subtotalBase,
           impuestos,
           total,
           notas,
@@ -358,12 +384,14 @@ const OrdenesCompraTab = () => {
         subtotal,
         aplica_iva: producto.aplica_iva ?? false,
         aplica_ieps: producto.aplica_ieps ?? false,
+        precio_incluye_iva: precioIncluyeIva,
       },
     ]);
 
     setProductoSeleccionado("");
     setCantidad("");
     setPrecioUnitario("");
+    setPrecioIncluyeIva(false);
   };
 
   const eliminarProducto = (index: number) => {
@@ -383,6 +411,7 @@ const OrdenesCompraTab = () => {
     setProductoSeleccionado("");
     setCantidad("");
     setPrecioUnitario("");
+    setPrecioIncluyeIva(false);
     setEditingOrdenId(null);
     setEntregasMultiples(false);
     setBultosPorEntrega("");
@@ -394,13 +423,33 @@ const OrdenesCompraTab = () => {
     mutationFn: async () => {
       if (!editingOrdenId) throw new Error("No order to update");
 
-      const subtotal = productosEnOrden.reduce((sum, p) => sum + p.subtotal, 0);
-      const ivaAmount = productosEnOrden.reduce((sum, p) => 
-        sum + (p.aplica_iva ? p.subtotal * 0.16 : 0), 0);
-      const iepsAmount = productosEnOrden.reduce((sum, p) => 
-        sum + (p.aplica_ieps ? p.subtotal * 0.08 : 0), 0);
+      // Calculate totals with proper IVA handling
+      let subtotalBase = 0;
+      let ivaAmount = 0;
+      let iepsAmount = 0;
+
+      for (const p of productosEnOrden) {
+        if (p.aplica_iva && p.precio_incluye_iva) {
+          const base = p.subtotal / 1.16;
+          subtotalBase += base;
+          ivaAmount += p.subtotal - base;
+        } else if (p.aplica_iva && !p.precio_incluye_iva) {
+          subtotalBase += p.subtotal;
+          ivaAmount += p.subtotal * 0.16;
+        } else {
+          subtotalBase += p.subtotal;
+        }
+        
+        if (p.aplica_ieps) {
+          const baseForIeps = p.aplica_iva && p.precio_incluye_iva 
+            ? p.subtotal / 1.16 
+            : p.subtotal;
+          iepsAmount += baseForIeps * 0.08;
+        }
+      }
+
       const impuestos = ivaAmount + iepsAmount;
-      const total = subtotal + impuestos;
+      const total = subtotalBase + impuestos;
 
       // Update orden
       const { error: ordenError } = await supabase
@@ -409,7 +458,7 @@ const OrdenesCompraTab = () => {
           folio,
           proveedor_id: proveedorId,
           fecha_entrega_programada: entregasMultiples ? null : (fechaEntrega || null),
-          subtotal,
+          subtotal: subtotalBase,
           impuestos,
           total,
           notas,
@@ -506,6 +555,7 @@ const OrdenesCompraTab = () => {
       subtotal: d.subtotal,
       aplica_iva: false,
       aplica_ieps: false,
+      precio_incluye_iva: false,
     }));
     setProductosEnOrden(productos);
     
@@ -547,13 +597,42 @@ const OrdenesCompraTab = () => {
     }
   };
 
-  const subtotalOrden = productosEnOrden.reduce((sum, p) => sum + p.subtotal, 0);
-  const ivaOrden = productosEnOrden.reduce((sum, p) => 
-    sum + (p.aplica_iva ? p.subtotal * 0.16 : 0), 0);
-  const iepsOrden = productosEnOrden.reduce((sum, p) => 
-    sum + (p.aplica_ieps ? p.subtotal * 0.08 : 0), 0);
-  const impuestosOrden = ivaOrden + iepsOrden;
-  const totalOrden = subtotalOrden + impuestosOrden;
+  // Calculate totals for display
+  const calcularTotalesOrden = () => {
+    let subtotalBase = 0;
+    let ivaAmount = 0;
+    let iepsAmount = 0;
+
+    for (const p of productosEnOrden) {
+      if (p.aplica_iva && p.precio_incluye_iva) {
+        const base = p.subtotal / 1.16;
+        subtotalBase += base;
+        ivaAmount += p.subtotal - base;
+      } else if (p.aplica_iva && !p.precio_incluye_iva) {
+        subtotalBase += p.subtotal;
+        ivaAmount += p.subtotal * 0.16;
+      } else {
+        subtotalBase += p.subtotal;
+      }
+      
+      if (p.aplica_ieps) {
+        const baseForIeps = p.aplica_iva && p.precio_incluye_iva 
+          ? p.subtotal / 1.16 
+          : p.subtotal;
+        iepsAmount += baseForIeps * 0.08;
+      }
+    }
+
+    return {
+      subtotal: subtotalBase,
+      iva: ivaAmount,
+      ieps: iepsAmount,
+      impuestos: ivaAmount + iepsAmount,
+      total: subtotalBase + ivaAmount + iepsAmount,
+    };
+  };
+
+  const totalesOrden = calcularTotalesOrden();
   const cantidadTotalBultos = productosEnOrden.reduce((sum, p) => sum + p.cantidad, 0);
 
   const filteredOrdenes = ordenes.filter(
@@ -806,7 +885,7 @@ const OrdenesCompraTab = () => {
                     min="1"
                   />
                 </div>
-                <div className="col-span-3">
+                <div className="col-span-2">
                   <Label>Precio Unitario</Label>
                   <Input
                     type="number"
@@ -817,7 +896,19 @@ const OrdenesCompraTab = () => {
                     min="0"
                   />
                 </div>
-                <div className="col-span-2 flex items-end">
+                <div className="col-span-2 flex flex-col gap-1">
+                  <Label className="text-xs">IVA incluido</Label>
+                  <div className="flex items-center gap-2 h-10">
+                    <Switch
+                      checked={precioIncluyeIva}
+                      onCheckedChange={setPrecioIncluyeIva}
+                    />
+                    <span className="text-xs text-muted-foreground">
+                      {precioIncluyeIva ? "Sí" : "No"}
+                    </span>
+                  </div>
+                </div>
+                <div className="col-span-1 flex items-end">
                   <Button type="button" onClick={agregarProducto} className="w-full">
                     <Plus className="h-4 w-4" />
                   </Button>
@@ -832,7 +923,7 @@ const OrdenesCompraTab = () => {
                         <TableHead>Producto</TableHead>
                         <TableHead>Cantidad</TableHead>
                         <TableHead>Precio</TableHead>
-                        <TableHead>Último Costo</TableHead>
+                        <TableHead>IVA</TableHead>
                         <TableHead>Subtotal</TableHead>
                         <TableHead></TableHead>
                       </TableRow>
@@ -844,12 +935,12 @@ const OrdenesCompraTab = () => {
                           <TableCell>{p.cantidad.toLocaleString()}</TableCell>
                           <TableCell>${formatCurrency(p.precio_unitario)}</TableCell>
                           <TableCell>
-                            {p.ultimo_costo ? (
-                              <span className="text-xs text-muted-foreground">
-                                ${formatCurrency(p.ultimo_costo)}
-                              </span>
+                            {p.aplica_iva ? (
+                              <Badge variant={p.precio_incluye_iva ? "default" : "outline"} className="text-xs">
+                                {p.precio_incluye_iva ? "Incluido" : "+16%"}
+                              </Badge>
                             ) : (
-                              "-"
+                              <span className="text-xs text-muted-foreground">N/A</span>
                             )}
                           </TableCell>
                           <TableCell>${formatCurrency(p.subtotal)}</TableCell>
@@ -989,21 +1080,21 @@ const OrdenesCompraTab = () => {
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span>Subtotal:</span>
-                    <span>${formatCurrency(subtotalOrden)}</span>
+                    <span>${formatCurrency(totalesOrden.subtotal)}</span>
                   </div>
-                  {ivaOrden > 0 && (
+                  {totalesOrden.iva > 0 && (
                     <div className="flex justify-between">
                       <span>IVA (16%):</span>
-                      <span>${formatCurrency(ivaOrden)}</span>
+                      <span>${formatCurrency(totalesOrden.iva)}</span>
                     </div>
                   )}
-                  {iepsOrden > 0 && (
+                  {totalesOrden.ieps > 0 && (
                     <div className="flex justify-between">
                       <span>IEPS (8%):</span>
-                      <span>${formatCurrency(iepsOrden)}</span>
+                      <span>${formatCurrency(totalesOrden.ieps)}</span>
                     </div>
                   )}
-                  {ivaOrden === 0 && iepsOrden === 0 && (
+                  {totalesOrden.iva === 0 && totalesOrden.ieps === 0 && (
                     <div className="flex justify-between text-muted-foreground">
                       <span>Impuestos:</span>
                       <span>$0.00</span>
@@ -1011,7 +1102,7 @@ const OrdenesCompraTab = () => {
                   )}
                   <div className="flex justify-between font-bold text-lg">
                     <span>Total:</span>
-                    <span>${formatCurrency(totalOrden)}</span>
+                    <span>${formatCurrency(totalesOrden.total)}</span>
                   </div>
                 </div>
               </div>

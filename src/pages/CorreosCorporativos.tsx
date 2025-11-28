@@ -1,12 +1,19 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Layout from "@/components/Layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Mail, CheckCircle, XCircle, RefreshCw, Link2, Unlink } from "lucide-react";
+import { Mail, CheckCircle, XCircle, RefreshCw, Link2, Unlink, ExternalLink, Copy } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface GmailCuenta {
   id: string;
@@ -23,8 +30,10 @@ const CorreosCorporativos = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [connectingEmail, setConnectingEmail] = useState<string | null>(null);
+  const [authUrl, setAuthUrl] = useState<string | null>(null);
+  const [authEmail, setAuthEmail] = useState<string | null>(null);
 
-  const { data: cuentas, isLoading } = useQuery({
+  const { data: cuentas, isLoading, refetch } = useQuery({
     queryKey: ["gmail-cuentas"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -75,30 +84,10 @@ const CorreosCorporativos = () => {
       }
 
       if (response.data?.authUrl) {
-        // Open OAuth in a new top-level window (not iframe)
-        // Using _blank ensures it opens as a true top-level window
-        const newWindow = window.open(response.data.authUrl, "_blank", "noopener,noreferrer");
-        
-        if (!newWindow) {
-          // If popup was blocked, show the URL to user
-          toast({
-            title: "Popup bloqueado",
-            description: "Por favor permite popups para este sitio y vuelve a intentar.",
-            variant: "destructive",
-          });
-        } else {
-          toast({
-            title: "Ventana de autorización abierta",
-            description: "Completa el proceso en la nueva ventana y regresa aquí.",
-          });
-        }
-        
+        // Store the URL and show dialog
+        setAuthUrl(response.data.authUrl);
+        setAuthEmail(email);
         setConnectingEmail(null);
-        
-        // Auto-refresh data after a delay to check for updates
-        setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ["gmail-cuentas"] });
-        }, 5000);
       } else {
         throw new Error("No se recibió URL de autorización");
       }
@@ -111,6 +100,23 @@ const CorreosCorporativos = () => {
       });
       setConnectingEmail(null);
     }
+  };
+
+  const handleCopyUrl = () => {
+    if (authUrl) {
+      navigator.clipboard.writeText(authUrl);
+      toast({
+        title: "URL copiada",
+        description: "Pega la URL en una nueva pestaña del navegador",
+      });
+    }
+  };
+
+  const handleCloseAuthDialog = () => {
+    setAuthUrl(null);
+    setAuthEmail(null);
+    // Refresh the data to check for updates
+    refetch();
   };
 
   const handleDisconnect = async (cuenta: GmailCuenta) => {
@@ -208,11 +214,17 @@ const CorreosCorporativos = () => {
   return (
     <Layout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Correos Corporativos</h1>
-          <p className="text-muted-foreground">
-            Gestiona las cuentas de correo integradas al sistema
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Correos Corporativos</h1>
+            <p className="text-muted-foreground">
+              Gestiona las cuentas de correo integradas al sistema
+            </p>
+          </div>
+          <Button variant="outline" onClick={() => refetch()}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Actualizar
+          </Button>
         </div>
 
         {isLoading ? (
@@ -302,6 +314,46 @@ const CorreosCorporativos = () => {
           </div>
         )}
       </div>
+
+      {/* Auth URL Dialog */}
+      <Dialog open={!!authUrl} onOpenChange={(open) => !open && handleCloseAuthDialog()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Autorizar {authEmail}</DialogTitle>
+            <DialogDescription>
+              Haz clic en el botón para abrir Google y autorizar el acceso. Después regresa aquí y cierra este diálogo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <Button
+              className="w-full"
+              asChild
+            >
+              <a href={authUrl || "#"} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Abrir Google para autorizar
+              </a>
+            </Button>
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">
+                  O copia la URL
+                </span>
+              </div>
+            </div>
+            <Button variant="outline" className="w-full" onClick={handleCopyUrl}>
+              <Copy className="h-4 w-4 mr-2" />
+              Copiar URL
+            </Button>
+            <p className="text-xs text-muted-foreground text-center">
+              Después de autorizar en Google, haz clic en "Actualizar" para verificar la conexión.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 };

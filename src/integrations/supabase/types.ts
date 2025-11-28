@@ -1118,6 +1118,7 @@ export type Database = {
         Row: {
           creado_por: string
           created_at: string
+          entregas_multiples: boolean | null
           fecha_entrega_programada: string | null
           fecha_entrega_real: string | null
           fecha_orden: string
@@ -1135,6 +1136,7 @@ export type Database = {
         Insert: {
           creado_por: string
           created_at?: string
+          entregas_multiples?: boolean | null
           fecha_entrega_programada?: string | null
           fecha_entrega_real?: string | null
           fecha_orden?: string
@@ -1152,6 +1154,7 @@ export type Database = {
         Update: {
           creado_por?: string
           created_at?: string
+          entregas_multiples?: boolean | null
           fecha_entrega_programada?: string | null
           fecha_entrega_real?: string | null
           fecha_orden?: string
@@ -1220,6 +1223,53 @@ export type Database = {
             columns: ["producto_id"]
             isOneToOne: false
             referencedRelation: "productos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ordenes_compra_entregas: {
+        Row: {
+          cantidad_bultos: number
+          created_at: string
+          fecha_entrega_real: string | null
+          fecha_programada: string
+          id: string
+          notas: string | null
+          numero_entrega: number
+          orden_compra_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          cantidad_bultos: number
+          created_at?: string
+          fecha_entrega_real?: string | null
+          fecha_programada: string
+          id?: string
+          notas?: string | null
+          numero_entrega: number
+          orden_compra_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          cantidad_bultos?: number
+          created_at?: string
+          fecha_entrega_real?: string | null
+          fecha_programada?: string
+          id?: string
+          notas?: string | null
+          numero_entrega?: number
+          orden_compra_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ordenes_compra_entregas_orden_compra_id_fkey"
+            columns: ["orden_compra_id"]
+            isOneToOne: false
+            referencedRelation: "ordenes_compra"
             referencedColumns: ["id"]
           },
         ]

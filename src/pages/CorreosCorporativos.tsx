@@ -58,19 +58,24 @@ const CorreosCorporativos = () => {
           description: "Debes iniciar sesión para conectar una cuenta",
           variant: "destructive",
         });
+        setConnectingEmail(null);
         return;
       }
 
+      console.log("Calling gmail-auth for:", email);
+      
       const response = await supabase.functions.invoke("gmail-auth", {
         body: { email },
       });
+
+      console.log("Response from gmail-auth:", response);
 
       if (response.error) {
         throw new Error(response.error.message);
       }
 
       if (response.data?.authUrl) {
-        // Open OAuth window
+        // Try to open OAuth window
         const width = 600;
         const height = 700;
         const left = window.screenX + (window.outerWidth - width) / 2;
@@ -81,6 +86,17 @@ const CorreosCorporativos = () => {
           "gmail-auth",
           `width=${width},height=${height},left=${left},top=${top}`
         );
+
+        // If popup was blocked, open in same window
+        if (!popup || popup.closed) {
+          toast({
+            title: "Popup bloqueado",
+            description: "Serás redirigido a Google para autorizar. Regresa a esta página después.",
+          });
+          // Open in same window as fallback
+          window.location.href = response.data.authUrl;
+          return;
+        }
 
         // Poll for popup closure and refresh data
         const checkPopup = setInterval(() => {
@@ -94,8 +110,11 @@ const CorreosCorporativos = () => {
             });
           }
         }, 500);
+      } else {
+        throw new Error("No se recibió URL de autorización");
       }
     } catch (error: any) {
+      console.error("Error connecting Gmail:", error);
       toast({
         title: "Error al conectar",
         description: error.message || "No se pudo iniciar el proceso de autorización",

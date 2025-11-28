@@ -240,14 +240,12 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
       </tr>`
     ).join('');
 
-    // Build delivery schedule section
+    // Build delivery schedule section with new design
     let entregasHTML = '';
     if (entregasProgramadas.length > 0) {
       const entregasRows = entregasProgramadas.map((e: any) => {
-        let fecha = '<span style="color: #ff9800; font-style: italic;">Pendiente de programar</span>';
+        let fecha = '<span style="color: #d4a024; font-style: italic;">Pendiente de programar</span>';
         if (e.fecha_programada) {
-          // Parse date correctly to avoid timezone issues
-          // fecha_programada is stored as "YYYY-MM-DD", parse it as local time
           const [year, month, day] = e.fecha_programada.split('-').map(Number);
           const fechaLocal = new Date(year, month - 1, day);
           fecha = fechaLocal.toLocaleDateString('es-MX', {
@@ -258,21 +256,21 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
           });
         }
         return `<tr>
-          <td style="padding: 8px; border: 1px solid #333; text-align: center;">${e.numero_entrega}</td>
-          <td style="padding: 8px; border: 1px solid #333;">${fecha}</td>
-          <td style="padding: 8px; border: 1px solid #333; text-align: center;">${e.cantidad_bultos} bultos</td>
+          <td style="text-align: center;">${e.numero_entrega}</td>
+          <td>${fecha}</td>
+          <td style="text-align: center;">${e.cantidad_bultos} bultos</td>
         </tr>`;
       }).join('');
 
       entregasHTML = `
-        <div style="margin-top: 30px;">
-          <h3 style="margin-bottom: 10px; font-size: 14px;">CALENDARIO DE ENTREGAS PROGRAMADAS</h3>
-          <table style="width: 100%; border-collapse: collapse;">
+        <div class="entregas-section">
+          <h3>📅 Calendario de Entregas Programadas</h3>
+          <table>
             <thead>
-              <tr style="background-color: #e8f5e9;">
-                <th style="padding: 10px; border: 1px solid #333; text-align: center; width: 80px;">Entrega #</th>
-                <th style="padding: 10px; border: 1px solid #333; text-align: left;">Fecha Programada</th>
-                <th style="padding: 10px; border: 1px solid #333; text-align: center; width: 120px;">Cantidad</th>
+              <tr>
+                <th style="width: 80px; text-align: center;">Entrega #</th>
+                <th>Fecha Programada</th>
+                <th style="width: 120px; text-align: center;">Cantidad</th>
               </tr>
             </thead>
             <tbody>
@@ -318,98 +316,247 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
           @media print {
             body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           }
+          * { box-sizing: border-box; }
           body { 
-            font-family: Arial, sans-serif; 
-            padding: 40px; 
-            max-width: 800px; 
+            font-family: 'Segoe UI', Arial, sans-serif; 
+            padding: 30px 40px; 
+            max-width: 850px; 
             margin: 0 auto;
-            font-size: 12px;
-            color: #000;
+            font-size: 11px;
+            color: #1a1a1a;
+            background: #fff;
           }
           .header { 
             display: flex; 
             justify-content: space-between; 
             align-items: flex-start;
-            border-bottom: 3px solid #2e7d32;
             padding-bottom: 20px;
-            margin-bottom: 30px;
+            margin-bottom: 25px;
+            border-bottom: 3px solid #1e3a5f;
           }
-          .company-info h1 { 
-            margin: 0; 
-            font-size: 24px; 
-            color: #2e7d32;
+          .company-info { 
+            flex: 1;
           }
-          .company-info p { margin: 5px 0; font-size: 11px; color: #666; }
-          .order-info { text-align: right; }
-          .order-info h2 { margin: 0; font-size: 18px; color: #333; }
-          .order-info p { margin: 5px 0; font-size: 11px; }
-          .folio { 
-            font-size: 24px; 
-            font-weight: bold; 
-            color: #2e7d32;
-            margin-top: 10px;
+          .company-logo {
+            font-size: 28px; 
+            font-weight: 800; 
+            color: #1e3a5f;
+            margin: 0 0 5px 0;
+            letter-spacing: -0.5px;
           }
-          .supplier-section {
-            background: #f5f5f5;
-            padding: 15px;
+          .company-logo span {
+            color: #d4a024;
+          }
+          .company-subtitle {
+            font-size: 10px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+          }
+          .company-details { 
+            font-size: 10px; 
+            color: #444;
+            line-height: 1.5;
+          }
+          .company-details strong {
+            color: #1e3a5f;
+          }
+          .order-box { 
+            text-align: right;
+            background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
+            color: white;
+            padding: 15px 20px;
             border-radius: 8px;
+            min-width: 200px;
+          }
+          .order-title { 
+            font-size: 10px; 
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            opacity: 0.9;
+            margin-bottom: 5px;
+          }
+          .folio { 
+            font-size: 22px; 
+            font-weight: 700; 
+            margin: 5px 0;
+          }
+          .order-date {
+            font-size: 10px;
+            opacity: 0.9;
+          }
+          .status-badge {
+            display: inline-block;
+            background: #d4a024;
+            color: #1e3a5f;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 9px;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-top: 8px;
+          }
+          .info-grid {
+            display: flex;
+            gap: 20px;
             margin-bottom: 25px;
           }
-          .supplier-section h3 { margin: 0 0 10px 0; font-size: 14px; color: #333; }
-          .supplier-section p { margin: 3px 0; }
-          table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+          .info-box {
+            flex: 1;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #1e3a5f;
+          }
+          .info-box.delivery {
+            border-left-color: #d4a024;
+          }
+          .info-box h3 { 
+            margin: 0 0 10px 0; 
+            font-size: 10px; 
+            color: #1e3a5f;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+          }
+          .info-box p { 
+            margin: 3px 0; 
+            font-size: 11px;
+            color: #333;
+          }
+          .info-box .highlight {
+            font-weight: 600;
+            color: #1e3a5f;
+            font-size: 12px;
+          }
+          table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin: 20px 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+          }
           th { 
-            background-color: #2e7d32; 
+            background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
             color: white; 
             padding: 12px 10px; 
             text-align: left;
-            font-size: 11px;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
           }
-          td { padding: 10px; border: 1px solid #333; font-size: 11px; }
-          .totals { margin-top: 20px; }
-          .totals table { width: 300px; margin-left: auto; }
-          .totals td { padding: 8px 12px; }
-          .totals .total-row { 
-            background-color: #2e7d32; 
+          td { 
+            padding: 10px; 
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 11px; 
+            background: #fff;
+          }
+          tbody tr:nth-child(even) td {
+            background: #f8f9fa;
+          }
+          tbody tr:hover td {
+            background: #f0f4f8;
+          }
+          .totals { 
+            margin-top: 20px; 
+            display: flex;
+            justify-content: flex-end;
+          }
+          .totals-box {
+            width: 280px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            overflow: hidden;
+          }
+          .totals-box .row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 15px;
+            border-bottom: 1px solid #e0e0e0;
+          }
+          .totals-box .row:last-child {
+            border-bottom: none;
+          }
+          .totals-box .total-row { 
+            background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
             color: white; 
             font-weight: bold;
             font-size: 14px;
           }
-          .notes { 
-            margin-top: 30px; 
-            padding: 15px; 
-            background: #fff3e0; 
-            border-left: 4px solid #ff9800;
-            border-radius: 4px;
+          .entregas-section {
+            margin-top: 25px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 15px;
           }
-          .notes h4 { margin: 0 0 10px 0; }
-          .footer { 
-            margin-top: 50px; 
-            text-align: center; 
-            font-size: 10px; 
-            color: #666;
-            border-top: 1px solid #ddd;
-            padding-top: 20px;
+          .entregas-section h3 {
+            margin: 0 0 15px 0;
+            font-size: 11px;
+            color: #1e3a5f;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+          }
+          .entregas-section table {
+            margin: 0;
+            box-shadow: none;
+          }
+          .entregas-section th {
+            background: #d4a024;
+            color: #1e3a5f;
+          }
+          .notes { 
+            margin-top: 25px; 
+            padding: 15px; 
+            background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+            border-left: 4px solid #d4a024;
+            border-radius: 0 6px 6px 0;
+          }
+          .notes h4 { 
+            margin: 0 0 8px 0;
+            color: #1e3a5f;
+            font-size: 11px;
+            text-transform: uppercase;
+          }
+          .notes p {
+            margin: 0;
+            color: #333;
+            line-height: 1.5;
           }
           .signature-section {
             display: flex;
             justify-content: space-between;
-            margin-top: 60px;
+            margin-top: 50px;
+            padding-top: 20px;
           }
           .signature-box {
-            width: 200px;
+            width: 180px;
             text-align: center;
           }
           .signature-line {
-            border-top: 1px solid #333;
-            margin-top: 50px;
-            padding-top: 5px;
-            font-size: 11px;
+            border-top: 2px solid #1e3a5f;
+            margin-top: 60px;
+            padding-top: 8px;
+            font-size: 10px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
           }
           .signature-name {
-            font-weight: bold;
+            font-weight: 600;
             margin-top: 5px;
-            font-size: 12px;
+            font-size: 11px;
+            color: #1e3a5f;
+          }
+          .footer { 
+            margin-top: 40px; 
+            text-align: center; 
+            font-size: 9px; 
+            color: #999;
+            border-top: 1px solid #e0e0e0;
+            padding-top: 15px;
+          }
+          .footer p {
+            margin: 3px 0;
           }
           @page { margin: 1cm; }
         </style>
@@ -417,29 +564,40 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
       <body>
         <div class="header">
           <div class="company-info">
-            <h1>ABARROTES LA MANITA</h1>
-            <p>Comercializadora de Abarrotes</p>
-            <p>México</p>
+            <h1 class="company-logo">ABARROTES LA <span>MANITA</span></h1>
+            <div class="company-subtitle">Comercializadora de Abarrotes</div>
+            <div class="company-details">
+              <strong>Abarrotes la Manita SA de CV</strong><br>
+              RFC: AMA 700701GI8<br>
+              Melchor Ocampo #59, Magdalena Mixiuhca<br>
+              Venustiano Carranza, 15850, CDMX<br>
+              Tel: 55 5552-0168 / 55 5552-7887<br>
+              compras@almasa.com.mx
+            </div>
           </div>
-          <div class="order-info">
-            <h2>ORDEN DE COMPRA</h2>
+          <div class="order-box">
+            <div class="order-title">Orden de Compra</div>
             <div class="folio">${orden.folio}</div>
-            <p><strong>Fecha:</strong> ${fechaOrden}</p>
-            <p><strong>Status:</strong> ${orden.status?.toUpperCase()}</p>
+            <div class="order-date">${fechaOrden}</div>
+            <div class="status-badge">${orden.status?.toUpperCase()}</div>
           </div>
         </div>
 
-        <div class="supplier-section">
-          <h3>PROVEEDOR</h3>
-          <p><strong>${orden.proveedores?.nombre || 'Sin proveedor'}</strong></p>
-          ${orden.proveedores?.direccion ? `<p>${orden.proveedores.direccion}</p>` : ''}
-          ${orden.proveedores?.email ? `<p>Email: ${orden.proveedores.email}</p>` : ''}
-          ${orden.proveedores?.telefono ? `<p>Tel: ${orden.proveedores.telefono}</p>` : ''}
+        <div class="info-grid">
+          <div class="info-box">
+            <h3>Proveedor</h3>
+            <p class="highlight">${orden.proveedores?.nombre || 'Sin proveedor'}</p>
+            ${orden.proveedores?.direccion ? `<p>${orden.proveedores.direccion}</p>` : ''}
+            ${orden.proveedores?.email ? `<p>📧 ${orden.proveedores.email}</p>` : ''}
+            ${orden.proveedores?.telefono ? `<p>📞 ${orden.proveedores.telefono}</p>` : ''}
+          </div>
+          ${!orden.entregas_multiples ? `
+            <div class="info-box delivery">
+              <h3>Entrega Programada</h3>
+              <p class="highlight">${fechaEntrega}</p>
+            </div>
+          ` : ''}
         </div>
-
-        ${!orden.entregas_multiples ? `
-          <p style="margin-bottom: 20px;"><strong>Fecha de Entrega Programada:</strong> ${fechaEntrega}</p>
-        ` : ''}
 
         <table>
           <thead>
@@ -457,27 +615,27 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
         </table>
 
         <div class="totals">
-          <table>
-            <tr>
-              <td style="text-align: right; border: none;"><strong>Subtotal:</strong></td>
-              <td style="text-align: right; border: 1px solid #333;">$${orden.subtotal?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-            </tr>
-            <tr>
-              <td style="text-align: right; border: none;"><strong>IVA (16%):</strong></td>
-              <td style="text-align: right; border: 1px solid #333;">$${orden.impuestos?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-            </tr>
-            <tr class="total-row">
-              <td style="text-align: right; border: none;"><strong>TOTAL:</strong></td>
-              <td style="text-align: right;">$${orden.total?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-            </tr>
-          </table>
+          <div class="totals-box">
+            <div class="row">
+              <span>Subtotal:</span>
+              <span>$${orden.subtotal?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+            </div>
+            <div class="row">
+              <span>IVA (16%):</span>
+              <span>$${orden.impuestos?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+            </div>
+            <div class="row total-row">
+              <span>TOTAL:</span>
+              <span>$${orden.total?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+            </div>
+          </div>
         </div>
 
         ${entregasHTML}
 
         ${orden.notas ? `
           <div class="notes">
-            <h4>Notas:</h4>
+            <h4>📝 Notas</h4>
             <p>${orden.notas}</p>
           </div>
         ` : ''}
@@ -498,7 +656,7 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
 
         <div class="footer">
           <p>Documento generado el ${new Date().toLocaleString('es-MX')}</p>
-          <p>Abarrotes La Manita - Sistema ERP</p>
+          <p><strong>Abarrotes la Manita SA de CV</strong> | compras@almasa.com.mx | Tel: 55 5552-0168</p>
         </div>
       </body>
       </html>

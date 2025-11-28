@@ -29,7 +29,9 @@ import {
   Image,
   File,
   Forward,
+  FileSpreadsheet,
 } from "lucide-react";
+import CrearCotizacionDialog from "@/components/cotizaciones/CrearCotizacionDialog";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
@@ -92,6 +94,7 @@ const EmailDetailView = ({
   const [replyOpen, setReplyOpen] = useState(false);
   const [replyAllOpen, setReplyAllOpen] = useState(false);
   const [forwardOpen, setForwardOpen] = useState(false);
+  const [cotizacionOpen, setCotizacionOpen] = useState(false);
   const [downloadingAttachment, setDownloadingAttachment] = useState<string | null>(null);
 
   // Keyboard navigation with arrow keys
@@ -301,6 +304,10 @@ const EmailDetailView = ({
           <div className="flex items-center gap-2">
             {!isFromTrash && (
               <>
+                <Button variant="outline" size="sm" onClick={() => setCotizacionOpen(true)}>
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Crear Cotización
+                </Button>
                 <Button variant="outline" size="sm" onClick={() => setReplyOpen(true)}>
                   <Reply className="h-4 w-4 mr-2" />
                   Responder
@@ -475,6 +482,23 @@ const EmailDetailView = ({
           originalBody: email.body,
         }}
         onSuccess={onBack}
+      />
+
+      {/* Crear Cotización dialog */}
+      <CrearCotizacionDialog
+        open={cotizacionOpen}
+        onOpenChange={setCotizacionOpen}
+        emailOrigen={{
+          id: email.id,
+          subject: email.subject,
+          from: email.from,
+        }}
+        onSuccess={() => {
+          toast({
+            title: "Cotización creada",
+            description: "Puedes verla en el módulo de Pedidos > Cotizaciones",
+          });
+        }}
       />
     </>
   );

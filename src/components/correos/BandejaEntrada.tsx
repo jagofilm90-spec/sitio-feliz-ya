@@ -65,7 +65,7 @@ const BandejaEntrada = ({ cuentaEmail, cuentaNombre }: BandejaEntradaProps) => {
         throw new Error(response.error.message);
       }
 
-      return response.data?.emails as Email[] || [];
+      return response.data?.messages as Email[] || [];
     },
     staleTime: 1000 * 60 * 2, // 2 minutes
   });

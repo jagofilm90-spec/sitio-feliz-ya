@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Trash2, ShoppingCart, Search } from "lucide-react";
+import { Plus, Trash2, ShoppingCart, Search, MapPin } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -39,8 +39,18 @@ interface DetalleProducto {
   subtotal: number;
 }
 
+interface Sucursal {
+  id: string;
+  nombre: string;
+  direccion: string;
+  contacto: string | null;
+  telefono: string | null;
+}
+
 const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: ClienteNuevoPedidoProps) => {
   const [productos, setProductos] = useState<any[]>([]);
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  const [selectedSucursalId, setSelectedSucursalId] = useState<string>("");
   const [detalles, setDetalles] = useState<DetalleProducto[]>([]);
   const [notas, setNotas] = useState("");
   const [loading, setLoading] = useState(false);
@@ -49,7 +59,8 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
 
   useEffect(() => {
     loadProductos();
-  }, []);
+    loadSucursales();
+  }, [clienteId]);
 
   const loadProductos = async () => {
     try {
@@ -66,6 +77,33 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
       toast({
         title: "Error",
         description: "No se pudieron cargar los productos",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const loadSucursales = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("cliente_sucursales")
+        .select("id, nombre, direccion, contacto, telefono")
+        .eq("cliente_id", clienteId)
+        .eq("activo", true)
+        .order("nombre");
+
+      if (error) throw error;
+      
+      const sucursalesData = data || [];
+      setSucursales(sucursalesData);
+      
+      // Si solo hay una sucursal, seleccionarla automáticamente
+      if (sucursalesData.length === 1) {
+        setSelectedSucursalId(sucursalesData[0].id);
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar las sucursales",
         variant: "destructive",
       });
     }
@@ -152,6 +190,15 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
       return;
     }
 
+    if (sucursales.length > 0 && !selectedSucursalId) {
+      toast({
+        title: "Selecciona una sucursal",
+        description: "Debes seleccionar una sucursal de entrega",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!validarCredito()) return;
 
     setLoading(true);
@@ -165,13 +212,14 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
       const timestamp = Date.now().toString().slice(-6);
       const folio = `PED-CLI-${timestamp}`;
 
-      // Crear pedido (sin vendedor_id ya que es del cliente)
+      // Crear pedido
       const { data: pedido, error: pedidoError } = await supabase
         .from("pedidos")
         .insert({
           folio,
           cliente_id: clienteId,
-          vendedor_id: user.user.id, // Temporal - necesitaría ajustarse
+          vendedor_id: user.user.id,
+          sucursal_id: selectedSucursalId || null,
           fecha_pedido: new Date().toISOString(),
           subtotal,
           impuestos,
@@ -220,9 +268,83 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
 
   const { subtotal, impuestos, total } = calcularTotales();
   const creditoDisponible = limiteCredito - saldoPendiente;
+  const selectedSucursal = sucursales.find(s => s.id === selectedSucursalId);
 
   return (
     <div className="space-y-6">
+      {/* Selector de Sucursal */}
+      {sucursales.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5" />
+              Dirección de Entrega
+            </CardTitle>
+            <CardDescription>
+              {sucursales.length === 1 
+                ? "Tu dirección de entrega configurada"
+                : "Selecciona la sucursal donde recibirás el pedido"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {sucursales.length === 1 ? (
+              <div className="p-4 bg-muted rounded-lg">
+                <p className="font-medium">{sucursales[0].nombre}</p>
+                <p className="text-sm text-muted-foreground">{sucursales[0].direccion}</p>
+                {sucursales[0].contacto && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Contacto: {sucursales[0].contacto} {sucursales[0].telefono && `- ${sucursales[0].telefono}`}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <Select value={selectedSucursalId} onValueChange={setSelectedSucursalId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona una sucursal" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sucursales.map((sucursal) => (
+                      <SelectItem key={sucursal.id} value={sucursal.id}>
+                        {sucursal.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                
+                {selectedSucursal && (
+                  <div className="p-4 bg-muted rounded-lg">
+                    <p className="font-medium">{selectedSucursal.nombre}</p>
+                    <p className="text-sm text-muted-foreground">{selectedSucursal.direccion}</p>
+                    {selectedSucursal.contacto && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Contacto: {selectedSucursal.contacto} {selectedSucursal.telefono && `- ${selectedSucursal.telefono}`}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {sucursales.length === 0 && (
+        <Card className="border-amber-500 bg-amber-50 dark:bg-amber-950/20">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <MapPin className="h-5 w-5 text-amber-600" />
+              <div>
+                <p className="font-medium text-amber-800 dark:text-amber-200">Sin dirección de entrega</p>
+                <p className="text-sm text-amber-700 dark:text-amber-300">
+                  Contacta a tu vendedor para configurar tu dirección de entrega
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Nuevo Pedido</CardTitle>
@@ -352,7 +474,7 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
               <Button
                 className="w-full"
                 onClick={crearPedido}
-                disabled={loading || total > creditoDisponible}
+                disabled={loading || total > creditoDisponible || (sucursales.length > 0 && !selectedSucursalId)}
               >
                 <ShoppingCart className="h-4 w-4 mr-2" />
                 {loading ? "Procesando..." : "Crear Pedido"}

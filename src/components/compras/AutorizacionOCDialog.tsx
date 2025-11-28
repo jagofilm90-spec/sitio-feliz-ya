@@ -266,11 +266,17 @@ const AutorizacionOCDialog = ({ open, onOpenChange, orden }: AutorizacionOCDialo
                         </td>
                         <td className="text-center p-2">{e.cantidad_bultos?.toLocaleString()}</td>
                         <td className="text-right p-2 font-medium">
-                          {new Date(e.fecha_programada).toLocaleDateString("es-MX", {
-                            day: "numeric",
-                            month: "short",
-                            year: "numeric",
-                          })}
+                          {e.fecha_programada ? (
+                            new Date(e.fecha_programada).toLocaleDateString("es-MX", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })
+                          ) : (
+                            <Badge variant="secondary" className="text-amber-600 bg-amber-100">
+                              Pendiente de programar
+                            </Badge>
+                          )}
                         </td>
                       </tr>
                     ))}

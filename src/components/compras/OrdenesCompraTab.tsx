@@ -34,6 +34,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import OrdenAccionesDialog from "./OrdenAccionesDialog";
+import AutorizacionOCDialog from "./AutorizacionOCDialog";
 import { formatCurrency } from "@/lib/utils";
 
 interface ProductoEnOrden {
@@ -59,6 +60,7 @@ const OrdenesCompraTab = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [accionesDialogOpen, setAccionesDialogOpen] = useState(false);
+  const [autorizacionDialogOpen, setAutorizacionDialogOpen] = useState(false);
   const [ordenSeleccionada, setOrdenSeleccionada] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [editingOrdenId, setEditingOrdenId] = useState<string | null>(null);
@@ -159,7 +161,7 @@ const OrdenesCompraTab = () => {
       const ordenParaAprobar = ordenes.find((o: any) => o.id === aprobarId);
       if (ordenParaAprobar) {
         setOrdenSeleccionada(ordenParaAprobar);
-        setAccionesDialogOpen(true);
+        setAutorizacionDialogOpen(true);
         // Clear the URL parameter
         setSearchParams({});
       }
@@ -990,6 +992,12 @@ const OrdenesCompraTab = () => {
         onOpenChange={setAccionesDialogOpen}
         orden={ordenSeleccionada}
         onEdit={handleEditOrden}
+      />
+
+      <AutorizacionOCDialog
+        open={autorizacionDialogOpen}
+        onOpenChange={setAutorizacionDialogOpen}
+        orden={ordenSeleccionada}
       />
     </Card>
   );

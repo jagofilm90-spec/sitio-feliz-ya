@@ -1271,7 +1271,7 @@ export type Database = {
           cantidad_bultos: number
           created_at: string
           fecha_entrega_real: string | null
-          fecha_programada: string
+          fecha_programada: string | null
           id: string
           notas: string | null
           numero_entrega: number
@@ -1283,7 +1283,7 @@ export type Database = {
           cantidad_bultos: number
           created_at?: string
           fecha_entrega_real?: string | null
-          fecha_programada: string
+          fecha_programada?: string | null
           id?: string
           notas?: string | null
           numero_entrega: number
@@ -1295,7 +1295,7 @@ export type Database = {
           cantidad_bultos?: number
           created_at?: string
           fecha_entrega_real?: string | null
-          fecha_programada?: string
+          fecha_programada?: string | null
           id?: string
           notas?: string | null
           numero_entrega?: number

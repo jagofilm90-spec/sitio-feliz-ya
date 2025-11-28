@@ -264,8 +264,8 @@ const OrdenesCompraTab = () => {
           orden_compra_id: orden.id,
           numero_entrega: e.numero_entrega,
           cantidad_bultos: e.cantidad_bultos,
-          fecha_programada: e.fecha_programada,
-          status: "programada",
+          fecha_programada: e.fecha_programada || null,
+          status: e.fecha_programada ? "programada" : "pendiente_fecha",
         }));
 
         const { error: entregasError } = await supabase
@@ -518,19 +518,6 @@ const OrdenesCompraTab = () => {
         variant: "destructive",
       });
       return;
-    }
-    
-    // Validate multiple deliveries have dates
-    if (entregasMultiples) {
-      const sinFecha = entregasProgramadas.some(e => !e.fecha_programada);
-      if (sinFecha) {
-        toast({
-          title: "Fechas incompletas",
-          description: "Asigna una fecha a cada entrega programada",
-          variant: "destructive",
-        });
-        return;
-      }
     }
     
     if (editingOrdenId) {
@@ -894,7 +881,7 @@ const OrdenesCompraTab = () => {
                             <TableRow>
                               <TableHead>Entrega #</TableHead>
                               <TableHead>Bultos</TableHead>
-                              <TableHead>Fecha Programada *</TableHead>
+                              <TableHead>Fecha Programada</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -919,8 +906,11 @@ const OrdenesCompraTab = () => {
                                     type="date"
                                     value={entrega.fecha_programada}
                                     onChange={(e) => updateFechaEntrega(index, e.target.value)}
-                                    required
+                                    placeholder="Pendiente"
                                   />
+                                  {!entrega.fecha_programada && (
+                                    <span className="text-xs text-amber-600 mt-1 block">Pendiente de programar</span>
+                                  )}
                                 </TableCell>
                               </TableRow>
                             ))}
@@ -928,6 +918,11 @@ const OrdenesCompraTab = () => {
                         </Table>
                         <div className="p-2 bg-muted text-sm text-muted-foreground text-center">
                           Total: {entregasProgramadas.reduce((sum, e) => sum + e.cantidad_bultos, 0).toLocaleString()} bultos en {entregasProgramadas.length} entregas
+                          {entregasProgramadas.some(e => !e.fecha_programada) && (
+                            <span className="text-amber-600 ml-2">
+                              ({entregasProgramadas.filter(e => !e.fecha_programada).length} pendientes de fecha)
+                            </span>
+                          )}
                         </div>
                       </div>
                     )}

@@ -13,8 +13,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar, CheckCircle, XCircle, Mail, Loader2, Pencil, Trash2, FileText, ShieldCheck, ShieldX, Send } from "lucide-react";
+import { Calendar, CheckCircle, XCircle, Mail, Loader2, Pencil, Trash2, FileText, ShieldCheck, ShieldX, Send, Truck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import ProgramarEntregasDialog from "./ProgramarEntregasDialog";
 
 interface OrdenAccionesDialogProps {
   open: boolean;
@@ -35,6 +36,22 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
   const [autorizando, setAutorizando] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [programarEntregasOpen, setProgramarEntregasOpen] = useState(false);
+
+  // Fetch pending deliveries count
+  const { data: entregasPendientes = 0 } = useQuery({
+    queryKey: ["entregas-pendientes", orden?.id],
+    queryFn: async () => {
+      if (!orden?.id || !orden?.entregas_multiples) return 0;
+      const { count } = await supabase
+        .from("ordenes_compra_entregas")
+        .select("*", { count: "exact", head: true })
+        .eq("orden_compra_id", orden.id)
+        .or("fecha_programada.is.null,status.eq.pendiente_fecha");
+      return count || 0;
+    },
+    enabled: !!orden?.id && orden?.entregas_multiples,
+  });
 
   // Fetch current user info
   useEffect(() => {
@@ -909,6 +926,7 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
   const canSendDirectly = isAdmin && (orden?.status === "pendiente" || orden?.status === "autorizada");
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
@@ -988,6 +1006,22 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
               >
                 <Mail className="mr-2 h-4 w-4" />
                 Enviar Orden al Proveedor
+              </Button>
+            )}
+
+            {orden?.entregas_multiples && (
+              <Button
+                variant="outline"
+                className={`w-full justify-start ${entregasPendientes > 0 ? "border-amber-300 text-amber-600 hover:bg-amber-50" : ""}`}
+                onClick={() => setProgramarEntregasOpen(true)}
+              >
+                <Truck className="mr-2 h-4 w-4" />
+                Programar Entregas
+                {entregasPendientes > 0 && (
+                  <Badge variant="secondary" className="ml-2 bg-amber-100 text-amber-700">
+                    {entregasPendientes} pendientes
+                  </Badge>
+                )}
               </Button>
             )}
 
@@ -1255,6 +1289,13 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
         )}
       </DialogContent>
     </Dialog>
+
+    <ProgramarEntregasDialog
+      open={programarEntregasOpen}
+      onOpenChange={setProgramarEntregasOpen}
+      orden={orden}
+    />
+    </>
   );
 };
 

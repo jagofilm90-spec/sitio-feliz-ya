@@ -1160,14 +1160,66 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
   const canSendDirectly = isAdmin && orden?.status === "pendiente";
   const proveedorTieneEmail = !!(orden?.proveedores?.email);
 
-  // Mark as sent without email (for informal suppliers)
+  // Mark as sent without email (for informal suppliers) - still sends internal copy
   const handleMarcarComoEnviada = async () => {
+    setEnviandoEmail(true);
     try {
+      // Generate PDF content for the internal copy
+      const pdfContent = await generarPDFContent(!!orden.autorizado_por);
+      const pdfBase64 = btoa(unescape(encodeURIComponent(pdfContent)));
+
+      // Send internal copy email to compras@almasa.com.mx
+      const copyHtmlBody = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #2e7d32;">📋 Orden de Compra Registrada (Control Interno)</h2>
+          <p>Se ha registrado la siguiente orden de compra para un proveedor sin correo electrónico:</p>
+          
+          <div style="background-color: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
+            <p style="margin: 5px 0;"><strong>⚠️ Proveedor sin correo:</strong> Esta orden NO fue enviada por email al proveedor.</p>
+          </div>
+
+          <div style="background-color: #e8f5e9; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2e7d32;">
+            <p style="margin: 5px 0;"><strong>Folio:</strong> ${orden.folio}</p>
+            <p style="margin: 5px 0;"><strong>Proveedor:</strong> ${orden.proveedores?.nombre}</p>
+            <p style="margin: 5px 0;"><strong>Total:</strong> $${orden.total?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+            <p style="margin: 5px 0;"><strong>Fecha de la orden:</strong> ${new Date(orden.fecha_orden).toLocaleDateString('es-MX')}</p>
+            <p style="margin: 5px 0;"><strong>Registrado:</strong> ${new Date().toLocaleString('es-MX')}</p>
+          </div>
+          
+          <p>Adjunto encontrarás el documento de la orden de compra.</p>
+          
+          <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;" />
+          <p style="color: #666; font-size: 12px;">
+            Notificación automática del sistema ERP - Abarrotes La Manita
+          </p>
+        </div>
+      `;
+
+      const attachments = [
+        {
+          filename: `Orden_Compra_${orden.folio}.html`,
+          content: pdfBase64,
+          mimeType: 'text/html'
+        }
+      ];
+
+      await supabase.functions.invoke('gmail-api', {
+        body: {
+          action: 'send',
+          email: 'compras@almasa.com.mx',
+          to: 'compras@almasa.com.mx',
+          subject: `[CONTROL INTERNO] OC ${orden.folio} - ${orden.proveedores?.nombre} (sin correo)`,
+          body: copyHtmlBody,
+          attachments: attachments,
+        },
+      });
+
+      // Update order status
       await supabase
         .from("ordenes_compra")
         .update({ 
           status: "enviada",
-          email_enviado_en: null // No email was sent
+          email_enviado_en: null // No email was sent to supplier
         })
         .eq("id", orden.id);
 
@@ -1175,17 +1227,20 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
 
       toast({
         title: "Orden registrada",
-        description: "La orden se marcó como enviada para control interno",
+        description: "La orden se marcó como enviada y se envió copia a compras@almasa.com.mx",
       });
       
       onOpenChange(false);
       resetForm();
     } catch (error: any) {
+      console.error('Error marking order as sent:', error);
       toast({
         title: "Error",
         description: error.message || "No se pudo actualizar la orden",
         variant: "destructive",
       });
+    } finally {
+      setEnviandoEmail(false);
     }
   };
 

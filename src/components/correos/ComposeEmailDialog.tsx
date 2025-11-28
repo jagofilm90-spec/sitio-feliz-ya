@@ -19,6 +19,7 @@ import {
 import { Send, X, Loader2, Paperclip, FileText, Image, File, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { logEmailAction } from "@/hooks/useGmailPermisos";
 
 interface AttachmentFile {
   filename: string;
@@ -242,6 +243,17 @@ const ComposeEmailDialog = ({
 
       if (response.error) {
         throw new Error(response.error.message);
+      }
+
+      // Log the email action for audit
+      const selectedCuenta = cuentas?.find(c => c.email === selectedFromEmail);
+      if (selectedCuenta) {
+        const accion = replyTo ? "responder" : forwardData ? "reenviar" : "enviar";
+        logEmailAction(selectedCuenta.id, accion, {
+          emailTo: to.trim(),
+          emailSubject: subject.trim(),
+          gmailMessageId: response.data?.messageId,
+        });
       }
 
       toast({

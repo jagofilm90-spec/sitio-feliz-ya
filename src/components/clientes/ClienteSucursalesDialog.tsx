@@ -30,6 +30,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Edit, Trash2, MapPin, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import GoogleMapsAddressAutocomplete from "@/components/GoogleMapsAddressAutocomplete";
 
 interface ClienteSucursalesDialogProps {
   open: boolean;
@@ -294,13 +295,12 @@ const ClienteSucursalesDialog = ({
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="suc_direccion">Dirección *</Label>
-                <Input
+                <Label htmlFor="suc_direccion">Dirección de Entrega *</Label>
+                <GoogleMapsAddressAutocomplete
                   id="suc_direccion"
                   value={formData.direccion}
-                  onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
-                  placeholder="Dirección de entrega"
-                  autoComplete="off"
+                  onChange={(value) => setFormData({ ...formData, direccion: value })}
+                  placeholder="Buscar dirección de entrega..."
                   required
                 />
               </div>

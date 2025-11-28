@@ -265,6 +265,140 @@ export type Database = {
         }
         Relationships: []
       }
+      cotizaciones: {
+        Row: {
+          cliente_id: string
+          creado_por: string
+          created_at: string
+          email_origen_id: string | null
+          fecha_creacion: string
+          fecha_vigencia: string
+          folio: string
+          gmail_cuenta_id: string | null
+          id: string
+          impuestos: number
+          notas: string | null
+          pedido_id: string | null
+          status: string
+          subtotal: number
+          sucursal_id: string | null
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          cliente_id: string
+          creado_por: string
+          created_at?: string
+          email_origen_id?: string | null
+          fecha_creacion?: string
+          fecha_vigencia: string
+          folio: string
+          gmail_cuenta_id?: string | null
+          id?: string
+          impuestos?: number
+          notas?: string | null
+          pedido_id?: string | null
+          status?: string
+          subtotal?: number
+          sucursal_id?: string | null
+          total?: number
+          updated_at?: string
+        }
+        Update: {
+          cliente_id?: string
+          creado_por?: string
+          created_at?: string
+          email_origen_id?: string | null
+          fecha_creacion?: string
+          fecha_vigencia?: string
+          folio?: string
+          gmail_cuenta_id?: string | null
+          id?: string
+          impuestos?: number
+          notas?: string | null
+          pedido_id?: string | null
+          status?: string
+          subtotal?: number
+          sucursal_id?: string | null
+          total?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cotizaciones_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotizaciones_gmail_cuenta_id_fkey"
+            columns: ["gmail_cuenta_id"]
+            isOneToOne: false
+            referencedRelation: "gmail_cuentas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotizaciones_pedido_id_fkey"
+            columns: ["pedido_id"]
+            isOneToOne: false
+            referencedRelation: "pedidos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotizaciones_sucursal_id_fkey"
+            columns: ["sucursal_id"]
+            isOneToOne: false
+            referencedRelation: "cliente_sucursales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cotizaciones_detalles: {
+        Row: {
+          cantidad: number
+          cotizacion_id: string
+          created_at: string
+          id: string
+          precio_unitario: number
+          producto_id: string
+          subtotal: number
+        }
+        Insert: {
+          cantidad: number
+          cotizacion_id: string
+          created_at?: string
+          id?: string
+          precio_unitario: number
+          producto_id: string
+          subtotal: number
+        }
+        Update: {
+          cantidad?: number
+          cotizacion_id?: string
+          created_at?: string
+          id?: string
+          precio_unitario?: number
+          producto_id?: string
+          subtotal?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cotizaciones_detalles_cotizacion_id_fkey"
+            columns: ["cotizacion_id"]
+            isOneToOne: false
+            referencedRelation: "cotizaciones"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotizaciones_detalles_producto_id_fkey"
+            columns: ["producto_id"]
+            isOneToOne: false
+            referencedRelation: "productos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       empleados: {
         Row: {
           activo: boolean | null
@@ -1617,6 +1751,7 @@ export type Database = {
         Args: { _conversacion_id: string; _user_id: string }
         Returns: boolean
       }
+      generar_folio_cotizacion: { Args: never; Returns: string }
       generar_folio_orden_compra: { Args: never; Returns: string }
       generar_notificaciones_fumigacion: { Args: never; Returns: undefined }
       get_cliente_id_for_user: { Args: { user_uuid: string }; Returns: string }

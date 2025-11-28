@@ -1446,6 +1446,7 @@ export type Database = {
           fecha_ultima_compra: string | null
           fecha_ultima_fumigacion: string | null
           id: string
+          kg_por_unidad: number | null
           maneja_caducidad: boolean | null
           marca: string | null
           nombre: string
@@ -1472,6 +1473,7 @@ export type Database = {
           fecha_ultima_compra?: string | null
           fecha_ultima_fumigacion?: string | null
           id?: string
+          kg_por_unidad?: number | null
           maneja_caducidad?: boolean | null
           marca?: string | null
           nombre: string
@@ -1498,6 +1500,7 @@ export type Database = {
           fecha_ultima_compra?: string | null
           fecha_ultima_fumigacion?: string | null
           id?: string
+          kg_por_unidad?: number | null
           maneja_caducidad?: boolean | null
           marca?: string | null
           nombre?: string

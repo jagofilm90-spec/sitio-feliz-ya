@@ -244,12 +244,14 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
     let entregasHTML = '';
     if (entregasProgramadas.length > 0) {
       const entregasRows = entregasProgramadas.map((e: any) => {
-        const fecha = new Date(e.fecha_programada).toLocaleDateString('es-MX', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        });
+        const fecha = e.fecha_programada 
+          ? new Date(e.fecha_programada).toLocaleDateString('es-MX', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })
+          : '<span style="color: #ff9800; font-style: italic;">Pendiente de programar</span>';
         return `<tr>
           <td style="padding: 8px; border: 1px solid #333; text-align: center;">${e.numero_entrega}</td>
           <td style="padding: 8px; border: 1px solid #333;">${fecha}</td>

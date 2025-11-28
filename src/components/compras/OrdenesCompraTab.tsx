@@ -146,7 +146,7 @@ const OrdenesCompraTab = () => {
           proveedores (nombre, email),
           ordenes_compra_detalles (
             *,
-            productos (nombre)
+            productos (nombre, codigo)
           )
         `)
         .order("created_at", { ascending: false });

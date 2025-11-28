@@ -13,15 +13,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar, CheckCircle, XCircle, Mail, Loader2 } from "lucide-react";
+import { Calendar, CheckCircle, XCircle, Mail, Loader2, Pencil } from "lucide-react";
 
 interface OrdenAccionesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   orden: any;
+  onEdit?: (orden: any) => void;
 }
 
-const OrdenAccionesDialog = ({ open, onOpenChange, orden }: OrdenAccionesDialogProps) => {
+const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccionesDialogProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [accion, setAccion] = useState<"cambiar_fecha" | "recibir" | "devolver" | "enviar_email" | null>(null);
@@ -218,6 +219,19 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden }: OrdenAccionesDialogP
 
         {!accion ? (
           <div className="space-y-3">
+            {onEdit && (
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => {
+                  onOpenChange(false);
+                  onEdit(orden);
+                }}
+              >
+                <Pencil className="mr-2 h-4 w-4" />
+                Editar Orden de Compra
+              </Button>
+            )}
             <Button
               variant="outline"
               className="w-full justify-start"

@@ -49,6 +49,7 @@ const OrdenesCompraTab = () => {
   const [accionesDialogOpen, setAccionesDialogOpen] = useState(false);
   const [ordenSeleccionada, setOrdenSeleccionada] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [editingOrdenId, setEditingOrdenId] = useState<string | null>(null);
   
   // Form state
   const [proveedorId, setProveedorId] = useState("");
@@ -96,7 +97,7 @@ const OrdenesCompraTab = () => {
         .from("ordenes_compra")
         .select(`
           *,
-          proveedores (nombre),
+          proveedores (nombre, email),
           ordenes_compra_detalles (
             *,
             productos (nombre)
@@ -233,6 +234,96 @@ const OrdenesCompraTab = () => {
     setProductoSeleccionado("");
     setCantidad("");
     setPrecioUnitario("");
+    setEditingOrdenId(null);
+  };
+
+  // Update orden de compra
+  const updateOrden = useMutation({
+    mutationFn: async () => {
+      if (!editingOrdenId) throw new Error("No order to update");
+
+      const subtotal = productosEnOrden.reduce((sum, p) => sum + p.subtotal, 0);
+      const impuestos = subtotal * 0.16;
+      const total = subtotal + impuestos;
+
+      // Update orden
+      const { error: ordenError } = await supabase
+        .from("ordenes_compra")
+        .update({
+          folio,
+          proveedor_id: proveedorId,
+          fecha_entrega_programada: fechaEntrega || null,
+          subtotal,
+          impuestos,
+          total,
+          notas,
+        })
+        .eq("id", editingOrdenId);
+
+      if (ordenError) throw ordenError;
+
+      // Delete existing detalles
+      const { error: deleteError } = await supabase
+        .from("ordenes_compra_detalles")
+        .delete()
+        .eq("orden_compra_id", editingOrdenId);
+
+      if (deleteError) throw deleteError;
+
+      // Create new detalles
+      const detalles = productosEnOrden.map((p) => ({
+        orden_compra_id: editingOrdenId,
+        producto_id: p.producto_id,
+        cantidad_ordenada: p.cantidad,
+        precio_unitario_compra: p.precio_unitario,
+        subtotal: p.subtotal,
+      }));
+
+      const { error: detallesError } = await supabase
+        .from("ordenes_compra_detalles")
+        .insert(detalles);
+
+      if (detallesError) throw detallesError;
+
+      return editingOrdenId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ordenes_compra"] });
+      queryClient.invalidateQueries({ queryKey: ["ordenes_calendario"] });
+      toast({
+        title: "Orden actualizada",
+        description: "La orden de compra se ha actualizado exitosamente",
+      });
+      resetForm();
+      setDialogOpen(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleEditOrden = (orden: any) => {
+    setEditingOrdenId(orden.id);
+    setFolio(orden.folio);
+    setProveedorId(orden.proveedor_id);
+    setFechaEntrega(orden.fecha_entrega_programada || "");
+    setNotas(orden.notas || "");
+    
+    // Load products from order details
+    const productos = (orden.ordenes_compra_detalles || []).map((d: any) => ({
+      producto_id: d.producto_id,
+      nombre: d.productos?.nombre || "Producto",
+      cantidad: d.cantidad_ordenada,
+      precio_unitario: d.precio_unitario_compra,
+      subtotal: d.subtotal,
+    }));
+    setProductosEnOrden(productos);
+    
+    setDialogOpen(true);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -245,7 +336,11 @@ const OrdenesCompraTab = () => {
       });
       return;
     }
-    createOrden.mutate();
+    if (editingOrdenId) {
+      updateOrden.mutate();
+    } else {
+      createOrden.mutate();
+    }
   };
 
   const subtotalOrden = productosEnOrden.reduce((sum, p) => sum + p.subtotal, 0);
@@ -278,7 +373,7 @@ const OrdenesCompraTab = () => {
             Gestiona tus órdenes de compra y recepciones
           </p>
         </div>
-        <Button onClick={() => setDialogOpen(true)}>
+        <Button onClick={() => { resetForm(); setDialogOpen(true); }}>
           <Plus className="mr-2 h-4 w-4" />
           Nueva Orden de Compra
         </Button>
@@ -353,10 +448,11 @@ const OrdenesCompraTab = () => {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Nueva Orden de Compra</DialogTitle>
+            <DialogTitle>{editingOrdenId ? "Editar Orden de Compra" : "Nueva Orden de Compra"}</DialogTitle>
             <DialogDescription>
-              Crea una nueva orden de compra. Los precios quedarán registrados como
-              historial.
+              {editingOrdenId 
+                ? "Modifica los detalles de la orden de compra."
+                : "Crea una nueva orden de compra. Los precios quedarán registrados como historial."}
             </DialogDescription>
           </DialogHeader>
 
@@ -540,8 +636,10 @@ const OrdenesCompraTab = () => {
               >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={createOrden.isPending}>
-                {createOrden.isPending ? "Guardando..." : "Crear Orden"}
+              <Button type="submit" disabled={createOrden.isPending || updateOrden.isPending}>
+                {(createOrden.isPending || updateOrden.isPending) 
+                  ? "Guardando..." 
+                  : editingOrdenId ? "Guardar Cambios" : "Crear Orden"}
               </Button>
             </div>
           </form>
@@ -552,6 +650,7 @@ const OrdenesCompraTab = () => {
         open={accionesDialogOpen}
         onOpenChange={setAccionesDialogOpen}
         orden={ordenSeleccionada}
+        onEdit={handleEditOrden}
       />
     </Card>
   );

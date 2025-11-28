@@ -228,9 +228,9 @@ const Layout = ({ children }: LayoutProps) => {
                 <Link key={item.path} to={item.path}>
                   <Button
                     variant={isActive ? "secondary" : "ghost"}
-                    className="w-full justify-start relative"
+                    className="w-full justify-start relative group hover:bg-accent/80 hover:translate-x-1 transition-all duration-200"
                   >
-                    <Icon className="h-4 w-4 mr-2" />
+                    <Icon className="h-4 w-4 mr-2 group-hover:scale-110 transition-transform duration-200" />
                     {item.label}
                     {showBadge && (
                       <Badge 
@@ -265,9 +265,9 @@ const Layout = ({ children }: LayoutProps) => {
                     >
                       <Button
                         variant={isActive ? "secondary" : "ghost"}
-                        className="w-full justify-start relative"
+                        className="w-full justify-start relative group hover:bg-accent/80 hover:translate-x-1 transition-all duration-200"
                       >
-                        <Icon className="h-4 w-4 mr-2" />
+                        <Icon className="h-4 w-4 mr-2 group-hover:scale-110 transition-transform duration-200" />
                         {item.label}
                         {showBadge && (
                           <Badge 

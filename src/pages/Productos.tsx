@@ -225,6 +225,7 @@ const Productos = () => {
     fecha_ultima_fumigacion: string;
     fecha_caducidad_inicial: string;
     stock_inicial: string;
+    proveedor_id: string;
   }>({
     codigo: "",
     nombre: "",
@@ -244,11 +245,28 @@ const Productos = () => {
     fecha_ultima_fumigacion: "",
     fecha_caducidad_inicial: "",
     stock_inicial: "",
+    proveedor_id: "",
   });
 
   useEffect(() => {
     loadProductos();
+    loadProveedores();
   }, []);
+
+  const loadProveedores = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("proveedores")
+        .select("id, nombre")
+        .eq("activo", true)
+        .order("nombre");
+
+      if (error) throw error;
+      setProveedores(data || []);
+    } catch (error: any) {
+      console.error("Error loading proveedores:", error);
+    }
+  };
 
   const loadProductos = async () => {
     try {
@@ -359,6 +377,20 @@ const Productos = () => {
 
         if (error) throw error;
 
+        // Si se seleccionó un proveedor, crear la relación en proveedor_productos
+        if (formData.proveedor_id && newProduct) {
+          const { error: provError } = await supabase
+            .from("proveedor_productos")
+            .insert([{
+              proveedor_id: formData.proveedor_id,
+              producto_id: newProduct.id
+            }]);
+          
+          if (provError) {
+            console.error("Error asociando proveedor:", provError);
+          }
+        }
+
         // Si tiene stock inicial y fecha de caducidad, crear el lote inicial
         const stockInicial = parseInt(formData.stock_inicial) || 0;
         if (stockInicial > 0 && newProduct) {
@@ -424,6 +456,7 @@ const Productos = () => {
       fecha_ultima_fumigacion: product.fecha_ultima_fumigacion || "",
       fecha_caducidad_inicial: "",
       stock_inicial: "",
+      proveedor_id: "",
     });
     setDialogOpen(true);
   };
@@ -473,6 +506,7 @@ const Productos = () => {
       fecha_ultima_fumigacion: "",
       fecha_caducidad_inicial: "",
       stock_inicial: "",
+      proveedor_id: "",
     });
   };
 
@@ -706,6 +740,29 @@ const Productos = () => {
                       required
                     />
                   </div>
+                  {!editingProduct && (
+                    <div className="space-y-2">
+                      <Label htmlFor="proveedor">Proveedor</Label>
+                      <Select
+                        value={formData.proveedor_id}
+                        onValueChange={(value) => setFormData({ ...formData, proveedor_id: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar proveedor (opcional)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {proveedores.map((prov) => (
+                            <SelectItem key={prov.id} value={prov.id}>
+                              {prov.nombre}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Se asociará automáticamente al proveedor
+                      </p>
+                    </div>
+                  )}
                 </div>
                 
                 {duplicateWarning && (

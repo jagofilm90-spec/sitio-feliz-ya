@@ -291,12 +291,28 @@ const Clientes = () => {
         .delete()
         .eq("id", id);
 
-      if (error) throw error;
+      if (error) {
+        // Check for foreign key constraint error
+        if (error.message.includes("violates foreign key constraint")) {
+          if (error.message.includes("cotizaciones")) {
+            throw new Error("No se puede eliminar el cliente porque tiene cotizaciones asociadas. Primero elimina las cotizaciones de este cliente.");
+          } else if (error.message.includes("pedidos")) {
+            throw new Error("No se puede eliminar el cliente porque tiene pedidos asociados. Primero elimina los pedidos de este cliente.");
+          } else if (error.message.includes("facturas")) {
+            throw new Error("No se puede eliminar el cliente porque tiene facturas asociadas.");
+          } else if (error.message.includes("cliente_sucursales")) {
+            throw new Error("No se puede eliminar el cliente porque tiene sucursales asociadas. Primero elimina las sucursales de este cliente.");
+          } else {
+            throw new Error("No se puede eliminar el cliente porque tiene registros asociados en el sistema.");
+          }
+        }
+        throw error;
+      }
       toast({ title: "Cliente eliminado" });
       loadClientes();
     } catch (error: any) {
       toast({
-        title: "Error",
+        title: "Error al eliminar",
         description: error.message,
         variant: "destructive",
       });

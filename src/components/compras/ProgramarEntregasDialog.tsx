@@ -109,15 +109,17 @@ const ProgramarEntregasDialog = ({ open, onOpenChange, orden }: ProgramarEntrega
             <p>Saludos cordiales,<br>Abarrotes La Manita</p>
           `;
           
-          await supabase.functions.invoke("gmail-api", {
+          const { error: emailError } = await supabase.functions.invoke("gmail-api", {
             body: {
               action: "send",
-              accountEmail: "compras@almasa.com.mx",
+              email: "compras@almasa.com.mx",
               to: orden.proveedores.email,
               subject: `Nuevas fechas programadas - ${orden.folio}`,
               body: htmlBody
             }
           });
+          
+          if (emailError) throw emailError;
           
           toast({
             title: "Fechas guardadas y notificación enviada",
@@ -138,6 +140,7 @@ const ProgramarEntregasDialog = ({ open, onOpenChange, orden }: ProgramarEntrega
       }
 
       queryClient.invalidateQueries({ queryKey: ["entregas-oc", orden?.id] });
+      queryClient.invalidateQueries({ queryKey: ["entregas-pendientes", orden?.id] });
       queryClient.invalidateQueries({ queryKey: ["ordenes_compra"] });
       queryClient.invalidateQueries({ queryKey: ["ordenes_calendario"] });
       setFechasActualizadas({});

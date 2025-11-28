@@ -295,6 +295,74 @@ serve(async (req) => {
         throw e;
       }
     }
+
+    // MARK ALL INBOX AS READ - Mark ALL unread emails in inbox as read
+    if (action === "markAllInboxAsRead") {
+      console.log("Starting markAllInboxAsRead for:", email);
+      let totalMarked = 0;
+      let pageToken: string | null = null;
+      
+      // Fetch and mark unread messages in batches
+      do {
+        // Get unread messages
+        let url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=500&labelIds=INBOX&labelIds=UNREAD`;
+        if (pageToken) {
+          url += `&pageToken=${pageToken}`;
+        }
+        
+        const listResponse = await fetch(url, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+
+        if (!listResponse.ok) {
+          console.error("Error listing unread messages:", await listResponse.text());
+          break;
+        }
+
+        const listData = await listResponse.json();
+        const messageIds = (listData.messages || []).map((m: any) => m.id);
+        
+        if (messageIds.length === 0) {
+          console.log("No more unread messages to mark");
+          break;
+        }
+
+        console.log(`Found ${messageIds.length} unread messages, marking as read...`);
+
+        // Mark as read using batchModify (supports up to 1000 per call)
+        const batchResponse = await fetch(
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages/batchModify`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ 
+              ids: messageIds,
+              removeLabelIds: ["UNREAD"] 
+            }),
+          }
+        );
+
+        if (!batchResponse.ok) {
+          console.error("Batch mark failed:", await batchResponse.text());
+          break;
+        }
+
+        totalMarked += messageIds.length;
+        pageToken = listData.nextPageToken || null;
+        
+        console.log(`Marked ${totalMarked} messages so far, nextPage: ${pageToken ? 'yes' : 'no'}`);
+      } while (pageToken);
+
+      console.log(`Finished markAllInboxAsRead: ${totalMarked} messages marked`);
+      
+      return new Response(
+        JSON.stringify({ success: true, totalMarked }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     
     // TRASH - Move to trash (single or batch)
     if (action === "trash") {

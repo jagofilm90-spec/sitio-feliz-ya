@@ -94,6 +94,9 @@ const CotizacionDetalleDialog = ({
   const [emailBody, setEmailBody] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const [showConvertDialog, setShowConvertDialog] = useState(false);
+  const [fechaEntrega, setFechaEntrega] = useState("");
   
   const { filterCuentasByPermiso } = useGmailPermisos();
 
@@ -121,6 +124,7 @@ const CotizacionDetalleDialog = ({
           sucursal:cliente_sucursales(nombre, direccion),
           detalles:cotizaciones_detalles(
             id,
+            producto_id,
             cantidad,
             precio_unitario,
             subtotal,
@@ -323,11 +327,115 @@ const CotizacionDetalleDialog = ({
     }
   };
 
+  const handleOpenConvertDialog = () => {
+    // Set default delivery date to 3 days from now
+    const defaultDate = new Date();
+    defaultDate.setDate(defaultDate.getDate() + 3);
+    setFechaEntrega(defaultDate.toISOString().split('T')[0]);
+    setShowConvertDialog(true);
+  };
+
   const handleConvertirPedido = async () => {
-    toast({
-      title: "Próximamente",
-      description: "La conversión a pedido estará disponible pronto",
-    });
+    if (!cotizacion) return;
+    
+    setConverting(true);
+    try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("No hay usuario autenticado");
+
+      // Generate folio for new pedido
+      const currentYearMonth = new Date().toISOString().slice(0, 7).replace('-', '');
+      const { data: lastPedido } = await supabase
+        .from("pedidos")
+        .select("folio")
+        .like("folio", `PED-${currentYearMonth}-%`)
+        .order("folio", { ascending: false })
+        .limit(1)
+        .single();
+
+      let newNumber = 1;
+      if (lastPedido?.folio) {
+        const lastNum = parseInt(lastPedido.folio.slice(-4));
+        newNumber = lastNum + 1;
+      }
+      const newFolio = `PED-${currentYearMonth}-${String(newNumber).padStart(4, '0')}`;
+
+      // Calculate peso_total_kg (sum of quantities in kg, approximate)
+      const pesoTotal = cotizacion.detalles?.reduce((acc: number, d: any) => {
+        return acc + (d.cantidad || 0);
+      }, 0) || 0;
+
+      // Create the pedido
+      const { data: newPedido, error: pedidoError } = await supabase
+        .from("pedidos")
+        .insert({
+          folio: newFolio,
+          cliente_id: cotizacion.cliente_id,
+          sucursal_id: cotizacion.sucursal_id,
+          vendedor_id: user.id,
+          fecha_pedido: new Date().toISOString(),
+          fecha_entrega_estimada: fechaEntrega || null,
+          status: "pendiente",
+          subtotal: cotizacion.subtotal,
+          impuestos: cotizacion.impuestos,
+          total: cotizacion.total,
+          peso_total_kg: pesoTotal,
+          notas: `Generado desde cotización ${cotizacion.folio}`,
+        })
+        .select()
+        .single();
+
+      if (pedidoError) throw pedidoError;
+
+      // Create pedido_detalles from cotizacion_detalles
+      const detallesInsert = cotizacion.detalles?.map((d: any) => ({
+        pedido_id: newPedido.id,
+        producto_id: d.producto_id || d.producto?.id,
+        cantidad: d.cantidad,
+        precio_unitario: d.precio_unitario,
+        subtotal: d.subtotal,
+      }));
+
+      if (detallesInsert && detallesInsert.length > 0) {
+        const { error: detallesError } = await supabase
+          .from("pedidos_detalles")
+          .insert(detallesInsert);
+
+        if (detallesError) throw detallesError;
+      }
+
+      // Update cotizacion with pedido_id and set status to aceptada
+      const { error: updateError } = await supabase
+        .from("cotizaciones")
+        .update({ 
+          pedido_id: newPedido.id,
+          status: "aceptada"
+        })
+        .eq("id", cotizacionId);
+
+      if (updateError) throw updateError;
+
+      toast({
+        title: "Pedido creado exitosamente",
+        description: `Se generó el pedido ${newFolio} a partir de la cotización`,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["cotizaciones"] });
+      queryClient.invalidateQueries({ queryKey: ["cotizacion", cotizacionId] });
+      queryClient.invalidateQueries({ queryKey: ["pedidos"] });
+      setShowConvertDialog(false);
+      onUpdate();
+    } catch (error: any) {
+      console.error("Error converting cotizacion to pedido:", error);
+      toast({
+        title: "Error al crear pedido",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setConverting(false);
+    }
   };
 
   const generarPDFContent = async () => {
@@ -886,11 +994,17 @@ const CotizacionDetalleDialog = ({
                   </Button>
                 </>
               )}
-              {(cotizacion.status === "enviada" || cotizacion.status === "aceptada") && (
-                <Button onClick={handleConvertirPedido}>
+              {(cotizacion.status === "enviada" || cotizacion.status === "aceptada") && !cotizacion.pedido_id && (
+                <Button onClick={handleOpenConvertDialog}>
                   <ShoppingCart className="h-4 w-4 mr-2" />
                   Convertir a pedido
                 </Button>
+              )}
+              {cotizacion.pedido_id && (
+                <Badge className="bg-green-500/20 text-green-700 px-3 py-2">
+                  <ShoppingCart className="h-4 w-4 mr-2" />
+                  Pedido generado
+                </Badge>
               )}
             </div>
           </div>
@@ -1014,6 +1128,57 @@ const CotizacionDetalleDialog = ({
                 </>
               ) : (
                 "Eliminar"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Convert to Pedido Dialog */}
+      <AlertDialog open={showConvertDialog} onOpenChange={setShowConvertDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5" />
+              Convertir a Pedido
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Se creará un nuevo pedido a partir de la cotización <strong>{cotizacion.folio}</strong> con los mismos productos y precios.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="bg-muted/50 p-3 rounded-lg text-sm space-y-1">
+              <p><strong>Cliente:</strong> {cotizacion.cliente?.nombre}</p>
+              <p><strong>Productos:</strong> {cotizacion.detalles?.length || 0} items</p>
+              <p><strong>Total:</strong> ${formatCurrency(cotizacion.total)}</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="fechaEntrega">Fecha de entrega estimada</Label>
+              <Input
+                id="fechaEntrega"
+                type="date"
+                value={fechaEntrega}
+                onChange={(e) => setFechaEntrega(e.target.value)}
+              />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={converting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConvertirPedido}
+              disabled={converting}
+              className="bg-primary"
+            >
+              {converting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creando pedido...
+                </>
+              ) : (
+                <>
+                  <ShoppingCart className="h-4 w-4 mr-2" />
+                  Crear Pedido
+                </>
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

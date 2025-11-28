@@ -78,6 +78,23 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
     enabled: !!orden?.id && orden?.entregas_multiples,
   });
 
+  // Fetch email confirmation status
+  const { data: confirmacionProveedor } = useQuery({
+    queryKey: ["confirmacion-oc", orden?.id],
+    queryFn: async () => {
+      if (!orden?.id) return null;
+      const { data, error } = await supabase
+        .from("ordenes_compra_confirmaciones")
+        .select("confirmado_en")
+        .eq("orden_compra_id", orden.id)
+        .not("confirmado_en", "is", null)
+        .single();
+      if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows returned
+      return data;
+    },
+    enabled: !!orden?.id && orden?.status === "enviada",
+  });
+
   // Fetch current user info
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -978,7 +995,11 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
       // Convert HTML to base64 for attachment
       const pdfBase64 = btoa(unescape(encodeURIComponent(pdfContent)));
 
-      // Simple email body with reference to attachment
+      // Confirmation URL for supplier
+      const confirmUrl = `https://vrcyjmfpteoccqdmdmqn.supabase.co/functions/v1/confirmar-oc?id=${orden.id}&action=confirm`;
+      const trackingPixelUrl = `https://vrcyjmfpteoccqdmdmqn.supabase.co/functions/v1/confirmar-oc?id=${orden.id}&action=track`;
+
+      // Simple email body with reference to attachment and confirmation button
       const htmlBody = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #2e7d32;">Orden de Compra: ${orden.folio}</h2>
@@ -994,11 +1015,22 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
           
           ${orden.notas ? `<p><strong>Notas:</strong> ${orden.notas}</p>` : ''}
 
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${confirmUrl}" 
+               style="display: inline-block; background-color: #2e7d32; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+              ✓ Confirmar Recepción de Orden
+            </a>
+            <p style="color: #666; font-size: 12px; margin-top: 10px;">
+              Por favor haga clic en el botón para confirmar que recibió esta orden.
+            </p>
+          </div>
+
           <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;" />
           <p style="color: #666; font-size: 12px;">
             Este correo fue enviado desde el sistema de Abarrotes La Manita.<br/>
-            Por favor confirme la recepción de esta orden.
+            <strong>Importante:</strong> Por favor confirme la recepción haciendo clic en el botón verde.
           </p>
+          <img src="${trackingPixelUrl}" width="1" height="1" style="display:none;" alt="" />
         </div>
       `;
 
@@ -1074,10 +1106,13 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
         // Don't fail the main operation if copy fails
       }
 
-      // Update order status to "enviada"
+      // Update order status to "enviada" and record send time
       await supabase
         .from("ordenes_compra")
-        .update({ status: "enviada" })
+        .update({ 
+          status: "enviada",
+          email_enviado_en: new Date().toISOString()
+        })
         .eq("id", orden.id);
 
       queryClient.invalidateQueries({ queryKey: ["ordenes_compra"] });
@@ -1129,9 +1164,30 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 flex-wrap">
             Gestionar Orden {orden?.folio}
             {getStatusBadge()}
+            {orden?.status === "enviada" && (
+              <div className="flex items-center gap-2 ml-auto">
+                {orden?.email_leido_en && (
+                  <Badge variant="outline" className="text-blue-600 border-blue-300">
+                    <Mail className="h-3 w-3 mr-1" />
+                    Leído
+                  </Badge>
+                )}
+                {confirmacionProveedor?.confirmado_en ? (
+                  <Badge variant="default" className="bg-green-600">
+                    <CheckCircle className="h-3 w-3 mr-1" />
+                    Confirmado por proveedor
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-amber-600 border-amber-300">
+                    <Mail className="h-3 w-3 mr-1" />
+                    Pendiente confirmación
+                  </Badge>
+                )}
+              </div>
+            )}
           </DialogTitle>
           <DialogDescription>
             {orden?.status === "rechazada" && orden?.motivo_rechazo && (

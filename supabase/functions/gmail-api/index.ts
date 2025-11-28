@@ -296,14 +296,53 @@ serve(async (req) => {
       }
     }
     
-    // TRASH - Move to trash (alias for delete)
+    // TRASH - Move to trash (single or batch)
     if (action === "trash") {
-      if (!messageId) {
+      const messageIds = Array.isArray(messageId) ? messageId : (messageId ? [messageId] : []);
+      
+      if (messageIds.length === 0) {
         throw new Error("messageId requerido");
       }
 
+      // Use batchModify for multiple messages
+      if (messageIds.length > 1) {
+        try {
+          const batchResponse = await fetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/batchModify`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ 
+                ids: messageIds,
+                addLabelIds: ["TRASH"],
+                removeLabelIds: ["INBOX"]
+              }),
+            }
+          );
+
+          if (batchResponse.ok) {
+            console.log(`Batch trashed: ${messageIds.length} messages`);
+            return new Response(
+              JSON.stringify({ success: true, count: messageIds.length }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          } else {
+            const errorText = await batchResponse.text();
+            console.log("Batch trash failed:", batchResponse.status, errorText);
+            throw new Error("Error al eliminar correos en lote");
+          }
+        } catch (e) {
+          console.log("Batch trash error:", e);
+          throw e;
+        }
+      }
+
+      // Single message
       const trashResponse = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/trash`,
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageIds[0]}/trash`,
         {
           method: "POST",
           headers: { Authorization: `Bearer ${accessToken}` },
@@ -316,10 +355,10 @@ serve(async (req) => {
         throw new Error("Error al eliminar correo");
       }
 
-      console.log("Email moved to trash:", messageId);
+      console.log("Email moved to trash:", messageIds[0]);
 
       return new Response(
-        JSON.stringify({ success: true, messageId }),
+        JSON.stringify({ success: true, messageId: messageIds[0] }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

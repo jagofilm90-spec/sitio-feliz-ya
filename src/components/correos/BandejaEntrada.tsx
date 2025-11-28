@@ -205,8 +205,10 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
       };
     },
     enabled: !!selectedAccount && activeTab === "inbox",
-    staleTime: 1000 * 60, // 60 seconds
+    staleTime: 1000 * 30, // 30 seconds - data considered fresh
+    gcTime: 1000 * 60 * 5, // Keep in cache for 5 minutes
     refetchInterval: 1000 * 60, // Refetch every 60 seconds
+    refetchOnWindowFocus: false, // Don't refetch on window focus to avoid lag
   });
 
   // Update allEmails and nextPageToken when initial data loads
@@ -385,26 +387,20 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
     setSelectionMode(false);
   };
 
-  // Delete selected emails
-  const handleDeleteSelected = async () => {
+  // Delete selected emails - optimistic, non-blocking
+  const handleDeleteSelected = () => {
     if (selectedEmailIds.size === 0) return;
 
     const selectedIdsArray = Array.from(selectedEmailIds);
     const unreadSelectedCount = emails?.filter(e => selectedIdsArray.includes(e.id) && e.isUnread).length || 0;
+    const count = selectedEmailIds.size;
 
-    setDeletingSelected(true);
     suppressNotificationsRef.current = true;
     
-    // Optimistic update: remove emails from list
-    queryClient.setQueryData(
-      ["gmail-inbox", selectedAccount, activeSearch],
-      (oldData: Email[] | undefined) => {
-        if (!oldData) return oldData;
-        return oldData.filter(e => !selectedIdsArray.includes(e.id));
-      }
-    );
+    // Optimistic update: remove emails from local state immediately
+    setAllEmails(prev => prev.filter(e => !selectedIdsArray.includes(e.id)));
     
-    // Optimistic update: decrement unread count and sync the ref
+    // Optimistic update: decrement unread count
     queryClient.setQueryData(
       ["gmail-unread-counts"],
       (oldData: Record<string, number> | undefined) => {
@@ -418,38 +414,32 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
       }
     );
 
-    try {
-      await Promise.all(
-        selectedIdsArray.map(emailId =>
-          supabase.functions.invoke("gmail-api", {
-            body: {
-              action: "trash",
-              email: selectedAccount,
-              messageId: emailId,
-            },
-          })
-        )
-      );
+    // Clear selection immediately - UI responds fast
+    toast.success(`${count} correo(s) eliminado(s)`);
+    setSelectedEmailIds(new Set());
+    setSelectionMode(false);
 
-      toast.success(`${selectedEmailIds.size} correo(s) eliminado(s)`);
-      setSelectedEmailIds(new Set());
-      setSelectionMode(false);
-      
-      await queryClient.invalidateQueries({ queryKey: ["gmail-unread-counts"] });
-      await queryClient.invalidateQueries({ queryKey: ["gmail-inbox", selectedAccount] });
-      await queryClient.invalidateQueries({ queryKey: ["gmail-trash", selectedAccount] });
-    } catch (error) {
-      console.error("Error deleting selected:", error);
-      toast.error("Error al eliminar correos");
-      // Revert optimistic update on error
+    // Fire batch API call in background (non-blocking)
+    supabase.functions.invoke("gmail-api", {
+      body: {
+        action: "trash",
+        email: selectedAccount,
+        messageId: selectedIdsArray,
+      },
+    }).then(() => {
+      // Sync silently
+      queryClient.invalidateQueries({ queryKey: ["gmail-unread-counts"] });
+      queryClient.invalidateQueries({ queryKey: ["gmail-trash", selectedAccount] });
+    }).catch((error) => {
+      console.error("Error deleting:", error);
+      // On error, refresh to get actual state
       queryClient.invalidateQueries({ queryKey: ["gmail-inbox", selectedAccount] });
       queryClient.invalidateQueries({ queryKey: ["gmail-unread-counts"] });
-    } finally {
-      setDeletingSelected(false);
+    }).finally(() => {
       setTimeout(() => {
         suppressNotificationsRef.current = false;
       }, 2000);
-    }
+    });
   };
 
   // Mark selected emails as read - optimistic, non-blocking

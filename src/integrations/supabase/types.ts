@@ -693,6 +693,41 @@ export type Database = {
         }
         Relationships: []
       }
+      gmail_firmas: {
+        Row: {
+          activo: boolean | null
+          created_at: string
+          firma_html: string
+          gmail_cuenta_id: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          activo?: boolean | null
+          created_at?: string
+          firma_html?: string
+          gmail_cuenta_id: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          activo?: boolean | null
+          created_at?: string
+          firma_html?: string
+          gmail_cuenta_id?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gmail_firmas_gmail_cuenta_id_fkey"
+            columns: ["gmail_cuenta_id"]
+            isOneToOne: true
+            referencedRelation: "gmail_cuentas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventario_lotes: {
         Row: {
           bodega_id: string | null

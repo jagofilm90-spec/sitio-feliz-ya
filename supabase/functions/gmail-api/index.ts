@@ -80,7 +80,7 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
-    const { action, email, to, subject, body: emailBody, maxResults, messageId, searchQuery, attachmentId, filename, attachments: emailAttachments, pageToken } = await req.json();
+    const { action, email, to, cc, bcc, subject, body: emailBody, maxResults, messageId, searchQuery, attachmentId, filename, attachments: emailAttachments, pageToken } = await req.json();
 
     // Get account credentials
     const { data: cuenta, error: cuentaError } = await supabase
@@ -431,7 +431,7 @@ serve(async (req) => {
       );
     }
 
-    // SEND - Send email with optional attachments
+    // SEND - Send email with optional attachments, CC, BCC
     if (action === "send") {
       if (!to || !subject) {
         throw new Error("Destinatario y asunto requeridos");
@@ -440,12 +440,28 @@ serve(async (req) => {
       const boundary = "boundary_" + Date.now();
       let emailContent: string;
 
+      // Build headers array
+      const headers = [
+        `From: ${email}`,
+        `To: ${to}`,
+      ];
+      
+      // Add CC if provided
+      if (cc) {
+        headers.push(`Cc: ${cc}`);
+      }
+      
+      // Add BCC if provided
+      if (bcc) {
+        headers.push(`Bcc: ${bcc}`);
+      }
+      
+      headers.push(`Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`);
+
       if (emailAttachments && emailAttachments.length > 0) {
         // Email with attachments - multipart/mixed
         let mimeMessage = [
-          `From: ${email}`,
-          `To: ${to}`,
-          `Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`,
+          ...headers,
           `MIME-Version: 1.0`,
           `Content-Type: multipart/mixed; boundary="${boundary}"`,
           "",
@@ -474,9 +490,7 @@ serve(async (req) => {
       } else {
         // Simple email without attachments
         emailContent = [
-          `From: ${email}`,
-          `To: ${to}`,
-          `Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`,
+          ...headers,
           `Content-Type: text/html; charset=utf-8`,
           `Content-Transfer-Encoding: base64`,
           "",

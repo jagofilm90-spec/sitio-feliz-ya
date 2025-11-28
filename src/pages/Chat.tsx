@@ -90,7 +90,56 @@ const Chat = () => {
   const [ultimoMensajeLeidoOtroUsuario, setUltimoMensajeLeidoOtroUsuario] = useState<string | null>(null);
   const [archivoSeleccionado, setArchivoSeleccionado] = useState<File | null>(null);
   const [subiendoArchivo, setSubiendoArchivo] = useState(false);
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const { toast } = useToast();
+
+  // Generate signed URLs for file attachments
+  const getSignedUrl = async (filePath: string): Promise<string | null> => {
+    // If it's already a full URL (legacy data), return as-is
+    if (filePath.startsWith('http')) {
+      return filePath;
+    }
+    
+    // Check cache first
+    if (signedUrls[filePath]) {
+      return signedUrls[filePath];
+    }
+
+    try {
+      const { data, error } = await supabase.storage
+        .from('chat-archivos')
+        .createSignedUrl(filePath, 3600); // 1 hour expiry
+
+      if (error || !data?.signedUrl) {
+        console.error('Error generating signed URL:', error);
+        return null;
+      }
+
+      // Cache the signed URL
+      setSignedUrls(prev => ({ ...prev, [filePath]: data.signedUrl }));
+      return data.signedUrl;
+    } catch (error) {
+      console.error('Error generating signed URL:', error);
+      return null;
+    }
+  };
+
+  // Generate signed URLs for messages with attachments
+  useEffect(() => {
+    const generateSignedUrls = async () => {
+      const urlsToGenerate = mensajes
+        .filter(m => m.archivo_url && !m.archivo_url.startsWith('http') && !signedUrls[m.archivo_url])
+        .map(m => m.archivo_url as string);
+
+      for (const filePath of urlsToGenerate) {
+        await getSignedUrl(filePath);
+      }
+    };
+
+    if (mensajes.length > 0) {
+      generateSignedUrls();
+    }
+  }, [mensajes]);
 
   useEffect(() => {
     loadCurrentUser();
@@ -657,12 +706,8 @@ const Chat = () => {
 
         if (uploadError) throw uploadError;
 
-        // Obtener URL pública del archivo
-        const { data: { publicUrl } } = supabase.storage
-          .from('chat-archivos')
-          .getPublicUrl(fileName);
-
-        archivoUrl = publicUrl;
+        // Store the file path (not URL) - signed URLs will be generated on-demand
+        archivoUrl = fileName;
         archivoNombre = archivoSeleccionado.name;
         archivoTipo = archivoSeleccionado.type;
       }
@@ -700,8 +745,14 @@ const Chat = () => {
     }
   };
 
-  const descargarArchivo = async (url: string, nombre: string) => {
+  const descargarArchivo = async (filePath: string, nombre: string) => {
     try {
+      // Get signed URL if needed
+      const url = await getSignedUrl(filePath);
+      if (!url) {
+        throw new Error('No se pudo obtener el archivo');
+      }
+
       const response = await fetch(url);
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
@@ -1095,9 +1146,15 @@ const Chat = () => {
                                     className="block"
                                   >
                                     <img 
-                                      src={mensaje.archivo_url} 
+                                      src={mensaje.archivo_url.startsWith('http') ? mensaje.archivo_url : (signedUrls[mensaje.archivo_url] || '')} 
                                       alt={mensaje.archivo_nombre || 'Imagen'} 
                                       className="max-w-xs rounded-md cursor-pointer hover:opacity-90 transition-opacity"
+                                      onError={(e) => {
+                                        // Reload signed URL if expired
+                                        if (mensaje.archivo_url && !mensaje.archivo_url.startsWith('http')) {
+                                          getSignedUrl(mensaje.archivo_url);
+                                        }
+                                      }}
                                     />
                                   </button>
                                 ) : (

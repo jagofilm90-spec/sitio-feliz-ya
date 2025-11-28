@@ -5,7 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { useUnreadEmails } from "@/hooks/useUnreadEmails";
 import { CentroNotificaciones } from "@/components/CentroNotificaciones";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   Package,
   Users,
@@ -24,6 +30,8 @@ import {
   PieChart,
   Bug,
   Mail,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 
 interface LayoutProps {
@@ -34,10 +42,12 @@ const Layout = ({ children }: LayoutProps) => {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [emailMenuOpen, setEmailMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
   const unreadCount = useUnreadMessages();
+  const { counts: emailCounts, cuentas: emailCuentas, totalUnread: totalUnreadEmails } = useUnreadEmails();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -82,8 +92,76 @@ const Layout = ({ children }: LayoutProps) => {
     { icon: UserCog, label: "Empleados", path: "/empleados" },
     { icon: Shield, label: "Usuarios", path: "/usuarios" },
     { icon: MessageCircle, label: "Chat", path: "/chat" },
-    { icon: Mail, label: "Correos", path: "/correos" },
+    // Correos is handled separately with collapsible
   ];
+
+  const renderEmailMenuItem = (isMobile: boolean = false) => {
+    const isActive = location.pathname === "/correos";
+    
+    return (
+      <Collapsible open={emailMenuOpen} onOpenChange={setEmailMenuOpen}>
+        <div className="space-y-1">
+          <div className="flex items-center">
+            <Link 
+              to="/correos" 
+              className="flex-1"
+              onClick={isMobile ? () => setMobileMenuOpen(false) : undefined}
+            >
+              <Button
+                variant={isActive ? "secondary" : "ghost"}
+                className="w-full justify-start"
+              >
+                <Mail className="h-4 w-4 mr-2" />
+                Correos
+                {totalUnreadEmails > 0 && (
+                  <Badge 
+                    variant="destructive" 
+                    className="ml-auto mr-2 h-5 min-w-5 flex items-center justify-center px-1.5"
+                  >
+                    {totalUnreadEmails > 99 ? "99+" : totalUnreadEmails}
+                  </Badge>
+                )}
+              </Button>
+            </Link>
+            {emailCuentas.length > 0 && (
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-9 w-9">
+                  {emailMenuOpen ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
+              </CollapsibleTrigger>
+            )}
+          </div>
+          <CollapsibleContent className="pl-6 space-y-1">
+            {emailCuentas.map((cuenta) => (
+              <Link 
+                key={cuenta.id} 
+                to="/correos"
+                onClick={isMobile ? () => setMobileMenuOpen(false) : undefined}
+              >
+                <div className="flex items-center justify-between py-1.5 px-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors">
+                  <span className="truncate max-w-[140px]" title={cuenta.email}>
+                    {cuenta.nombre}
+                  </span>
+                  {(emailCounts[cuenta.email] || 0) > 0 && (
+                    <Badge 
+                      variant="secondary" 
+                      className="h-5 min-w-5 flex items-center justify-center px-1.5 bg-primary/10 text-primary"
+                    >
+                      {emailCounts[cuenta.email]}
+                    </Badge>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </CollapsibleContent>
+        </div>
+      </Collapsible>
+    );
+  };
 
   if (loading) {
     return (
@@ -153,6 +231,7 @@ const Layout = ({ children }: LayoutProps) => {
                 </Link>
               );
             })}
+            {renderEmailMenuItem(false)}
           </nav>
         </aside>
 
@@ -189,6 +268,7 @@ const Layout = ({ children }: LayoutProps) => {
                     </Link>
                   );
                 })}
+                {renderEmailMenuItem(true)}
               </nav>
             </aside>
           </div>

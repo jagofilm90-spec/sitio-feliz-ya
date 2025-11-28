@@ -609,102 +609,29 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
         .eq("orden_compra_id", orden.id)
         .eq("tipo", "autorizacion_oc");
 
-      // Refetch to get updated autorizador name
-      const { data: autorizadorData } = await supabase
+      // Create internal notification for the creator
+      const { data: adminProfile } = await supabase
         .from("profiles")
         .select("full_name")
         .eq("id", currentUserId)
         .single();
 
-      // Now send the order to supplier automatically
-      if (orden?.proveedores?.email) {
-        // Generate PDF with authorization
-        const pdfContent = await generarPDFContent(true);
-        const pdfBase64 = btoa(unescape(encodeURIComponent(pdfContent)));
-
-        const htmlBody = `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #2e7d32;">Orden de Compra: ${orden.folio}</h2>
-            <p>Estimado proveedor <strong>${orden.proveedores?.nombre}</strong>,</p>
-            <p>Por medio del presente, le enviamos nuestra orden de compra autorizada.</p>
-            <p><strong>Adjunto encontrará el documento formal de la orden de compra.</strong></p>
-            
-            <div style="background-color: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
-              <p style="margin: 5px 0;"><strong>Folio:</strong> ${orden.folio}</p>
-              <p style="margin: 5px 0;"><strong>Total:</strong> $${orden.total?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
-              <p style="margin: 5px 0;"><strong>Autorizado por:</strong> ${autorizadorData?.full_name || 'Administrador'}</p>
-            </div>
-
-            <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;" />
-            <p style="color: #666; font-size: 12px;">
-              Este correo fue enviado desde el sistema de Abarrotes La Manita.<br/>
-              Por favor confirme la recepción de esta orden.
-            </p>
-          </div>
-        `;
-
-        const attachments = [
-          {
-            filename: `Orden_Compra_${orden.folio}.html`,
-            content: pdfBase64,
-            mimeType: 'text/html'
-          }
-        ];
-
-        await supabase.functions.invoke('gmail-api', {
-          body: {
-            action: 'send',
-            email: 'compras@almasa.com.mx',
-            to: orden.proveedores.email,
-            subject: `Orden de Compra ${orden.folio} - Abarrotes La Manita`,
-            body: htmlBody,
-            attachments: attachments,
-          },
+      await supabase
+        .from("notificaciones")
+        .insert({
+          tipo: "oc_autorizada",
+          titulo: `Orden ${orden.folio} autorizada`,
+          descripcion: `Tu orden de compra a ${orden.proveedores?.nombre || 'proveedor'} ha sido autorizada por ${adminProfile?.full_name || 'Administrador'}. Ya puedes enviarla al proveedor.`,
+          orden_compra_id: orden.id,
+          leida: false,
         });
-
-        // Update status to enviada
-        await supabase
-          .from("ordenes_compra")
-          .update({ status: "enviada" })
-          .eq("id", orden.id);
-      }
-
-      // Notify creator about approval
-      const creadorEmail = await getCreadorEmail();
-      if (creadorEmail) {
-        const { data: adminProfile } = await supabase
-          .from("profiles")
-          .select("full_name")
-          .eq("id", currentUserId)
-          .single();
-
-        await supabase.functions.invoke('gmail-api', {
-          body: {
-            action: 'send',
-            email: 'compras@almasa.com.mx',
-            to: creadorEmail,
-            subject: `[AUTORIZADA] Orden de Compra ${orden.folio}`,
-            body: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #2e7d32;">✓ Orden Autorizada</h2>
-                <p>La orden de compra <strong>${orden.folio}</strong> ha sido autorizada y enviada al proveedor.</p>
-                <div style="background-color: #e8f5e9; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                  <p style="margin: 5px 0;"><strong>Autorizado por:</strong> ${adminProfile?.full_name || 'Administrador'}</p>
-                  <p style="margin: 5px 0;"><strong>Proveedor:</strong> ${orden.proveedores?.nombre}</p>
-                </div>
-              </div>
-            `,
-          },
-        });
-      }
 
       queryClient.invalidateQueries({ queryKey: ["ordenes_compra"] });
+      queryClient.invalidateQueries({ queryKey: ["notificaciones"] });
 
       toast({
         title: "Orden autorizada",
-        description: orden?.proveedores?.email 
-          ? "La orden fue autorizada y enviada al proveedor" 
-          : "La orden fue autorizada",
+        description: "La orden fue autorizada. El creador puede enviarla al proveedor.",
       });
       
       onOpenChange(false);
@@ -868,7 +795,7 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
       const { data, error } = await supabase.functions.invoke('gmail-api', {
         body: {
           action: 'send',
-          email: 'compras@almasa.com.mx',
+          accountEmail: 'compras@almasa.com.mx',
           to: orden.proveedores.email,
           subject: `Orden de Compra ${orden.folio} - Abarrotes La Manita`,
           body: htmlBody,
@@ -923,7 +850,8 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
 
   const canRequestAuthorization = orden?.status === "pendiente" && !isAdmin;
   const canAuthorize = isAdmin && orden?.status === "pendiente_autorizacion";
-  const canSendDirectly = isAdmin && (orden?.status === "pendiente" || orden?.status === "autorizada");
+  const canSendToSupplier = orden?.status === "autorizada";
+  const canSendDirectly = isAdmin && orden?.status === "pendiente";
 
   return (
     <>
@@ -985,7 +913,7 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
                   onClick={() => setAccion("autorizar")}
                 >
                   <ShieldCheck className="mr-2 h-4 w-4" />
-                  Autorizar y Enviar al Proveedor
+                  Autorizar Orden
                 </Button>
                 <Button
                   variant="outline"
@@ -998,6 +926,19 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
               </>
             )}
 
+            {/* Button to send to supplier - visible when authorized */}
+            {canSendToSupplier && (
+              <Button
+                variant="outline"
+                className="w-full justify-start text-green-600 hover:text-green-700 border-green-200"
+                onClick={() => setAccion("enviar_email")}
+              >
+                <Mail className="mr-2 h-4 w-4" />
+                Enviar al Proveedor
+              </Button>
+            )}
+
+            {/* Admin can send directly without authorization */}
             {canSendDirectly && (
               <Button
                 variant="outline"
@@ -1005,7 +946,7 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
                 onClick={() => setAccion("enviar_email")}
               >
                 <Mail className="mr-2 h-4 w-4" />
-                Enviar Orden al Proveedor
+                Enviar Orden al Proveedor (sin autorizar)
               </Button>
             )}
 

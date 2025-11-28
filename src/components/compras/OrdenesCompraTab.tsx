@@ -802,17 +802,17 @@ const OrdenesCompraTab = () => {
                         <TableRow key={index}>
                           <TableCell>{p.nombre}</TableCell>
                           <TableCell>{p.cantidad.toLocaleString()}</TableCell>
-                          <TableCell>{formatCurrency(p.precio_unitario)}</TableCell>
+                          <TableCell>${formatCurrency(p.precio_unitario)}</TableCell>
                           <TableCell>
                             {p.ultimo_costo ? (
                               <span className="text-xs text-muted-foreground">
-                                {formatCurrency(p.ultimo_costo)}
+                                ${formatCurrency(p.ultimo_costo)}
                               </span>
                             ) : (
                               "-"
                             )}
                           </TableCell>
-                          <TableCell>{formatCurrency(p.subtotal)}</TableCell>
+                          <TableCell>${formatCurrency(p.subtotal)}</TableCell>
                           <TableCell>
                             <Button
                               type="button"
@@ -941,18 +941,18 @@ const OrdenesCompraTab = () => {
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span>Subtotal:</span>
-                    <span>{formatCurrency(subtotalOrden)}</span>
+                    <span>${formatCurrency(subtotalOrden)}</span>
                   </div>
                   {ivaOrden > 0 && (
                     <div className="flex justify-between">
                       <span>IVA (16%):</span>
-                      <span>{formatCurrency(ivaOrden)}</span>
+                      <span>${formatCurrency(ivaOrden)}</span>
                     </div>
                   )}
                   {iepsOrden > 0 && (
                     <div className="flex justify-between">
                       <span>IEPS (8%):</span>
-                      <span>{formatCurrency(iepsOrden)}</span>
+                      <span>${formatCurrency(iepsOrden)}</span>
                     </div>
                   )}
                   {ivaOrden === 0 && iepsOrden === 0 && (
@@ -963,7 +963,7 @@ const OrdenesCompraTab = () => {
                   )}
                   <div className="flex justify-between font-bold text-lg">
                     <span>Total:</span>
-                    <span>{formatCurrency(totalOrden)}</span>
+                    <span>${formatCurrency(totalOrden)}</span>
                   </div>
                 </div>
               </div>

@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { CheckCircle, XCircle, Loader2, Package, Building2, Calendar, DollarSign } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, Package, Building2, Calendar, DollarSign, Truck } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
 interface AutorizacionOCDialogProps {
@@ -53,6 +53,21 @@ const AutorizacionOCDialog = ({ open, onOpenChange, orden }: AutorizacionOCDialo
       return data;
     },
     enabled: !!orden?.creado_por,
+  });
+
+  // Fetch scheduled deliveries
+  const { data: entregasProgramadas = [] } = useQuery({
+    queryKey: ["entregas-oc", orden?.id],
+    queryFn: async () => {
+      if (!orden?.id) return [];
+      const { data } = await supabase
+        .from("ordenes_compra_entregas")
+        .select("*")
+        .eq("orden_compra_id", orden.id)
+        .order("numero_entrega");
+      return data || [];
+    },
+    enabled: !!orden?.id && orden?.entregas_multiples,
   });
 
   const handleAutorizar = async () => {
@@ -217,9 +232,9 @@ const AutorizacionOCDialog = ({ open, onOpenChange, orden }: AutorizacionOCDialo
                   {detalles.map((d: any, idx: number) => (
                     <tr key={idx} className="border-t">
                       <td className="p-2">{d.productos?.nombre || "Producto"}</td>
-                      <td className="text-center p-2">{d.cantidad_ordenada}</td>
-                      <td className="text-right p-2">{formatCurrency(d.precio_unitario_compra)}</td>
-                      <td className="text-right p-2 font-medium">{formatCurrency(d.subtotal)}</td>
+                      <td className="text-center p-2">{d.cantidad_ordenada?.toLocaleString()}</td>
+                      <td className="text-right p-2">${formatCurrency(d.precio_unitario_compra)}</td>
+                      <td className="text-right p-2 font-medium">${formatCurrency(d.subtotal)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -227,16 +242,54 @@ const AutorizacionOCDialog = ({ open, onOpenChange, orden }: AutorizacionOCDialo
             </div>
           </div>
 
+          {/* Scheduled Deliveries */}
+          {orden.entregas_multiples && entregasProgramadas.length > 0 && (
+            <div className="mb-4">
+              <h4 className="font-medium mb-2 flex items-center gap-2">
+                <Truck className="h-4 w-4" />
+                Entregas Programadas ({entregasProgramadas.length})
+              </h4>
+              <div className="border rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted">
+                    <tr>
+                      <th className="text-left p-2">Entrega</th>
+                      <th className="text-center p-2">Bultos</th>
+                      <th className="text-right p-2">Fecha Programada</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {entregasProgramadas.map((e: any) => (
+                      <tr key={e.id} className="border-t">
+                        <td className="p-2">
+                          <Badge variant="outline">Tráiler {e.numero_entrega}</Badge>
+                        </td>
+                        <td className="text-center p-2">{e.cantidad_bultos?.toLocaleString()}</td>
+                        <td className="text-right p-2 font-medium">
+                          {new Date(e.fecha_programada).toLocaleDateString("es-MX", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* Totals */}
           <div className="flex justify-end mb-4">
             <div className="w-64 space-y-1">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Subtotal:</span>
-                <span>{formatCurrency(orden.subtotal)}</span>
+                <span>${formatCurrency(orden.subtotal)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">IVA (16%):</span>
-                <span>{formatCurrency(orden.impuestos)}</span>
+                <span>${formatCurrency(orden.impuestos)}</span>
               </div>
               <Separator className="my-2" />
               <div className="flex justify-between font-bold text-lg">
@@ -244,7 +297,7 @@ const AutorizacionOCDialog = ({ open, onOpenChange, orden }: AutorizacionOCDialo
                   <DollarSign className="h-4 w-4" />
                   Total:
                 </span>
-                <span className="text-primary">{formatCurrency(orden.total)}</span>
+                <span className="text-primary">${formatCurrency(orden.total)}</span>
               </div>
             </div>
           </div>

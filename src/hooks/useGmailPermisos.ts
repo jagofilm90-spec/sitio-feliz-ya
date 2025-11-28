@@ -45,49 +45,51 @@ export const useGmailPermisos = () => {
   });
 
   const isAdmin = userData?.isAdmin || false;
+  const userId = userData?.userId;
 
-  // Get user's permitted accounts (always runs for non-admins when userData is available)
+  // Get user's permitted accounts - always fetch when we have a userId
   const { data: permisos, isLoading: isLoadingPermisos } = useQuery({
-    queryKey: ["gmail-permisos-usuario", userData?.userId],
+    queryKey: ["gmail-permisos-usuario", userId],
     queryFn: async () => {
-      if (!userData?.userId) return [];
+      if (!userId) return [];
 
       const { data, error } = await supabase
         .from("gmail_cuenta_permisos")
         .select("gmail_cuenta_id")
-        .eq("user_id", userData.userId);
+        .eq("user_id", userId);
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error fetching gmail permisos:", error);
+        return [];
+      }
       return data?.map(p => p.gmail_cuenta_id) || [];
     },
-    enabled: !!userData && !userData.isAdmin,
+    enabled: !!userId,
   });
 
   // Filter function to apply to accounts
   const filterCuentasByPermiso = (cuentas: GmailCuenta[]): GmailCuenta[] => {
     // Still loading user data
-    if (isLoadingUser) return [];
-    
-    // No user data (not authenticated)
-    if (!userData) return [];
+    if (isLoadingUser || !userData) return [];
     
     // Admins see all accounts
-    if (userData.isAdmin) return cuentas;
+    if (isAdmin) return cuentas;
     
     // Still loading permissions for non-admin
     if (isLoadingPermisos) return [];
     
     // Non-admins see only permitted accounts
-    if (!permisos || permisos.length === 0) return [];
+    const permisosArray = permisos || [];
+    if (permisosArray.length === 0) return [];
     
-    return cuentas.filter(c => permisos.includes(c.id));
+    return cuentas.filter(c => permisosArray.includes(c.id));
   };
 
   return {
     isAdmin,
-    permisos,
+    permisos: permisos || [],
     filterCuentasByPermiso,
-    isLoading: isLoadingUser || (!isAdmin && isLoadingPermisos),
+    isLoading: isLoadingUser || (!!userId && !isAdmin && isLoadingPermisos),
   };
 };
 

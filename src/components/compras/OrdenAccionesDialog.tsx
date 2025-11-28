@@ -16,6 +16,24 @@ import { Textarea } from "@/components/ui/textarea";
 import { Calendar, CheckCircle, XCircle, Mail, Loader2, Pencil, Trash2, FileText, ShieldCheck, ShieldX, Send, Truck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import ProgramarEntregasDialog from "./ProgramarEntregasDialog";
+import logoManita from "@/assets/logo-manita.png";
+
+// Helper function to convert image to base64
+const getLogoBase64 = async (): Promise<string> => {
+  try {
+    const response = await fetch(logoManita);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.error('Error loading logo:', error);
+    return '';
+  }
+};
 
 interface OrdenAccionesDialogProps {
   open: boolean;
@@ -218,6 +236,9 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
   };
 
   const generarPDFContent = async (incluirAutorizacion: boolean = false) => {
+    // Fetch logo as base64
+    const logoBase64 = await getLogoBase64();
+    
     // Fetch scheduled deliveries if order has multiple deliveries
     let entregasProgramadas: any[] = [];
     if (orden.entregas_multiples) {
@@ -564,8 +585,7 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
       <body>
         <div class="header">
           <div class="company-info">
-            <h1 class="company-logo">ABARROTES LA <span>MANITA</span></h1>
-            <div class="company-subtitle">Comercializadora de Abarrotes</div>
+            ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" style="height: 70px; margin-bottom: 10px;">` : ''}
             <div class="company-details">
               <strong>Abarrotes la Manita SA de CV</strong><br>
               RFC: AMA 700701GI8<br>

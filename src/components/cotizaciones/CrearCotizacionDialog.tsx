@@ -78,6 +78,7 @@ interface CrearCotizacionDialogProps {
   emailOrigen?: { id: string; subject: string; from: string };
   gmailCuentaId?: string;
   onSuccess?: (cotizacionId: string) => void;
+  cotizacionId?: string; // For edit mode
 }
 
 const CrearCotizacionDialog = ({
@@ -86,9 +87,11 @@ const CrearCotizacionDialog = ({
   emailOrigen,
   gmailCuentaId,
   onSuccess,
+  cotizacionId,
 }: CrearCotizacionDialogProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [loadingData, setLoadingData] = useState(false);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -100,13 +103,19 @@ const CrearCotizacionDialog = ({
   const [vigenciaDias, setVigenciaDias] = useState(7);
   const [notas, setNotas] = useState("");
   const [detalles, setDetalles] = useState<DetalleProducto[]>([]);
+  const [folio, setFolio] = useState<string>("");
+
+  const isEditMode = !!cotizacionId;
 
   useEffect(() => {
     if (open) {
       loadClientes();
       loadProductos();
+      if (cotizacionId) {
+        loadCotizacion(cotizacionId);
+      }
     }
-  }, [open]);
+  }, [open, cotizacionId]);
 
   useEffect(() => {
     if (selectedCliente) {
@@ -153,6 +162,71 @@ const CrearCotizacionDialog = ({
 
     if (!error && data) {
       setProductos(data);
+    }
+  };
+
+  const loadCotizacion = async (id: string) => {
+    setLoadingData(true);
+    try {
+      const { data: cotizacion, error } = await supabase
+        .from("cotizaciones")
+        .select(`
+          *,
+          detalles:cotizaciones_detalles(
+            id,
+            producto_id,
+            cantidad,
+            precio_unitario,
+            subtotal,
+            producto:productos(
+              id, nombre, codigo, unidad, marca, precio_venta, aplica_iva, aplica_ieps
+            )
+          )
+        `)
+        .eq("id", id)
+        .single();
+
+      if (error) throw error;
+
+      setFolio(cotizacion.folio);
+      setSelectedCliente(cotizacion.cliente_id);
+      setSelectedSucursal(cotizacion.sucursal_id || "");
+      setNotas(cotizacion.notas || "");
+      
+      // Calculate vigencia days from fecha_vigencia
+      const vigencia = new Date(cotizacion.fecha_vigencia);
+      const hoy = new Date();
+      const diffTime = vigencia.getTime() - hoy.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      setVigenciaDias(Math.max(1, diffDays));
+
+      // Load detalles
+      const detallesFormateados: DetalleProducto[] = cotizacion.detalles.map((d: any) => ({
+        producto_id: d.producto_id,
+        nombre: d.producto.nombre,
+        codigo: d.producto.codigo,
+        unidad: d.producto.unidad,
+        marca: d.producto.marca,
+        precio_unitario: d.precio_unitario,
+        cantidad: d.cantidad,
+        subtotal: d.subtotal,
+        precio_lista: d.producto.precio_venta,
+        ultimo_precio_cliente: null,
+        fecha_ultima_compra: null,
+        aplica_iva: d.producto.aplica_iva,
+        aplica_ieps: d.producto.aplica_ieps,
+      }));
+
+      setDetalles(detallesFormateados);
+    } catch (error: any) {
+      console.error("Error loading cotizacion:", error);
+      toast({
+        title: "Error al cargar cotización",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingData(false);
     }
   };
 
@@ -278,7 +352,7 @@ const CrearCotizacionDialog = ({
     };
   };
 
-  const handleCrear = async () => {
+  const handleGuardar = async () => {
     if (!selectedCliente) {
       toast({
         title: "Selecciona un cliente",
@@ -303,64 +377,111 @@ const CrearCotizacionDialog = ({
         throw new Error("No hay sesión activa");
       }
 
-      // Generate folio
-      const { data: folioData, error: folioError } = await supabase.rpc(
-        "generar_folio_cotizacion"
-      );
-
-      if (folioError) throw folioError;
-
       const totales = calcularTotales();
       const fechaVigencia = addDays(new Date(), vigenciaDias);
 
-      // Create cotizacion
-      const { data: cotizacion, error: cotizacionError } = await supabase
-        .from("cotizaciones")
-        .insert({
-          folio: folioData,
-          cliente_id: selectedCliente,
-          sucursal_id: selectedSucursal || null,
-          fecha_vigencia: format(fechaVigencia, "yyyy-MM-dd"),
-          email_origen_id: emailOrigen?.id || null,
-          gmail_cuenta_id: gmailCuentaId || null,
-          notas,
-          subtotal: totales.subtotal,
-          impuestos: totales.impuestos,
-          total: totales.total,
-          creado_por: session.session.user.id,
-        })
-        .select()
-        .single();
+      if (isEditMode && cotizacionId) {
+        // UPDATE mode
+        const { error: cotizacionError } = await supabase
+          .from("cotizaciones")
+          .update({
+            cliente_id: selectedCliente,
+            sucursal_id: selectedSucursal || null,
+            fecha_vigencia: format(fechaVigencia, "yyyy-MM-dd"),
+            notas,
+            subtotal: totales.subtotal,
+            impuestos: totales.impuestos,
+            total: totales.total,
+          })
+          .eq("id", cotizacionId);
 
-      if (cotizacionError) throw cotizacionError;
+        if (cotizacionError) throw cotizacionError;
 
-      // Create detalles
-      const detallesInsert = detalles.map((d) => ({
-        cotizacion_id: cotizacion.id,
-        producto_id: d.producto_id,
-        cantidad: d.cantidad,
-        precio_unitario: d.precio_unitario,
-        subtotal: d.subtotal,
-      }));
+        // Delete existing detalles
+        const { error: deleteError } = await supabase
+          .from("cotizaciones_detalles")
+          .delete()
+          .eq("cotizacion_id", cotizacionId);
 
-      const { error: detallesError } = await supabase
-        .from("cotizaciones_detalles")
-        .insert(detallesInsert);
+        if (deleteError) throw deleteError;
 
-      if (detallesError) throw detallesError;
+        // Insert new detalles
+        const detallesInsert = detalles.map((d) => ({
+          cotizacion_id: cotizacionId,
+          producto_id: d.producto_id,
+          cantidad: d.cantidad,
+          precio_unitario: d.precio_unitario,
+          subtotal: d.subtotal,
+        }));
 
-      toast({
-        title: "Cotización creada",
-        description: `Folio: ${folioData}`,
-      });
+        const { error: detallesError } = await supabase
+          .from("cotizaciones_detalles")
+          .insert(detallesInsert);
 
-      onSuccess?.(cotizacion.id);
+        if (detallesError) throw detallesError;
+
+        toast({
+          title: "Cotización actualizada",
+          description: `Folio: ${folio}`,
+        });
+
+        onSuccess?.(cotizacionId);
+      } else {
+        // CREATE mode
+        const { data: folioData, error: folioError } = await supabase.rpc(
+          "generar_folio_cotizacion"
+        );
+
+        if (folioError) throw folioError;
+
+        const { data: cotizacion, error: cotizacionError } = await supabase
+          .from("cotizaciones")
+          .insert({
+            folio: folioData,
+            cliente_id: selectedCliente,
+            sucursal_id: selectedSucursal || null,
+            fecha_vigencia: format(fechaVigencia, "yyyy-MM-dd"),
+            email_origen_id: emailOrigen?.id || null,
+            gmail_cuenta_id: gmailCuentaId || null,
+            notas,
+            subtotal: totales.subtotal,
+            impuestos: totales.impuestos,
+            total: totales.total,
+            creado_por: session.session.user.id,
+          })
+          .select()
+          .single();
+
+        if (cotizacionError) throw cotizacionError;
+
+        const detallesInsert = detalles.map((d) => ({
+          cotizacion_id: cotizacion.id,
+          producto_id: d.producto_id,
+          cantidad: d.cantidad,
+          precio_unitario: d.precio_unitario,
+          subtotal: d.subtotal,
+        }));
+
+        const { error: detallesError } = await supabase
+          .from("cotizaciones_detalles")
+          .insert(detallesInsert);
+
+        if (detallesError) throw detallesError;
+
+        toast({
+          title: "Cotización creada",
+          description: `Folio: ${folioData}`,
+        });
+
+        onSuccess?.(cotizacion.id);
+      }
+
       onOpenChange(false);
       resetForm();
     } catch (error: any) {
-      console.error("Error creating cotizacion:", error);
+      console.error("Error saving cotizacion:", error);
       toast({
-        title: "Error al crear cotización",
+        title: isEditMode ? "Error al actualizar cotización" : "Error al crear cotización",
         description: error.message,
         variant: "destructive",
       });
@@ -376,6 +497,7 @@ const CrearCotizacionDialog = ({
     setNotas("");
     setDetalles([]);
     setSearchTerm("");
+    setFolio("");
   };
 
   const totales = calcularTotales();
@@ -386,10 +508,15 @@ const CrearCotizacionDialog = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            Nueva Cotización
+            {isEditMode ? `Editar Cotización ${folio}` : "Nueva Cotización"}
           </DialogTitle>
         </DialogHeader>
 
+        {loadingData ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
         <div className="space-y-6">
           {emailOrigen && (
             <div className="p-3 bg-muted rounded-lg text-sm">
@@ -653,12 +780,13 @@ const CrearCotizacionDialog = ({
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleCrear} disabled={loading}>
+            <Button onClick={handleGuardar} disabled={loading}>
               {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Crear Cotización
+              {isEditMode ? "Guardar Cambios" : "Crear Cotización"}
             </Button>
           </div>
         </div>
+        )}
       </DialogContent>
     </Dialog>
   );

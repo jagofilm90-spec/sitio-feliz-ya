@@ -42,6 +42,7 @@ import {
   Loader2,
   RefreshCw,
   Trash2,
+  Pencil,
 } from "lucide-react";
 import { format, isBefore } from "date-fns";
 import { es } from "date-fns/locale";
@@ -65,6 +66,7 @@ const CotizacionesTab = () => {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [crearOpen, setCrearOpen] = useState(false);
+  const [editCotizacionId, setEditCotizacionId] = useState<string | null>(null);
   const [selectedCotizacion, setSelectedCotizacion] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [cotizacionToDelete, setCotizacionToDelete] = useState<Cotizacion | null>(null);
@@ -262,10 +264,18 @@ const CotizacionesTab = () => {
                               Ver detalle
                             </DropdownMenuItem>
                             {c.status === "borrador" && (
-                              <DropdownMenuItem>
-                                <Send className="h-4 w-4 mr-2" />
-                                Enviar al cliente
-                              </DropdownMenuItem>
+                              <>
+                                <DropdownMenuItem
+                                  onClick={() => setEditCotizacionId(c.id)}
+                                >
+                                  <Pencil className="h-4 w-4 mr-2" />
+                                  Editar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem>
+                                  <Send className="h-4 w-4 mr-2" />
+                                  Enviar al cliente
+                                </DropdownMenuItem>
+                              </>
                             )}
                             {(c.status === "enviada" || c.status === "aceptada") && (
                               <DropdownMenuItem
@@ -306,8 +316,14 @@ const CotizacionesTab = () => {
       </div>
 
       <CrearCotizacionDialog
-        open={crearOpen}
-        onOpenChange={setCrearOpen}
+        open={crearOpen || !!editCotizacionId}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCrearOpen(false);
+            setEditCotizacionId(null);
+          }
+        }}
+        cotizacionId={editCotizacionId || undefined}
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ["cotizaciones"] });
         }}

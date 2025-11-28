@@ -51,7 +51,33 @@ serve(async (req) => {
     }
 
     const tokens = await tokenResponse.json();
-    console.log("Tokens received for:", email);
+    console.log("Tokens received, verifying account...");
+
+    // Verify the actual email of the authorized account
+    const userInfoResponse = await fetch(
+      "https://www.googleapis.com/oauth2/v2/userinfo",
+      {
+        headers: { Authorization: `Bearer ${tokens.access_token}` },
+      }
+    );
+
+    if (!userInfoResponse.ok) {
+      throw new Error("Error al verificar cuenta de Gmail");
+    }
+
+    const userInfo = await userInfoResponse.json();
+    const authorizedEmail = userInfo.email;
+    
+    console.log("Expected email:", email);
+    console.log("Authorized email:", authorizedEmail);
+
+    // Verify the authorized account matches the expected email
+    if (authorizedEmail.toLowerCase() !== email.toLowerCase()) {
+      throw new Error(
+        `La cuenta autorizada (${authorizedEmail}) no coincide con la cuenta esperada (${email}). ` +
+        `Por favor, asegúrate de iniciar sesión con ${email} durante la autorización.`
+      );
+    }
 
     // Calculate token expiry
     const expiresAt = new Date(Date.now() + (tokens.expires_in * 1000));

@@ -165,20 +165,25 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
       }
     }
     
-    // Update previous counts
+  // Update previous counts
     previousUnreadCountsRef.current = { ...unreadCounts };
   }, [unreadCounts, cuentas]);
 
+  // State for pagination
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
+  const [allEmails, setAllEmails] = useState<Email[]>([]);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   // Fetch email list - every 60 seconds
   const {
-    data: emails,
+    data: emailsData,
     isLoading,
     refetch,
     isRefetching,
   } = useQuery({
     queryKey: ["gmail-inbox", selectedAccount, activeSearch],
     queryFn: async () => {
-      if (!selectedAccount) return [];
+      if (!selectedAccount) return { messages: [], nextPageToken: null };
 
       const response = await supabase.functions.invoke("gmail-api", {
         body: {
@@ -193,12 +198,63 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
         throw new Error(response.error.message);
       }
 
-      return (response.data?.messages as Email[]) || [];
+      return {
+        messages: (response.data?.messages as Email[]) || [],
+        nextPageToken: response.data?.nextPageToken || null,
+      };
     },
     enabled: !!selectedAccount && activeTab === "inbox",
     staleTime: 1000 * 60, // 60 seconds
     refetchInterval: 1000 * 60, // Refetch every 60 seconds
   });
+
+  // Update allEmails and nextPageToken when initial data loads
+  useEffect(() => {
+    if (emailsData) {
+      setAllEmails(emailsData.messages);
+      setNextPageToken(emailsData.nextPageToken);
+    }
+  }, [emailsData]);
+
+  // Reset pagination when account or search changes
+  useEffect(() => {
+    setAllEmails([]);
+    setNextPageToken(null);
+  }, [selectedAccount, activeSearch]);
+
+  // Load more emails
+  const handleLoadMore = async () => {
+    if (!nextPageToken || isLoadingMore) return;
+    
+    setIsLoadingMore(true);
+    try {
+      const response = await supabase.functions.invoke("gmail-api", {
+        body: {
+          action: "list",
+          email: selectedAccount,
+          maxResults: 50,
+          searchQuery: activeSearch || undefined,
+          pageToken: nextPageToken,
+        },
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+
+      const newMessages = (response.data?.messages as Email[]) || [];
+      setAllEmails(prev => [...prev, ...newMessages]);
+      setNextPageToken(response.data?.nextPageToken || null);
+    } catch (error) {
+      console.error("Error loading more emails:", error);
+      toast.error("Error al cargar más correos");
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  // Use allEmails instead of emails for display
+  const emails = allEmails;
 
   // Auto-open first unread email when triggered from notification
   useEffect(() => {
@@ -790,6 +846,9 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
               selectedIds={selectedEmailIds}
               onToggleSelect={handleToggleSelect}
               selectionMode={selectionMode}
+              hasMore={!!nextPageToken}
+              isLoadingMore={isLoadingMore}
+              onLoadMore={handleLoadMore}
             />
           </TabsContent>
 

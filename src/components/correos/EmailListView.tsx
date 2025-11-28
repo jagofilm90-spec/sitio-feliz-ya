@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Mail, RefreshCw, Paperclip } from "lucide-react";
+import { Mail, RefreshCw, Paperclip, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -26,6 +26,9 @@ interface EmailListViewProps {
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
   selectionMode: boolean;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
 }
 
 const EmailListView = ({
@@ -37,6 +40,9 @@ const EmailListView = ({
   selectedIds,
   onToggleSelect,
   selectionMode,
+  hasMore = false,
+  isLoadingMore = false,
+  onLoadMore,
 }: EmailListViewProps) => {
   const formatEmailDate = (dateStr: string) => {
     try {
@@ -145,6 +151,26 @@ const EmailListView = ({
               </button>
             </div>
           ))}
+          
+          {/* Load More Button */}
+          {hasMore && (
+            <div className="p-4 flex justify-center">
+              <Button
+                variant="outline"
+                onClick={onLoadMore}
+                disabled={isLoadingMore}
+              >
+                {isLoadingMore ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Cargando...
+                  </>
+                ) : (
+                  "Cargar más correos"
+                )}
+              </Button>
+            </div>
+          )}
         </div>
       </ScrollArea>
     </Card>

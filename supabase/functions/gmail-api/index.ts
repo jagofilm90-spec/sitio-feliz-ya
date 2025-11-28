@@ -99,11 +99,15 @@ serve(async (req) => {
       throw new Error(`No se pudo obtener token válido para ${email}. Reconecte la cuenta.`);
     }
 
-    // LIST - List inbox emails with optional search
+    // LIST - List inbox emails with optional search and pagination
     if (action === "list") {
+      const { pageToken } = await req.clone().json().catch(() => ({}));
       let url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults || 50}&labelIds=INBOX`;
       if (searchQuery) {
         url += `&q=${encodeURIComponent(searchQuery)}`;
+      }
+      if (pageToken) {
+        url += `&pageToken=${pageToken}`;
       }
 
       const listResponse = await fetch(url, {
@@ -144,7 +148,7 @@ serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ messages }),
+        JSON.stringify({ messages, nextPageToken: listData.nextPageToken || null }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

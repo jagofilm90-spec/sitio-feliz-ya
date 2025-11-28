@@ -874,6 +874,12 @@ const OrdenesCompraTab = () => {
                         if (prod?.ultimo_costo_compra) {
                           setPrecioUnitario(prod.ultimo_costo_compra.toString());
                         }
+                        // Auto-fill kg_por_unidad if product has it
+                        if (prod?.kg_por_unidad) {
+                          setKgPorUnidad(prod.kg_por_unidad.toString());
+                        } else {
+                          setKgPorUnidad("");
+                        }
                       }}
                       disabled={!proveedorId}
                     >

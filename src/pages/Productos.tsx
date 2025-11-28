@@ -214,6 +214,7 @@ const Productos = () => {
     presentacion: string;
     unidad: "bulto" | "caja" | "churla" | "cubeta";
     precio_por_kilo: boolean;
+    kg_por_unidad: string;
     precio_venta: string;
     precio_compra: string;
     stock_minimo: string;
@@ -234,6 +235,7 @@ const Productos = () => {
     presentacion: "",
     unidad: "bulto",
     precio_por_kilo: false,
+    kg_por_unidad: "",
     precio_venta: "",
     precio_compra: "",
     stock_minimo: "",
@@ -319,6 +321,7 @@ const Productos = () => {
         presentacion: formData.presentacion || null,
         unidad: formData.unidad,
         precio_por_kilo: formData.precio_por_kilo,
+        kg_por_unidad: formData.kg_por_unidad ? parseFloat(formData.kg_por_unidad) : null,
         precio_venta: parseFloat(formData.precio_venta),
         precio_compra: parseFloat(formData.precio_compra) || 0,
         stock_minimo: parseInt(formData.stock_minimo),
@@ -445,6 +448,7 @@ const Productos = () => {
       presentacion: product.presentacion || "",
       unidad: product.unidad,
       precio_por_kilo: product.precio_por_kilo || false,
+      kg_por_unidad: product.kg_por_unidad?.toString() || "",
       precio_venta: product.precio_venta.toString(),
       precio_compra: product.precio_compra.toString(),
       stock_minimo: product.stock_minimo.toString(),
@@ -495,6 +499,7 @@ const Productos = () => {
       presentacion: "",
       unidad: "bulto",
       precio_por_kilo: false,
+      kg_por_unidad: "",
       precio_venta: "",
       precio_compra: "",
       stock_minimo: "",
@@ -771,17 +776,38 @@ const Productos = () => {
                   </p>
                 )}
                 
-                <div className="flex items-center space-x-2 p-3 bg-muted rounded-md">
-                  <input
-                    type="checkbox"
-                    id="precio_por_kilo"
-                    checked={formData.precio_por_kilo}
-                    onChange={(e) => setFormData({ ...formData, precio_por_kilo: e.target.checked })}
-                    className="rounded"
-                  />
-                  <Label htmlFor="precio_por_kilo" className="cursor-pointer">
-                    Precio por kilo
-                  </Label>
+                <div className="flex items-center gap-4 p-3 bg-muted rounded-md">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="precio_por_kilo"
+                      checked={formData.precio_por_kilo}
+                      onChange={(e) => setFormData({ ...formData, precio_por_kilo: e.target.checked })}
+                      className="rounded"
+                    />
+                    <Label htmlFor="precio_por_kilo" className="cursor-pointer">
+                      Precio por kilo
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="kg_por_unidad" className="text-sm whitespace-nowrap">
+                      Kg por unidad:
+                    </Label>
+                    <Input
+                      id="kg_por_unidad"
+                      type="number"
+                      step="0.01"
+                      value={formData.kg_por_unidad}
+                      onChange={(e) => setFormData({ ...formData, kg_por_unidad: e.target.value })}
+                      placeholder="ej: 5"
+                      className="w-24"
+                    />
+                    {formData.kg_por_unidad && (
+                      <span className="text-xs text-muted-foreground">
+                        (para conversión en compras)
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">

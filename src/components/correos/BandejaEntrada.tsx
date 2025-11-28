@@ -301,7 +301,7 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
   }, [pendingOpenUnread, emails, selectedAccount, isLoading]);
 
   // Fetch selected email detail
-  const { data: emailDetail, isLoading: isLoadingDetail } = useQuery({
+  const { data: emailDetail, isLoading: isLoadingDetail, isError: isEmailError } = useQuery({
     queryKey: ["gmail-email", selectedAccount, selectedEmailId],
     queryFn: async () => {
       if (!selectedEmailId || !selectedAccount) return null;
@@ -314,13 +314,24 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
         },
       });
 
+      // Handle 404 - email was deleted
       if (response.error) {
+        const errorData = response.data as { error?: string } | null;
+        if (errorData?.error?.includes("no encontrado") || errorData?.error?.includes("eliminado")) {
+          // Remove from local list
+          setAllEmails(prev => prev.filter(e => e.id !== selectedEmailId));
+          toast.info("Este correo ya no existe o fue eliminado");
+          setSelectedEmailId(null);
+          setSelectedEmailIndex(-1);
+          return null;
+        }
         throw new Error(response.error.message);
       }
 
       return response.data as EmailDetail;
     },
     enabled: !!selectedEmailId && !!selectedAccount,
+    retry: false, // Don't retry on 404 errors
   });
 
   // Mark email as read when viewing - with optimistic update

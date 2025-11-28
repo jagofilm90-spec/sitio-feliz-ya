@@ -6,27 +6,74 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Retry helper for network calls with exponential backoff
+async function fetchWithRetry(
+  url: string, 
+  options: RequestInit, 
+  maxRetries = 3,
+  baseDelay = 1000
+): Promise<Response> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+      
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error: any) {
+      lastError = error;
+      console.error(`Fetch attempt ${attempt + 1} failed:`, error.message);
+      
+      // Don't retry on abort
+      if (error.name === 'AbortError') {
+        throw new Error('La solicitud tardó demasiado. Intente de nuevo.');
+      }
+      
+      // Wait before retrying (exponential backoff)
+      if (attempt < maxRetries - 1) {
+        const delay = baseDelay * Math.pow(2, attempt);
+        console.log(`Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  throw new Error(`Error de conexión después de ${maxRetries} intentos: ${lastError?.message || 'Unknown error'}`);
+}
+
 async function refreshAccessToken(refreshToken: string): Promise<{ access_token: string; expires_in: number } | null> {
   const GMAIL_CLIENT_ID = Deno.env.get("GMAIL_CLIENT_ID");
   const GMAIL_CLIENT_SECRET = Deno.env.get("GMAIL_CLIENT_SECRET");
 
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: GMAIL_CLIENT_ID!,
-      client_secret: GMAIL_CLIENT_SECRET!,
-      refresh_token: refreshToken,
-      grant_type: "refresh_token",
-    }),
-  });
+  try {
+    const response = await fetchWithRetry("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: GMAIL_CLIENT_ID!,
+        client_secret: GMAIL_CLIENT_SECRET!,
+        refresh_token: refreshToken,
+        grant_type: "refresh_token",
+      }),
+    });
 
-  if (!response.ok) {
-    console.error("Failed to refresh token:", await response.text());
+    if (!response.ok) {
+      console.error("Failed to refresh token:", await response.text());
+      return null;
+    }
+
+    return response.json();
+  } catch (error: any) {
+    console.error("Token refresh error:", error.message);
     return null;
   }
-
-  return response.json();
 }
 
 async function getValidAccessToken(supabase: any, cuenta: any): Promise<string | null> {
@@ -109,7 +156,7 @@ serve(async (req) => {
         url += `&pageToken=${pageToken}`;
       }
 
-      const listResponse = await fetch(url, {
+      const listResponse = await fetchWithRetry(url, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 
@@ -121,11 +168,12 @@ serve(async (req) => {
       const messages = [];
 
       for (const msg of (listData.messages || []).slice(0, maxResults || 50)) {
-        const msgResponse = await fetch(
+        const msgResponse = await fetchWithRetry(
           `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
           {
             headers: { Authorization: `Bearer ${accessToken}` },
-          }
+          },
+          2 // fewer retries for individual messages
         );
 
         if (msgResponse.ok) {
@@ -154,7 +202,7 @@ serve(async (req) => {
 
     // LIST TRASH - List emails in trash
     if (action === "listTrash") {
-      const listResponse = await fetch(
+      const listResponse = await fetchWithRetry(
         `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults || 50}&labelIds=TRASH`,
         {
           headers: { Authorization: `Bearer ${accessToken}` },
@@ -169,11 +217,12 @@ serve(async (req) => {
       const messages = [];
 
       for (const msg of (listData.messages || []).slice(0, maxResults || 50)) {
-        const msgResponse = await fetch(
+        const msgResponse = await fetchWithRetry(
           `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
           {
             headers: { Authorization: `Bearer ${accessToken}` },
-          }
+          },
+          2
         );
 
         if (msgResponse.ok) {
@@ -199,7 +248,7 @@ serve(async (req) => {
 
     // GET UNREAD COUNT - Get unread message count
     if (action === "getUnreadCount") {
-      const profileResponse = await fetch(
+      const profileResponse = await fetchWithRetry(
         `https://gmail.googleapis.com/gmail/v1/users/me/labels/INBOX`,
         {
           headers: { Authorization: `Bearer ${accessToken}` },
@@ -536,12 +585,21 @@ serve(async (req) => {
         throw new Error("messageId requerido");
       }
 
-      const msgResponse = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`,
-        {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }
-      );
+      let msgResponse: Response;
+      try {
+        msgResponse = await fetchWithRetry(
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`,
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }
+        );
+      } catch (networkError: any) {
+        console.error("Network error reading email:", networkError.message);
+        return new Response(
+          JSON.stringify({ error: `Error de red: ${networkError.message}` }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
       if (!msgResponse.ok) {
         const errorText = await msgResponse.text();
@@ -639,7 +697,7 @@ serve(async (req) => {
         throw new Error("messageId y attachmentId requeridos");
       }
 
-      const attachmentResponse = await fetch(
+      const attachmentResponse = await fetchWithRetry(
         `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/attachments/${attachmentId}`,
         {
           headers: { Authorization: `Bearer ${accessToken}` },

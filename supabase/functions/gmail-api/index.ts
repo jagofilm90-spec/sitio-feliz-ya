@@ -80,7 +80,7 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
-    const { action, email, to, subject, body: emailBody, maxResults, messageId, searchQuery, attachmentId, filename, attachments: emailAttachments } = await req.json();
+    const { action, email, to, subject, body: emailBody, maxResults, messageId, searchQuery, attachmentId, filename, attachments: emailAttachments, pageToken } = await req.json();
 
     // Get account credentials
     const { data: cuenta, error: cuentaError } = await supabase
@@ -101,7 +101,6 @@ serve(async (req) => {
 
     // LIST - List inbox emails with optional search and pagination
     if (action === "list") {
-      const { pageToken } = await req.clone().json().catch(() => ({}));
       let url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults || 50}&labelIds=INBOX`;
       if (searchQuery) {
         url += `&q=${encodeURIComponent(searchQuery)}`;

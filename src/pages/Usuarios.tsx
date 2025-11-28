@@ -151,28 +151,47 @@ export default function Usuarios() {
 
     setIsCheckingEmail(true);
     try {
-      const { data, error } = await supabase
+      // Verificar en profiles primero
+      const { data: profileData, error: profileError } = await supabase
         .from("profiles")
         .select("email")
         .eq("email", newUser.email)
         .maybeSingle();
 
-      if (error) throw error;
+      if (profileError) throw profileError;
 
-      if (data) {
+      if (profileData) {
         setEmailCheckResult("taken");
         toast({
           variant: "destructive",
           title: "Email no disponible",
           description: "Este email ya está registrado en el sistema",
         });
-      } else {
+        return;
+      }
+
+      // Verificar también en empleados por si el email está asociado a un empleado sin usuario
+      const { data: empleadoData } = await supabase
+        .from("empleados")
+        .select("email")
+        .eq("email", newUser.email)
+        .maybeSingle();
+
+      if (empleadoData) {
+        // Email existe en empleados pero no en profiles - se puede usar pero hay empleado para vincular
         setEmailCheckResult("available");
         toast({
           title: "Email disponible",
-          description: "Este email puede ser usado",
+          description: "Este email pertenece a un empleado existente",
         });
+        return;
       }
+
+      setEmailCheckResult("available");
+      toast({
+        title: "Email disponible",
+        description: "Este email puede ser usado",
+      });
     } catch (error: any) {
       console.error("Error checking email:", error);
       toast({
@@ -297,10 +316,27 @@ export default function Usuarios() {
       loadEmpleados();
     } catch (error: any) {
       console.error("Error creating user:", error);
-      const errorMsg = error.message || "Error desconocido";
-      const friendlyMsg = errorMsg.includes("already been registered") 
-        ? "Este email ya está registrado en el sistema"
-        : errorMsg;
+      // Extraer mensaje de error de diferentes fuentes posibles
+      let errorMsg = error.message || "Error desconocido";
+      
+      // Si el error tiene un contexto con mensaje, usarlo
+      if (error.context?.body) {
+        try {
+          const bodyError = JSON.parse(error.context.body);
+          if (bodyError.error) errorMsg = bodyError.error;
+        } catch (e) {
+          // Si no se puede parsear, usar el mensaje original
+        }
+      }
+      
+      // Traducir mensajes comunes
+      let friendlyMsg = errorMsg;
+      if (errorMsg.includes("already been registered") || errorMsg.includes("email_exists")) {
+        friendlyMsg = "Este email ya está registrado en el sistema";
+      } else if (errorMsg.includes("password")) {
+        friendlyMsg = "La contraseña no cumple con los requisitos mínimos";
+      }
+      
       toast({
         variant: "destructive",
         title: "Error al crear usuario",

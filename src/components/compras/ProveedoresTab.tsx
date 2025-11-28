@@ -20,9 +20,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Edit, Globe, Package, Trash2 } from "lucide-react";
+import { Plus, Search, Edit, Globe, Package, Trash2, X, Mail } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import ProveedorProductosSelector from "./ProveedorProductosSelector";
 import {
@@ -59,10 +65,16 @@ const ProveedoresTab = () => {
   const [productosProveedor, setProductosProveedor] = useState<Proveedor | null>(null);
   const [deletingProveedor, setDeletingProveedor] = useState<Proveedor | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  
+  // Multi-email support
+  const [emails, setEmails] = useState<string[]>([]);
+  const [newEmail, setNewEmail] = useState("");
+  const [editEmails, setEditEmails] = useState<string[]>([]);
+  const [editNewEmail, setEditNewEmail] = useState("");
+  
   const [newProveedor, setNewProveedor] = useState({
     nombre: "",
     nombre_contacto: "",
-    email: "",
     telefono: "",
     direccion: "",
     pais: "México",
@@ -72,6 +84,39 @@ const ProveedoresTab = () => {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Helper to parse emails from DB (stored as comma-separated)
+  const parseEmails = (emailStr: string | null): string[] => {
+    if (!emailStr) return [];
+    return emailStr.split(",").map(e => e.trim()).filter(e => e.length > 0);
+  };
+
+  // Helper to join emails for DB storage
+  const joinEmails = (emailsArr: string[]): string => {
+    return emailsArr.join(", ");
+  };
+
+  const handleAddEmail = () => {
+    if (newEmail && newEmail.includes("@") && !emails.includes(newEmail.trim())) {
+      setEmails([...emails, newEmail.trim()]);
+      setNewEmail("");
+    }
+  };
+
+  const handleRemoveEmail = (emailToRemove: string) => {
+    setEmails(emails.filter(e => e !== emailToRemove));
+  };
+
+  const handleAddEditEmail = () => {
+    if (editNewEmail && editNewEmail.includes("@") && !editEmails.includes(editNewEmail.trim())) {
+      setEditEmails([...editEmails, editNewEmail.trim()]);
+      setEditNewEmail("");
+    }
+  };
+
+  const handleRemoveEditEmail = (emailToRemove: string) => {
+    setEditEmails(editEmails.filter(e => e !== emailToRemove));
+  };
 
   const { data: proveedores = [], isLoading } = useQuery({
     queryKey: ["proveedores"],
@@ -87,7 +132,7 @@ const ProveedoresTab = () => {
   });
 
   const createProveedor = useMutation({
-    mutationFn: async (proveedor: typeof newProveedor) => {
+    mutationFn: async (proveedor: typeof newProveedor & { email: string }) => {
       const { error } = await supabase.from("proveedores").insert([proveedor]);
       if (error) throw error;
     },
@@ -97,13 +142,14 @@ const ProveedoresTab = () => {
       setNewProveedor({
         nombre: "",
         nombre_contacto: "",
-        email: "",
         telefono: "",
         direccion: "",
         pais: "México",
         rfc: "",
         notas: "",
       });
+      setEmails([]);
+      setNewEmail("");
       toast({
         title: "Proveedor creado",
         description: "El proveedor ha sido registrado exitosamente",
@@ -274,30 +320,54 @@ const ProveedoresTab = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+              <div className="space-y-2">
+                <Label>Correos electrónicos</Label>
+                <div className="flex gap-2">
                   <Input
-                    id="email"
                     type="email"
-                    placeholder="contacto@proveedor.com"
-                    value={newProveedor.email}
-                    onChange={(e) =>
-                      setNewProveedor({ ...newProveedor, email: e.target.value })
-                    }
+                    placeholder="correo@proveedor.com"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddEmail())}
                   />
+                  <Button type="button" variant="outline" onClick={handleAddEmail}>
+                    <Plus className="h-4 w-4" />
+                  </Button>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="telefono">Teléfono</Label>
-                  <Input
-                    id="telefono"
-                    placeholder="555-1234"
-                    value={newProveedor.telefono}
-                    onChange={(e) =>
-                      setNewProveedor({ ...newProveedor, telefono: e.target.value })
-                    }
-                  />
-                </div>
+                {emails.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {emails.map((email, idx) => (
+                      <Badge key={idx} variant="secondary" className="gap-1 pr-1">
+                        <Mail className="h-3 w-3" />
+                        {email}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-4 w-4 ml-1 hover:bg-destructive/20"
+                          onClick={() => handleRemoveEmail(email)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Agrega uno o más correos. Las órdenes de compra se enviarán a todos.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="telefono">Teléfono</Label>
+                <Input
+                  id="telefono"
+                  placeholder="555-1234"
+                  value={newProveedor.telefono}
+                  onChange={(e) =>
+                    setNewProveedor({ ...newProveedor, telefono: e.target.value })
+                  }
+                />
               </div>
 
               <div className="space-y-2">
@@ -325,7 +395,7 @@ const ProveedoresTab = () => {
               </div>
 
               <Button
-                onClick={() => createProveedor.mutate(newProveedor)}
+                onClick={() => createProveedor.mutate({ ...newProveedor, email: joinEmails(emails) })}
                 disabled={!newProveedor.nombre || createProveedor.isPending}
                 className="w-full"
               >
@@ -372,7 +442,36 @@ const ProveedoresTab = () => {
                   </TableCell>
                   <TableCell>{proveedor.nombre_contacto || "-"}</TableCell>
                   <TableCell>{proveedor.telefono || "-"}</TableCell>
-                  <TableCell>{proveedor.email || "-"}</TableCell>
+                  <TableCell>
+                    {proveedor.email ? (
+                      (() => {
+                        const emailsList = parseEmails(proveedor.email);
+                        if (emailsList.length === 0) return "-";
+                        if (emailsList.length === 1) return emailsList[0];
+                        return (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="cursor-help flex items-center gap-1">
+                                  {emailsList[0]}
+                                  <Badge variant="outline" className="text-xs px-1 py-0">
+                                    +{emailsList.length - 1}
+                                  </Badge>
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <div className="space-y-1">
+                                  {emailsList.map((email, idx) => (
+                                    <div key={idx}>{email}</div>
+                                  ))}
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        );
+                      })()
+                    ) : "-"}
+                  </TableCell>
                   <TableCell>
                     <Badge variant={proveedor.activo ? "default" : "secondary"}>
                       {proveedor.activo ? "Activo" : "Inactivo"}
@@ -396,6 +495,8 @@ const ProveedoresTab = () => {
                         size="sm"
                         onClick={() => {
                           setEditingProveedor(proveedor);
+                          setEditEmails(parseEmails(proveedor.email));
+                          setEditNewEmail("");
                           setIsEditDialogOpen(true);
                         }}
                         title="Editar proveedor"
@@ -488,34 +589,56 @@ const ProveedoresTab = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-email">Email</Label>
+              <div className="space-y-2">
+                <Label>Correos electrónicos</Label>
+                <div className="flex gap-2">
                   <Input
-                    id="edit-email"
                     type="email"
-                    value={editingProveedor.email || ""}
-                    onChange={(e) =>
-                      setEditingProveedor({
-                        ...editingProveedor,
-                        email: e.target.value,
-                      })
-                    }
+                    placeholder="correo@proveedor.com"
+                    value={editNewEmail}
+                    onChange={(e) => setEditNewEmail(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddEditEmail())}
                   />
+                  <Button type="button" variant="outline" onClick={handleAddEditEmail}>
+                    <Plus className="h-4 w-4" />
+                  </Button>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-telefono">Teléfono</Label>
-                  <Input
-                    id="edit-telefono"
-                    value={editingProveedor.telefono || ""}
-                    onChange={(e) =>
-                      setEditingProveedor({
-                        ...editingProveedor,
-                        telefono: e.target.value,
-                      })
-                    }
-                  />
-                </div>
+                {editEmails.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {editEmails.map((email, idx) => (
+                      <Badge key={idx} variant="secondary" className="gap-1 pr-1">
+                        <Mail className="h-3 w-3" />
+                        {email}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-4 w-4 ml-1 hover:bg-destructive/20"
+                          onClick={() => handleRemoveEditEmail(email)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Agrega uno o más correos. Las órdenes de compra se enviarán a todos.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-telefono">Teléfono</Label>
+                <Input
+                  id="edit-telefono"
+                  value={editingProveedor.telefono || ""}
+                  onChange={(e) =>
+                    setEditingProveedor({
+                      ...editingProveedor,
+                      telefono: e.target.value,
+                    })
+                  }
+                />
               </div>
 
               <div className="space-y-2">
@@ -563,7 +686,7 @@ const ProveedoresTab = () => {
               </div>
 
               <Button
-                onClick={() => updateProveedor.mutate(editingProveedor)}
+                onClick={() => updateProveedor.mutate({ ...editingProveedor, email: joinEmails(editEmails) })}
                 disabled={!editingProveedor.nombre || updateProveedor.isPending}
                 className="w-full"
               >

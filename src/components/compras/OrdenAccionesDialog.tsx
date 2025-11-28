@@ -794,6 +794,7 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
         }
       ];
 
+      // 1. Send email to supplier
       const { data, error } = await supabase.functions.invoke('gmail-api', {
         body: {
           action: 'send',
@@ -807,6 +808,48 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
 
       if (error) throw error;
 
+      // 2. Send copy notification to compras@almasa.com.mx
+      const copyHtmlBody = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #2e7d32;">✓ Orden de Compra Enviada</h2>
+          <p>Se ha enviado la siguiente orden de compra al proveedor:</p>
+          
+          <div style="background-color: #e8f5e9; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2e7d32;">
+            <p style="margin: 5px 0;"><strong>Folio:</strong> ${orden.folio}</p>
+            <p style="margin: 5px 0;"><strong>Proveedor:</strong> ${orden.proveedores?.nombre}</p>
+            <p style="margin: 5px 0;"><strong>Email del proveedor:</strong> ${orden.proveedores?.email}</p>
+            <p style="margin: 5px 0;"><strong>Total:</strong> $${orden.total?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+            <p style="margin: 5px 0;"><strong>Fecha de la orden:</strong> ${new Date(orden.fecha_orden).toLocaleDateString('es-MX')}</p>
+            <p style="margin: 5px 0;"><strong>Enviado:</strong> ${new Date().toLocaleString('es-MX')}</p>
+          </div>
+          
+          <p>Adjunto encontrarás una copia del documento enviado al proveedor.</p>
+          
+          <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;" />
+          <p style="color: #666; font-size: 12px;">
+            Notificación automática del sistema ERP - Abarrotes La Manita
+          </p>
+        </div>
+      `;
+
+      // Send copy to internal email (don't fail if this fails)
+      try {
+        await supabase.functions.invoke('gmail-api', {
+          body: {
+            action: 'send',
+            email: 'compras@almasa.com.mx',
+            to: 'compras@almasa.com.mx',
+            subject: `[COPIA ENVIADA] OC ${orden.folio} enviada a ${orden.proveedores?.nombre}`,
+            body: copyHtmlBody,
+            attachments: attachments,
+          },
+        });
+        console.log('Copy email sent to compras@almasa.com.mx');
+      } catch (copyError) {
+        console.error('Error sending copy email:', copyError);
+        // Don't fail the main operation if copy fails
+      }
+
       // Update order status to "enviada"
       await supabase
         .from("ordenes_compra")
@@ -817,7 +860,7 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
 
       toast({
         title: "Orden enviada",
-        description: `La orden se envió correctamente a ${orden.proveedores.email} con el PDF adjunto`,
+        description: `La orden se envió a ${orden.proveedores.email} y una copia a compras@almasa.com.mx`,
       });
       
       onOpenChange(false);

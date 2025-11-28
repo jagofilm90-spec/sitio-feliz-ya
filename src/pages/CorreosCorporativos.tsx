@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useGmailPermisos } from "@/hooks/useGmailPermisos";
 import {
   Mail,
   CheckCircle,
@@ -18,6 +19,7 @@ import {
   Copy,
   Inbox,
   Settings,
+  Shield,
 } from "lucide-react";
 import {
   Dialog,
@@ -27,6 +29,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import BandejaEntrada from "@/components/correos/BandejaEntrada";
+import GmailPermisosManager from "@/components/correos/GmailPermisosManager";
 
 interface GmailCuenta {
   id: string;
@@ -46,6 +49,8 @@ const CorreosCorporativos = () => {
   const [authUrl, setAuthUrl] = useState<string | null>(null);
   const [authEmail, setAuthEmail] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("bandeja");
+
+  const { isAdmin, filterCuentasByPermiso } = useGmailPermisos();
 
   const { data: cuentas, isLoading, refetch } = useQuery({
     queryKey: ["gmail-cuentas"],
@@ -69,10 +74,12 @@ const CorreosCorporativos = () => {
     return new Date(cuenta.token_expires_at) < new Date();
   };
 
-  // Filter connected accounts for the inbox
-  const connectedCuentas = cuentas?.filter(
+  // Filter connected accounts for the inbox based on permissions
+  const allConnectedCuentas = cuentas?.filter(
     (c) => isConnected(c) && c.activo
   ) || [];
+  
+  const connectedCuentas = filterCuentasByPermiso(allConnectedCuentas);
 
   const handleConnect = async (email: string) => {
     setConnectingEmail(email);
@@ -252,10 +259,18 @@ const CorreosCorporativos = () => {
               <Inbox className="h-4 w-4" />
               Bandeja de Entrada
             </TabsTrigger>
-            <TabsTrigger value="cuentas" className="gap-2">
-              <Settings className="h-4 w-4" />
-              Cuentas
-            </TabsTrigger>
+            {isAdmin && (
+              <>
+                <TabsTrigger value="cuentas" className="gap-2">
+                  <Settings className="h-4 w-4" />
+                  Cuentas
+                </TabsTrigger>
+                <TabsTrigger value="permisos" className="gap-2">
+                  <Shield className="h-4 w-4" />
+                  Permisos
+                </TabsTrigger>
+              </>
+            )}
           </TabsList>
 
           <TabsContent value="bandeja" className="mt-6">
@@ -390,6 +405,12 @@ const CorreosCorporativos = () => {
               </div>
             )}
           </TabsContent>
+
+          {isAdmin && (
+            <TabsContent value="permisos" className="mt-6">
+              <GmailPermisosManager />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
 

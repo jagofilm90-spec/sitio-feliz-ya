@@ -560,6 +560,100 @@ export type Database = {
           },
         ]
       }
+      gmail_auditoria: {
+        Row: {
+          accion: string
+          created_at: string
+          email_subject: string | null
+          email_to: string | null
+          gmail_cuenta_id: string
+          gmail_message_id: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          accion: string
+          created_at?: string
+          email_subject?: string | null
+          email_to?: string | null
+          gmail_cuenta_id: string
+          gmail_message_id?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          accion?: string
+          created_at?: string
+          email_subject?: string | null
+          email_to?: string | null
+          gmail_cuenta_id?: string
+          gmail_message_id?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gmail_auditoria_gmail_cuenta_id_fkey"
+            columns: ["gmail_cuenta_id"]
+            isOneToOne: false
+            referencedRelation: "gmail_cuentas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gmail_auditoria_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gmail_cuenta_permisos: {
+        Row: {
+          asignado_por: string | null
+          created_at: string
+          gmail_cuenta_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          asignado_por?: string | null
+          created_at?: string
+          gmail_cuenta_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          asignado_por?: string | null
+          created_at?: string
+          gmail_cuenta_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gmail_cuenta_permisos_asignado_por_fkey"
+            columns: ["asignado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gmail_cuenta_permisos_gmail_cuenta_id_fkey"
+            columns: ["gmail_cuenta_id"]
+            isOneToOne: false
+            referencedRelation: "gmail_cuentas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gmail_cuenta_permisos_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gmail_cuentas: {
         Row: {
           access_token: string | null

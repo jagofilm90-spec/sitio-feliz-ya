@@ -28,10 +28,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, Search, MoreVertical, Loader2 } from "lucide-react";
+import { Plus, Trash2, Search, MoreVertical, Loader2, Truck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import OrdenAccionesDialog from "./OrdenAccionesDialog";
+import { formatCurrency } from "@/lib/utils";
 
 interface ProductoEnOrden {
   producto_id: string;
@@ -42,6 +44,12 @@ interface ProductoEnOrden {
   subtotal: number;
   aplica_iva: boolean;
   aplica_ieps: boolean;
+}
+
+interface EntregaProgramada {
+  numero_entrega: number;
+  cantidad_bultos: number;
+  fecha_programada: string;
 }
 
 const OrdenesCompraTab = () => {
@@ -63,6 +71,11 @@ const OrdenesCompraTab = () => {
   const [cantidad, setCantidad] = useState("");
   const [precioUnitario, setPrecioUnitario] = useState("");
   const [generatingFolio, setGeneratingFolio] = useState(false);
+  
+  // Multiple deliveries state
+  const [entregasMultiples, setEntregasMultiples] = useState(false);
+  const [bultosPorEntrega, setBultosPorEntrega] = useState("");
+  const [entregasProgramadas, setEntregasProgramadas] = useState<EntregaProgramada[]>([]);
 
   // Function to generate next folio
   const generateNextFolio = async () => {
@@ -137,6 +150,45 @@ const OrdenesCompraTab = () => {
     },
   });
 
+  // Calculate deliveries based on total quantity and bultos per delivery
+  const calcularEntregas = () => {
+    const cantidadTotal = productosEnOrden.reduce((sum, p) => sum + p.cantidad, 0);
+    const bultosPorTrailer = parseInt(bultosPorEntrega) || 0;
+    
+    if (cantidadTotal <= 0 || bultosPorTrailer <= 0) {
+      setEntregasProgramadas([]);
+      return;
+    }
+    
+    const numEntregas = Math.ceil(cantidadTotal / bultosPorTrailer);
+    const entregas: EntregaProgramada[] = [];
+    let bultosRestantes = cantidadTotal;
+    
+    for (let i = 1; i <= numEntregas; i++) {
+      const bultosEntrega = Math.min(bultosPorTrailer, bultosRestantes);
+      entregas.push({
+        numero_entrega: i,
+        cantidad_bultos: bultosEntrega,
+        fecha_programada: "",
+      });
+      bultosRestantes -= bultosEntrega;
+    }
+    
+    setEntregasProgramadas(entregas);
+  };
+
+  const updateFechaEntrega = (index: number, fecha: string) => {
+    setEntregasProgramadas(prev => 
+      prev.map((e, i) => i === index ? { ...e, fecha_programada: fecha } : e)
+    );
+  };
+
+  const updateCantidadEntrega = (index: number, cantidad: number) => {
+    setEntregasProgramadas(prev => 
+      prev.map((e, i) => i === index ? { ...e, cantidad_bultos: cantidad } : e)
+    );
+  };
+
   // Create orden de compra
   const createOrden = useMutation({
     mutationFn: async () => {
@@ -146,10 +198,8 @@ const OrdenesCompraTab = () => {
       if (!user) throw new Error("No user");
 
       const subtotal = productosEnOrden.reduce((sum, p) => sum + p.subtotal, 0);
-      // Calculate IVA only for products with aplica_iva = true
       const ivaAmount = productosEnOrden.reduce((sum, p) => 
         sum + (p.aplica_iva ? p.subtotal * 0.16 : 0), 0);
-      // Calculate IEPS only for products with aplica_ieps = true  
       const iepsAmount = productosEnOrden.reduce((sum, p) => 
         sum + (p.aplica_ieps ? p.subtotal * 0.08 : 0), 0);
       const impuestos = ivaAmount + iepsAmount;
@@ -161,13 +211,14 @@ const OrdenesCompraTab = () => {
         .insert({
           folio,
           proveedor_id: proveedorId,
-          fecha_entrega_programada: fechaEntrega || null,
+          fecha_entrega_programada: entregasMultiples ? null : (fechaEntrega || null),
           subtotal,
           impuestos,
           total,
           notas,
           creado_por: user.id,
           status: "pendiente",
+          entregas_multiples: entregasMultiples,
         })
         .select()
         .single();
@@ -189,6 +240,23 @@ const OrdenesCompraTab = () => {
 
       if (detallesError) throw detallesError;
 
+      // Create multiple deliveries if enabled
+      if (entregasMultiples && entregasProgramadas.length > 0) {
+        const entregas = entregasProgramadas.map((e) => ({
+          orden_compra_id: orden.id,
+          numero_entrega: e.numero_entrega,
+          cantidad_bultos: e.cantidad_bultos,
+          fecha_programada: e.fecha_programada,
+          status: "programada",
+        }));
+
+        const { error: entregasError } = await supabase
+          .from("ordenes_compra_entregas")
+          .insert(entregas);
+
+        if (entregasError) throw entregasError;
+      }
+
       // Update productos with last purchase info
       for (const p of productosEnOrden) {
         await supabase
@@ -204,10 +272,13 @@ const OrdenesCompraTab = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ordenes_compra"] });
+      queryClient.invalidateQueries({ queryKey: ["ordenes_calendario"] });
       queryClient.invalidateQueries({ queryKey: ["productos"] });
       toast({
         title: "Orden creada",
-        description: "La orden de compra se ha creado exitosamente",
+        description: entregasMultiples 
+          ? `Orden creada con ${entregasProgramadas.length} entregas programadas`
+          : "La orden de compra se ha creado exitosamente",
       });
       resetForm();
       setDialogOpen(false);
@@ -259,6 +330,10 @@ const OrdenesCompraTab = () => {
 
   const eliminarProducto = (index: number) => {
     setProductosEnOrden(productosEnOrden.filter((_, i) => i !== index));
+    // Recalculate deliveries if multiple deliveries enabled
+    if (entregasMultiples) {
+      setTimeout(calcularEntregas, 0);
+    }
   };
 
   const resetForm = () => {
@@ -271,6 +346,9 @@ const OrdenesCompraTab = () => {
     setCantidad("");
     setPrecioUnitario("");
     setEditingOrdenId(null);
+    setEntregasMultiples(false);
+    setBultosPorEntrega("");
+    setEntregasProgramadas([]);
   };
 
   // Update orden de compra
@@ -279,10 +357,8 @@ const OrdenesCompraTab = () => {
       if (!editingOrdenId) throw new Error("No order to update");
 
       const subtotal = productosEnOrden.reduce((sum, p) => sum + p.subtotal, 0);
-      // Calculate IVA only for products with aplica_iva = true
       const ivaAmount = productosEnOrden.reduce((sum, p) => 
         sum + (p.aplica_iva ? p.subtotal * 0.16 : 0), 0);
-      // Calculate IEPS only for products with aplica_ieps = true  
       const iepsAmount = productosEnOrden.reduce((sum, p) => 
         sum + (p.aplica_ieps ? p.subtotal * 0.08 : 0), 0);
       const impuestos = ivaAmount + iepsAmount;
@@ -294,11 +370,12 @@ const OrdenesCompraTab = () => {
         .update({
           folio,
           proveedor_id: proveedorId,
-          fecha_entrega_programada: fechaEntrega || null,
+          fecha_entrega_programada: entregasMultiples ? null : (fechaEntrega || null),
           subtotal,
           impuestos,
           total,
           notas,
+          entregas_multiples: entregasMultiples,
         })
         .eq("id", editingOrdenId);
 
@@ -327,6 +404,32 @@ const OrdenesCompraTab = () => {
 
       if (detallesError) throw detallesError;
 
+      // Handle multiple deliveries
+      if (entregasMultiples) {
+        // Delete existing entregas
+        await supabase
+          .from("ordenes_compra_entregas")
+          .delete()
+          .eq("orden_compra_id", editingOrdenId);
+
+        // Create new entregas
+        if (entregasProgramadas.length > 0) {
+          const entregas = entregasProgramadas.map((e) => ({
+            orden_compra_id: editingOrdenId,
+            numero_entrega: e.numero_entrega,
+            cantidad_bultos: e.cantidad_bultos,
+            fecha_programada: e.fecha_programada,
+            status: "programada",
+          }));
+
+          const { error: entregasError } = await supabase
+            .from("ordenes_compra_entregas")
+            .insert(entregas);
+
+          if (entregasError) throw entregasError;
+        }
+      }
+
       return editingOrdenId;
     },
     onSuccess: () => {
@@ -348,12 +451,13 @@ const OrdenesCompraTab = () => {
     },
   });
 
-  const handleEditOrden = (orden: any) => {
+  const handleEditOrden = async (orden: any) => {
     setEditingOrdenId(orden.id);
     setFolio(orden.folio);
     setProveedorId(orden.proveedor_id);
     setFechaEntrega(orden.fecha_entrega_programada || "");
     setNotas(orden.notas || "");
+    setEntregasMultiples(orden.entregas_multiples || false);
     
     // Load products from order details
     const productos = (orden.ordenes_compra_detalles || []).map((d: any) => ({
@@ -362,8 +466,27 @@ const OrdenesCompraTab = () => {
       cantidad: d.cantidad_ordenada,
       precio_unitario: d.precio_unitario_compra,
       subtotal: d.subtotal,
+      aplica_iva: false,
+      aplica_ieps: false,
     }));
     setProductosEnOrden(productos);
+    
+    // Load entregas if multiple
+    if (orden.entregas_multiples) {
+      const { data: entregas } = await supabase
+        .from("ordenes_compra_entregas")
+        .select("*")
+        .eq("orden_compra_id", orden.id)
+        .order("numero_entrega");
+      
+      if (entregas && entregas.length > 0) {
+        setEntregasProgramadas(entregas.map(e => ({
+          numero_entrega: e.numero_entrega,
+          cantidad_bultos: e.cantidad_bultos,
+          fecha_programada: e.fecha_programada,
+        })));
+      }
+    }
     
     setDialogOpen(true);
   };
@@ -378,6 +501,20 @@ const OrdenesCompraTab = () => {
       });
       return;
     }
+    
+    // Validate multiple deliveries have dates
+    if (entregasMultiples) {
+      const sinFecha = entregasProgramadas.some(e => !e.fecha_programada);
+      if (sinFecha) {
+        toast({
+          title: "Fechas incompletas",
+          description: "Asigna una fecha a cada entrega programada",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    
     if (editingOrdenId) {
       updateOrden.mutate();
     } else {
@@ -392,6 +529,7 @@ const OrdenesCompraTab = () => {
     sum + (p.aplica_ieps ? p.subtotal * 0.08 : 0), 0);
   const impuestosOrden = ivaOrden + iepsOrden;
   const totalOrden = subtotalOrden + impuestosOrden;
+  const cantidadTotalBultos = productosEnOrden.reduce((sum, p) => sum + p.cantidad, 0);
 
   const filteredOrdenes = ordenes.filter(
     (orden) =>
@@ -447,14 +585,14 @@ const OrdenesCompraTab = () => {
               <TableHead>Fecha</TableHead>
               <TableHead>Total</TableHead>
               <TableHead>Estado</TableHead>
-              <TableHead>Entrega Programada</TableHead>
+              <TableHead>Entregas</TableHead>
               <TableHead></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredOrdenes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground">
+                <TableCell colSpan={7} className="text-center text-muted-foreground">
                   No hay órdenes de compra registradas
                 </TableCell>
               </TableRow>
@@ -466,12 +604,19 @@ const OrdenesCompraTab = () => {
                   <TableCell>
                     {new Date(orden.fecha_orden).toLocaleDateString()}
                   </TableCell>
-                  <TableCell>${orden.total.toLocaleString()}</TableCell>
+                  <TableCell>{formatCurrency(orden.total)}</TableCell>
                   <TableCell>{getStatusBadge(orden.status)}</TableCell>
                   <TableCell>
-                    {orden.fecha_entrega_programada
-                      ? new Date(orden.fecha_entrega_programada).toLocaleDateString()
-                      : "-"}
+                    {orden.entregas_multiples ? (
+                      <Badge variant="outline" className="gap-1">
+                        <Truck className="h-3 w-3" />
+                        Múltiples
+                      </Badge>
+                    ) : orden.fecha_entrega_programada ? (
+                      new Date(orden.fecha_entrega_programada).toLocaleDateString()
+                    ) : (
+                      "-"
+                    )}
                   </TableCell>
                   <TableCell>
                     <Button
@@ -539,14 +684,16 @@ const OrdenesCompraTab = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>Fecha de Entrega Programada</Label>
-                <Input
-                  type="date"
-                  value={fechaEntrega}
-                  onChange={(e) => setFechaEntrega(e.target.value)}
-                />
-              </div>
+              {!entregasMultiples && (
+                <div>
+                  <Label>Fecha de Entrega Programada</Label>
+                  <Input
+                    type="date"
+                    value={fechaEntrega}
+                    onChange={(e) => setFechaEntrega(e.target.value)}
+                  />
+                </div>
+              )}
             </div>
 
             <div>
@@ -636,18 +783,18 @@ const OrdenesCompraTab = () => {
                       {productosEnOrden.map((p, index) => (
                         <TableRow key={index}>
                           <TableCell>{p.nombre}</TableCell>
-                          <TableCell>{p.cantidad}</TableCell>
-                          <TableCell>${p.precio_unitario}</TableCell>
+                          <TableCell>{p.cantidad.toLocaleString()}</TableCell>
+                          <TableCell>{formatCurrency(p.precio_unitario)}</TableCell>
                           <TableCell>
                             {p.ultimo_costo ? (
                               <span className="text-xs text-muted-foreground">
-                                ${p.ultimo_costo}
+                                {formatCurrency(p.ultimo_costo)}
                               </span>
                             ) : (
                               "-"
                             )}
                           </TableCell>
-                          <TableCell>${p.subtotal.toLocaleString()}</TableCell>
+                          <TableCell>{formatCurrency(p.subtotal)}</TableCell>
                           <TableCell>
                             <Button
                               type="button"
@@ -666,34 +813,139 @@ const OrdenesCompraTab = () => {
               )}
             </div>
 
+            {/* Multiple Deliveries Section */}
+            {productosEnOrden.length > 0 && (
+              <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Truck className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <h3 className="font-semibold">Múltiples Entregas (Tráilers)</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Divide la orden en varias entregas con fechas diferentes
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={entregasMultiples}
+                    onCheckedChange={(checked) => {
+                      setEntregasMultiples(checked);
+                      if (!checked) {
+                        setEntregasProgramadas([]);
+                        setBultosPorEntrega("");
+                      }
+                    }}
+                  />
+                </div>
+
+                {entregasMultiples && (
+                  <div className="space-y-4 pt-2">
+                    <div className="grid grid-cols-3 gap-4 items-end">
+                      <div>
+                        <Label>Total de bultos en la orden</Label>
+                        <Input
+                          value={cantidadTotalBultos.toLocaleString()}
+                          disabled
+                          className="bg-muted"
+                        />
+                      </div>
+                      <div>
+                        <Label>Bultos por tráiler/entrega</Label>
+                        <Input
+                          type="number"
+                          value={bultosPorEntrega}
+                          onChange={(e) => setBultosPorEntrega(e.target.value)}
+                          placeholder="Ej: 1200"
+                          min="1"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={calcularEntregas}
+                        disabled={!bultosPorEntrega || cantidadTotalBultos <= 0}
+                      >
+                        Calcular Entregas
+                      </Button>
+                    </div>
+
+                    {entregasProgramadas.length > 0 && (
+                      <div className="border rounded-lg overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Entrega #</TableHead>
+                              <TableHead>Bultos</TableHead>
+                              <TableHead>Fecha Programada *</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {entregasProgramadas.map((entrega, index) => (
+                              <TableRow key={index}>
+                                <TableCell>
+                                  <Badge variant="outline">
+                                    Tráiler {entrega.numero_entrega}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <Input
+                                    type="number"
+                                    value={entrega.cantidad_bultos}
+                                    onChange={(e) => updateCantidadEntrega(index, parseInt(e.target.value) || 0)}
+                                    className="w-24"
+                                    min="1"
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Input
+                                    type="date"
+                                    value={entrega.fecha_programada}
+                                    onChange={(e) => updateFechaEntrega(index, e.target.value)}
+                                    required
+                                  />
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                        <div className="p-2 bg-muted text-sm text-muted-foreground text-center">
+                          Total: {entregasProgramadas.reduce((sum, e) => sum + e.cantidad_bultos, 0).toLocaleString()} bultos en {entregasProgramadas.length} entregas
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {productosEnOrden.length > 0 && (
               <div className="border rounded-lg p-4 bg-muted/50">
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span>Subtotal:</span>
-                    <span>${subtotalOrden.toLocaleString()}</span>
+                    <span>{formatCurrency(subtotalOrden)}</span>
                   </div>
                   {ivaOrden > 0 && (
                     <div className="flex justify-between">
                       <span>IVA (16%):</span>
-                      <span>${ivaOrden.toLocaleString()}</span>
+                      <span>{formatCurrency(ivaOrden)}</span>
                     </div>
                   )}
                   {iepsOrden > 0 && (
                     <div className="flex justify-between">
                       <span>IEPS (8%):</span>
-                      <span>${iepsOrden.toLocaleString()}</span>
+                      <span>{formatCurrency(iepsOrden)}</span>
                     </div>
                   )}
                   {ivaOrden === 0 && iepsOrden === 0 && (
                     <div className="flex justify-between text-muted-foreground">
                       <span>Impuestos:</span>
-                      <span>$0</span>
+                      <span>$0.00</span>
                     </div>
                   )}
                   <div className="flex justify-between font-bold text-lg">
                     <span>Total:</span>
-                    <span>${totalOrden.toLocaleString()}</span>
+                    <span>{formatCurrency(totalOrden)}</span>
                   </div>
                 </div>
               </div>

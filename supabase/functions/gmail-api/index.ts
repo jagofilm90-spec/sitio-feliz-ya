@@ -201,9 +201,63 @@ serve(async (req) => {
       }
 
       const msgData = await msgResponse.json();
+      const headers = msgData.payload?.headers || [];
+      
+      // Extract body from message parts
+      let bodyHtml = "";
+      let bodyText = "";
+      
+      const extractBody = (part: any) => {
+        if (part.mimeType === "text/html" && part.body?.data) {
+          bodyHtml = atob(part.body.data.replace(/-/g, "+").replace(/_/g, "/"));
+        } else if (part.mimeType === "text/plain" && part.body?.data) {
+          bodyText = atob(part.body.data.replace(/-/g, "+").replace(/_/g, "/"));
+        }
+        if (part.parts) {
+          part.parts.forEach(extractBody);
+        }
+      };
+      
+      if (msgData.payload?.body?.data) {
+        const mimeType = msgData.payload.mimeType;
+        const decoded = atob(msgData.payload.body.data.replace(/-/g, "+").replace(/_/g, "/"));
+        if (mimeType === "text/html") {
+          bodyHtml = decoded;
+        } else {
+          bodyText = decoded;
+        }
+      }
+      
+      if (msgData.payload?.parts) {
+        msgData.payload.parts.forEach(extractBody);
+      }
+      
+      // Extract attachments
+      const attachments: { filename: string; mimeType: string }[] = [];
+      const extractAttachments = (part: any) => {
+        if (part.filename && part.body?.attachmentId) {
+          attachments.push({ filename: part.filename, mimeType: part.mimeType });
+        }
+        if (part.parts) {
+          part.parts.forEach(extractAttachments);
+        }
+      };
+      if (msgData.payload?.parts) {
+        msgData.payload.parts.forEach(extractAttachments);
+      }
+
+      const emailDetail = {
+        id: msgData.id,
+        from: headers.find((h: any) => h.name === "From")?.value || "",
+        to: headers.find((h: any) => h.name === "To")?.value || "",
+        subject: headers.find((h: any) => h.name === "Subject")?.value || "",
+        date: headers.find((h: any) => h.name === "Date")?.value || "",
+        body: bodyHtml || bodyText.replace(/\n/g, "<br>") || msgData.snippet || "",
+        attachments,
+      };
 
       return new Response(
-        JSON.stringify({ message: msgData }),
+        JSON.stringify(emailDetail),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

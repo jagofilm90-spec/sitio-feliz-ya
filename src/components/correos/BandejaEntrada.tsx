@@ -142,7 +142,15 @@ const BandejaEntrada = ({ cuentaEmail, cuentaNombre }: BandejaEntradaProps) => {
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Clock className="h-4 w-4" />
                   <span>
-                    {format(new Date(emailDetail.date), "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es })}
+                    {(() => {
+                      try {
+                        const date = new Date(emailDetail.date);
+                        if (isNaN(date.getTime())) return emailDetail.date;
+                        return format(date, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
+                      } catch {
+                        return emailDetail.date;
+                      }
+                    })()}
                   </span>
                 </div>
               </div>

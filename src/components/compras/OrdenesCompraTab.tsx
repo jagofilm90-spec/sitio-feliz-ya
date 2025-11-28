@@ -135,6 +135,25 @@ const OrdenesCompraTab = () => {
     },
   });
 
+  // Fetch productos asociados al proveedor seleccionado
+  const { data: productosProveedor = [] } = useQuery({
+    queryKey: ["proveedor-productos", proveedorId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("proveedor_productos")
+        .select("producto_id")
+        .eq("proveedor_id", proveedorId);
+      if (error) throw error;
+      return data.map(p => p.producto_id);
+    },
+    enabled: !!proveedorId,
+  });
+
+  // Filter products: if proveedor has associated products, show only those; otherwise show all
+  const productosDisponibles = proveedorId && productosProveedor.length > 0
+    ? productos.filter(p => productosProveedor.includes(p.id))
+    : productos;
+
   // Fetch ordenes de compra
   const { data: ordenes = [] } = useQuery({
     queryKey: ["ordenes_compra"],
@@ -321,7 +340,7 @@ const OrdenesCompraTab = () => {
       return;
     }
 
-    const producto = productos.find((p) => p.id === productoSeleccionado);
+    const producto = productosDisponibles.find((p) => p.id === productoSeleccionado);
     if (!producto) return;
 
     const cantidadNum = parseInt(cantidad);
@@ -688,7 +707,15 @@ const OrdenesCompraTab = () => {
               </div>
               <div>
                 <Label>Proveedor *</Label>
-                <Select value={proveedorId} onValueChange={setProveedorId} required>
+                <Select 
+                  value={proveedorId} 
+                  onValueChange={(value) => {
+                    setProveedorId(value);
+                    setProductoSeleccionado(""); // Reset product when proveedor changes
+                    setPrecioUnitario("");
+                  }} 
+                  required
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar proveedor" />
                   </SelectTrigger>
@@ -724,7 +751,14 @@ const OrdenesCompraTab = () => {
             </div>
 
             <div className="border rounded-lg p-4 space-y-4">
-              <h3 className="font-semibold">Agregar Productos</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold">Agregar Productos</h3>
+                {proveedorId && productosProveedor.length > 0 && (
+                  <Badge variant="outline" className="text-xs">
+                    {productosDisponibles.length} productos de este proveedor
+                  </Badge>
+                )}
+              </div>
               <div className="grid grid-cols-12 gap-2">
                 <div className="col-span-5">
                   <Label>Producto</Label>
@@ -732,26 +766,33 @@ const OrdenesCompraTab = () => {
                     value={productoSeleccionado}
                     onValueChange={(value) => {
                       setProductoSeleccionado(value);
-                      const prod = productos.find((p) => p.id === value);
+                      const prod = productosDisponibles.find((p) => p.id === value);
                       if (prod?.ultimo_costo_compra) {
                         setPrecioUnitario(prod.ultimo_costo_compra.toString());
                       }
                     }}
+                    disabled={!proveedorId}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar" />
+                      <SelectValue placeholder={proveedorId ? "Seleccionar" : "Primero selecciona proveedor"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {productos.map((p) => (
+                      {productosDisponibles.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
                           {p.nombre}
+                          {p.marca && <span className="text-xs text-muted-foreground ml-1">({p.marca})</span>}
                           {p.ultimo_costo_compra && (
                             <span className="text-xs text-muted-foreground ml-2">
-                              (Último: ${p.ultimo_costo_compra})
+                              - Último: ${p.ultimo_costo_compra}
                             </span>
                           )}
                         </SelectItem>
                       ))}
+                      {productosDisponibles.length === 0 && proveedorId && (
+                        <div className="p-2 text-sm text-muted-foreground">
+                          No hay productos asociados a este proveedor
+                        </div>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>

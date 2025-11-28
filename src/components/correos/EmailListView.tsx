@@ -69,9 +69,35 @@ const EmailListView = ({
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
+      <Card>
+        <div className="p-4 border-b bg-primary/5">
+          <div className="flex items-center justify-center gap-3">
+            <div className="relative">
+              <Mail className="h-6 w-6 text-primary animate-pulse" />
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full animate-ping" />
+            </div>
+            <span className="text-sm font-medium text-primary">
+              Cargando correos...
+            </span>
+          </div>
+        </div>
+        <div className="divide-y">
+          {/* Skeleton loader for emails */}
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="p-4 flex items-start gap-3 animate-pulse">
+              <div className="w-2 h-2 mt-2 rounded-full bg-muted" />
+              <div className="flex-1 space-y-2">
+                <div className="flex justify-between">
+                  <div className="h-4 bg-muted rounded w-1/3" />
+                  <div className="h-3 bg-muted rounded w-16" />
+                </div>
+                <div className="h-4 bg-muted rounded w-2/3" />
+                <div className="h-3 bg-muted rounded w-full" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
     );
   }
 

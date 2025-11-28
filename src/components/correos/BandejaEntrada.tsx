@@ -72,6 +72,7 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
   const [selectedEmailIds, setSelectedEmailIds] = useState<Set<string>>(new Set());
   const [deletingSelected, setDeletingSelected] = useState(false);
   const [showOnlyUnread, setShowOnlyUnread] = useState(false);
+  const [markingAllInboxAsRead, setMarkingAllInboxAsRead] = useState(false);
   // Flag to open first unread email after account switch from notification
   const [pendingOpenUnread, setPendingOpenUnread] = useState<string | null>(null);
   
@@ -553,7 +554,7 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
     }
   };
 
-  // Mark all emails as read
+   // Mark all emails as read
   const handleMarkAllAsRead = async () => {
     if (!emails || emails.length === 0) return;
     
@@ -590,6 +591,74 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
       toast.error("Error al marcar correos como leídos");
     } finally {
       setMarkingAllAsRead(false);
+      setTimeout(() => {
+        suppressNotificationsRef.current = false;
+      }, 2000);
+    }
+  };
+
+  // Mark ALL emails in ALL accounts as read (resets everything to 0)
+  const handleMarkAllAccountsAsRead = async () => {
+    const totalUnread = Object.values(unreadCounts || {}).reduce((sum, count) => sum + count, 0);
+    
+    if (totalUnread === 0) {
+      toast.info("No hay correos sin leer en ninguna cuenta");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `¿Estás seguro de marcar TODOS los ${totalUnread.toLocaleString()} correos sin leer como leídos en TODAS las cuentas?\n\nEsto puede tardar unos minutos.`
+    );
+    
+    if (!confirmed) return;
+
+    setMarkingAllInboxAsRead(true);
+    suppressNotificationsRef.current = true;
+    
+    toast.info("Marcando todos los correos como leídos... Esto puede tardar unos minutos.");
+
+    try {
+      // Mark all emails as read for ALL accounts in parallel
+      const results = await Promise.allSettled(
+        cuentas.map(cuenta =>
+          supabase.functions.invoke("gmail-api", {
+            body: {
+              action: "markAllInboxAsRead",
+              email: cuenta.email,
+            },
+          })
+        )
+      );
+
+      let totalMarked = 0;
+      results.forEach((result, index) => {
+        if (result.status === "fulfilled" && result.value.data?.totalMarked) {
+          totalMarked += result.value.data.totalMarked;
+          console.log(`${cuentas[index].email}: ${result.value.data.totalMarked} emails marked`);
+        }
+      });
+
+      // Reset all counts to 0 optimistically
+      queryClient.setQueryData(["gmail-unread-counts"], () => {
+        const zeroCounts: Record<string, number> = {};
+        cuentas.forEach(c => { zeroCounts[c.email] = 0; });
+        previousUnreadCountsRef.current = { ...zeroCounts };
+        return zeroCounts;
+      });
+
+      // Clear local emails state
+      setAllEmails(prev => prev.map(e => ({ ...e, isUnread: false })));
+
+      toast.success(`¡Listo! ${totalMarked.toLocaleString()} correos marcados como leídos`);
+      
+      // Refresh data
+      queryClient.invalidateQueries({ queryKey: ["gmail-unread-counts"] });
+      queryClient.invalidateQueries({ queryKey: ["gmail-inbox"] });
+    } catch (error) {
+      console.error("Error marking all accounts as read:", error);
+      toast.error("Error al marcar correos como leídos");
+    } finally {
+      setMarkingAllInboxAsRead(false);
       setTimeout(() => {
         suppressNotificationsRef.current = false;
       }, 2000);
@@ -675,6 +744,22 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
                 <CheckCheck className="h-4 w-4 mr-2" />
               )}
               Marcar leídos
+            </Button>
+
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleMarkAllAccountsAsRead}
+              disabled={markingAllInboxAsRead}
+              title="Marcar TODOS los correos de TODAS las cuentas como leídos"
+              className="bg-amber-500 hover:bg-amber-600 text-white"
+            >
+              {markingAllInboxAsRead ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <CheckCheck className="h-4 w-4 mr-2" />
+              )}
+              Resetear TODO a 0
             </Button>
 
             <Button

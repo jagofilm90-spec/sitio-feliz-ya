@@ -1072,6 +1072,7 @@ export type Database = {
           fecha_vencimiento: string | null
           id: string
           leida: boolean | null
+          orden_compra_id: string | null
           tipo: string
           titulo: string
         }
@@ -1083,6 +1084,7 @@ export type Database = {
           fecha_vencimiento?: string | null
           id?: string
           leida?: boolean | null
+          orden_compra_id?: string | null
           tipo: string
           titulo: string
         }
@@ -1094,6 +1096,7 @@ export type Database = {
           fecha_vencimiento?: string | null
           id?: string
           leida?: boolean | null
+          orden_compra_id?: string | null
           tipo?: string
           titulo?: string
         }
@@ -1110,6 +1113,13 @@ export type Database = {
             columns: ["empleado_id"]
             isOneToOne: false
             referencedRelation: "empleados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notificaciones_orden_compra_id_fkey"
+            columns: ["orden_compra_id"]
+            isOneToOne: false
+            referencedRelation: "ordenes_compra"
             referencedColumns: ["id"]
           },
         ]

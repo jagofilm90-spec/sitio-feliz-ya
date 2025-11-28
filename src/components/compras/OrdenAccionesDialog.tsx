@@ -499,7 +499,7 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
     setSolicitandoAutorizacion(true);
 
     try {
-      // Get current user name for the email
+      // Get current user name
       const { data: { user } } = await supabase.auth.getUser();
       let nombreSolicitante = 'Usuario';
       if (user) {
@@ -511,56 +511,33 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
         nombreSolicitante = profile?.full_name || 'Usuario';
       }
 
-      // Build approval URL
-      const appUrl = window.location.origin;
-      const approvalUrl = `${appUrl}/compras?aprobar=${orden.id}`;
-
-      const htmlBody = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #2e7d32;">Solicitud de Autorización - Orden de Compra</h2>
-          <p>Se requiere tu autorización para la siguiente orden de compra:</p>
-          
-          <div style="background-color: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
-            <p style="margin: 5px 0;"><strong>Folio:</strong> ${orden.folio}</p>
-            <p style="margin: 5px 0;"><strong>Proveedor:</strong> ${orden.proveedores?.nombre || 'Sin proveedor'}</p>
-            <p style="margin: 5px 0;"><strong>Total:</strong> $${orden.total?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
-            <p style="margin: 5px 0;"><strong>Solicitado por:</strong> ${nombreSolicitante}</p>
-            <p style="margin: 5px 0;"><strong>Productos:</strong> ${orden.ordenes_compra_detalles?.length || 0} items</p>
-          </div>
-          
-          <p><strong>Para autorizar o rechazar esta orden, ingresa al sistema:</strong></p>
-          <p><a href="${approvalUrl}" style="display: inline-block; background-color: #2e7d32; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 10px 0;">Ver Orden de Compra</a></p>
-
-          <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;" />
-          <p style="color: #666; font-size: 12px;">
-            Este correo fue enviado desde el sistema de Abarrotes La Manita.
-          </p>
-        </div>
-      `;
-
-      const { error } = await supabase.functions.invoke('gmail-api', {
-        body: {
-          action: 'send',
-          email: 'compras@almasa.com.mx',
-          to: 'jagomez@almasa.com.mx',
-          subject: `[AUTORIZACIÓN REQUERIDA] Orden de Compra ${orden.folio}`,
-          body: htmlBody,
-        },
-      });
-
-      if (error) throw error;
-
-      // Update order status
+      // Update order status first
       await supabase
         .from("ordenes_compra")
         .update({ status: "pendiente_autorizacion" })
         .eq("id", orden.id);
 
+      // Create notification for admin (internal notification system)
+      const { error: notifError } = await supabase
+        .from("notificaciones")
+        .insert({
+          tipo: "autorizacion_oc",
+          titulo: `Autorización requerida: ${orden.folio}`,
+          descripcion: `${nombreSolicitante} solicita autorización para la orden de compra a ${orden.proveedores?.nombre || 'proveedor'} por $${orden.total?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
+          orden_compra_id: orden.id,
+          leida: false,
+        });
+
+      if (notifError) {
+        console.error('Error creating notification:', notifError);
+        // Continue anyway, the order status was updated
+      }
+
       queryClient.invalidateQueries({ queryKey: ["ordenes_compra"] });
 
       toast({
         title: "Solicitud enviada",
-        description: "Se envió la solicitud de autorización a jagomez@almasa.com.mx",
+        description: "La solicitud de autorización está pendiente. El administrador la verá en sus notificaciones.",
       });
       
       onOpenChange(false);
@@ -590,6 +567,13 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
           fecha_autorizacion: new Date().toISOString()
         })
         .eq("id", orden.id);
+
+      // Mark related notification as read
+      await supabase
+        .from("notificaciones")
+        .update({ leida: true })
+        .eq("orden_compra_id", orden.id)
+        .eq("tipo", "autorizacion_oc");
 
       // Refetch to get updated autorizador name
       const { data: autorizadorData } = await supabase
@@ -726,6 +710,13 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
           motivo_rechazo: motivoRechazo
         })
         .eq("id", orden.id);
+
+      // Mark related notification as read
+      await supabase
+        .from("notificaciones")
+        .update({ leida: true })
+        .eq("orden_compra_id", orden.id)
+        .eq("tipo", "autorizacion_oc");
 
       // Notify creator about rejection
       const creadorEmail = await getCreadorEmail();

@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { Bell, PackageX, AlertCircle, X, IdCard } from "lucide-react";
+import { Bell, PackageX, AlertCircle, X, IdCard, FileCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -21,7 +21,7 @@ const STORAGE_KEY = "dismissed-notifications";
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 export const CentroNotificaciones = () => {
-  const { alertasCaducidad, notificacionesStock, alertasLicencias, totalCount, loading, marcarComoLeida } = useNotificaciones();
+  const { alertasCaducidad, notificacionesStock, alertasLicencias, autorizacionesOC, totalCount, loading, marcarComoLeida, isAdmin } = useNotificaciones();
   const navigate = useNavigate();
   const [dismissedLicencias, setDismissedLicencias] = useState<string[]>([]);
   const [dismissedCaducidad, setDismissedCaducidad] = useState<string[]>([]);
@@ -76,7 +76,7 @@ export const CentroNotificaciones = () => {
     [alertasCaducidad, dismissedCaducidad]
   );
 
-  const computedCount = notificacionesStock.length + visibleAlertasLicencias.length + visibleAlertasCaducidad.length;
+  const computedCount = notificacionesStock.length + visibleAlertasLicencias.length + visibleAlertasCaducidad.length + autorizacionesOC.length;
 
   const handleLicenciaClick = (puesto: string) => {
     const tabMap: Record<string, string> = {
@@ -89,6 +89,11 @@ export const CentroNotificaciones = () => {
 
   const handleCaducidadClick = () => {
     navigate("/inventario");
+  };
+
+  const handleAutorizacionClick = (ordenCompraId: string, notificacionId: string) => {
+    marcarComoLeida(notificacionId);
+    navigate(`/compras?aprobar=${ordenCompraId}`);
   };
 
   return (
@@ -126,6 +131,44 @@ export const CentroNotificaciones = () => {
             </div>
           ) : (
             <div className="p-2">
+              {/* Autorizaciones de Órdenes de Compra - Prioritarias */}
+              {autorizacionesOC.length > 0 && (
+                <div className="mb-2">
+                  <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">
+                    Autorizaciones Pendientes
+                  </div>
+                  {autorizacionesOC.map((notif) => (
+                    <div
+                      key={notif.id}
+                      className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 mb-2"
+                      onClick={() => handleAutorizacionClick(notif.orden_compra_id, notif.id)}
+                    >
+                      <FileCheck className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{notif.titulo}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-2">
+                          {notif.descripcion}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {new Date(notif.created_at).toLocaleDateString("es-MX", {
+                            day: "numeric",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300">
+                        Revisar
+                      </Badge>
+                    </div>
+                  ))}
+                  {(notificacionesStock.length > 0 || visibleAlertasLicencias.length > 0 || visibleAlertasCaducidad.length > 0) && (
+                    <Separator className="my-2" />
+                  )}
+                </div>
+              )}
+
               {/* Notificaciones de Stock Bajo */}
               {notificacionesStock.length > 0 && (
                 <div className="mb-2">

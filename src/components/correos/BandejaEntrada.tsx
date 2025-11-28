@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,11 +11,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
-import { Inbox, RefreshCw, PenSquare, Loader2, ChevronDown, Search, Trash2, Mail } from "lucide-react";
+import { Inbox, RefreshCw, PenSquare, Loader2, ChevronDown, Search, Trash2, Mail, Bell } from "lucide-react";
+import { toast } from "sonner";
 import EmailListView from "./EmailListView";
 import EmailDetailView from "./EmailDetailView";
 import ComposeEmailDialog from "./ComposeEmailDialog";
 import TrashListView from "./TrashListView";
+import { playNotificationSound } from "@/utils/notificationSound";
 
 interface Email {
   id: string;
@@ -64,10 +66,14 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
   const [activeSearch, setActiveSearch] = useState("");
   const [activeTab, setActiveTab] = useState("inbox");
   const [isFromTrash, setIsFromTrash] = useState(false);
+  
+  // Track previous unread counts to detect new emails
+  const previousUnreadCountsRef = useRef<Record<string, number>>({});
+  const isInitialLoadRef = useRef(true);
 
   const selectedCuenta = cuentas.find((c) => c.email === selectedAccount);
 
-  // Fetch unread counts for all accounts
+  // Fetch unread counts for all accounts with real-time polling
   const { data: unreadCounts } = useQuery({
     queryKey: ["gmail-unread-counts"],
     queryFn: async () => {
@@ -86,9 +92,65 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
       }
       return counts;
     },
-    staleTime: 1000 * 60, // 1 minute
-    refetchInterval: 1000 * 60 * 2, // Refetch every 2 minutes
+    staleTime: 1000 * 30, // 30 seconds
+    refetchInterval: 1000 * 30, // Poll every 30 seconds for real-time feel
   });
+
+  // Detect new emails and show notifications
+  useEffect(() => {
+    if (!unreadCounts) return;
+    
+    // Skip notification on initial load
+    if (isInitialLoadRef.current) {
+      previousUnreadCountsRef.current = { ...unreadCounts };
+      isInitialLoadRef.current = false;
+      return;
+    }
+
+    // Check each account for new emails
+    for (const cuenta of cuentas) {
+      const currentCount = unreadCounts[cuenta.email] || 0;
+      const previousCount = previousUnreadCountsRef.current[cuenta.email] || 0;
+      
+      // If unread count increased, we have new emails
+      if (currentCount > previousCount) {
+        const newEmailsCount = currentCount - previousCount;
+        
+        // Play notification sound
+        playNotificationSound();
+        
+        // Show toast notification
+        toast.info(
+          `${newEmailsCount} nuevo${newEmailsCount > 1 ? 's' : ''} correo${newEmailsCount > 1 ? 's' : ''} en ${cuenta.nombre}`,
+          {
+            description: cuenta.email,
+            icon: <Bell className="h-4 w-4" />,
+            action: {
+              label: "Ver",
+              onClick: () => {
+                setSelectedAccount(cuenta.email);
+                setActiveTab("inbox");
+              },
+            },
+            duration: 8000,
+          }
+        );
+
+        // Request browser notification permission and show notification
+        if (Notification.permission === "granted") {
+          new Notification(`Nuevo correo en ${cuenta.nombre}`, {
+            body: `${newEmailsCount} correo${newEmailsCount > 1 ? 's' : ''} sin leer`,
+            icon: "/favicon.ico",
+          });
+        } else if (Notification.permission !== "denied") {
+          Notification.requestPermission();
+        }
+      }
+    }
+    
+    // Update previous counts
+    previousUnreadCountsRef.current = { ...unreadCounts };
+  }, [unreadCounts, cuentas]);
 
   // Fetch email list
   const {

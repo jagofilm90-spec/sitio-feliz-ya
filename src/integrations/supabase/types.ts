@@ -923,6 +923,7 @@ export type Database = {
           peso_total_kg: number | null
           status: Database["public"]["Enums"]["order_status"]
           subtotal: number | null
+          sucursal_id: string | null
           total: number | null
           updated_at: string
           vendedor_id: string
@@ -939,6 +940,7 @@ export type Database = {
           peso_total_kg?: number | null
           status?: Database["public"]["Enums"]["order_status"]
           subtotal?: number | null
+          sucursal_id?: string | null
           total?: number | null
           updated_at?: string
           vendedor_id: string
@@ -955,6 +957,7 @@ export type Database = {
           peso_total_kg?: number | null
           status?: Database["public"]["Enums"]["order_status"]
           subtotal?: number | null
+          sucursal_id?: string | null
           total?: number | null
           updated_at?: string
           vendedor_id?: string
@@ -965,6 +968,13 @@ export type Database = {
             columns: ["cliente_id"]
             isOneToOne: false
             referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pedidos_sucursal_id_fkey"
+            columns: ["sucursal_id"]
+            isOneToOne: false
+            referencedRelation: "cliente_sucursales"
             referencedColumns: ["id"]
           },
           {

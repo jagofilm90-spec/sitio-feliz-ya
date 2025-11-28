@@ -1016,7 +1016,7 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
               <XCircle className="mr-2 h-4 w-4" />
               Marcar como Devuelta
             </Button>
-            {orden?.status === "pendiente" && (
+            {(orden?.status === "pendiente" || isAdmin) && (
               <Button
                 variant="outline"
                 className="w-full justify-start text-destructive hover:text-destructive"

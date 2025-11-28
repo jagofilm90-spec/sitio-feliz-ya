@@ -83,27 +83,34 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
 
   const selectedCuenta = cuentas.find((c) => c.email === selectedAccount);
 
-  // Fetch unread counts for all accounts with real-time polling - every 60 seconds
+  // Fetch unread counts for all accounts IN PARALLEL - much faster initial load
   const { data: unreadCounts } = useQuery({
     queryKey: ["gmail-unread-counts"],
     queryFn: async () => {
-      const counts: Record<string, number> = {};
-      for (const cuenta of cuentas) {
-        try {
-          const response = await supabase.functions.invoke("gmail-api", {
+      // Fetch all counts in parallel instead of sequentially
+      const results = await Promise.allSettled(
+        cuentas.map(cuenta =>
+          supabase.functions.invoke("gmail-api", {
             body: { action: "getUnreadCount", email: cuenta.email },
-          });
-          if (response.data?.unreadCount !== undefined) {
-            counts[cuenta.email] = response.data.unreadCount;
-          }
-        } catch (e) {
-          console.error("Error fetching unread count for", cuenta.email, e);
+          }).then(response => ({
+            email: cuenta.email,
+            count: response.data?.unreadCount ?? 0,
+          }))
+        )
+      );
+      
+      const counts: Record<string, number> = {};
+      results.forEach((result, index) => {
+        if (result.status === "fulfilled") {
+          counts[result.value.email] = result.value.count;
+        } else {
+          counts[cuentas[index].email] = 0;
         }
-      }
+      });
       return counts;
     },
-    staleTime: 1000 * 60, // 60 seconds
-    refetchInterval: 1000 * 60, // Poll every 60 seconds
+    staleTime: 1000 * 60,
+    refetchInterval: 1000 * 60,
   });
 
   // Detect new emails and show notifications
@@ -190,7 +197,7 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
         body: {
           action: "list",
           email: selectedAccount,
-          maxResults: 50,
+          maxResults: 25, // Reduced for faster initial load
           searchQuery: activeSearch || undefined,
         },
       });
@@ -205,10 +212,10 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
       };
     },
     enabled: !!selectedAccount && activeTab === "inbox",
-    staleTime: 1000 * 30, // 30 seconds - data considered fresh
-    gcTime: 1000 * 60 * 5, // Keep in cache for 5 minutes
+    staleTime: 1000 * 60 * 2, // 2 minutes - data considered fresh longer
+    gcTime: 1000 * 60 * 10, // Keep in cache for 10 minutes
     refetchInterval: 1000 * 60, // Refetch every 60 seconds
-    refetchOnWindowFocus: false, // Don't refetch on window focus to avoid lag
+    refetchOnWindowFocus: false,
   });
 
   // Update allEmails and nextPageToken when initial data loads

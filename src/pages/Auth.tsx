@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
+import logoAlmasa from "@/assets/logo-almasa.png";
 
 const authSchema = z.object({
   email: z.string().email({ message: "Email inválido" }),
@@ -145,8 +146,9 @@ const Auth = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
       <div className="w-full max-w-md space-y-4">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-primary mb-2">Abarrotes La Manita</h1>
-          <p className="text-muted-foreground">Sistema de Gestión Empresarial</p>
+          <img src={logoAlmasa} alt="ALMASA" className="h-16 mx-auto mb-4" />
+          <p className="text-lg font-medium text-foreground">Abarrotes la Manita SA de CV</p>
+          <p className="text-sm text-muted-foreground">Sistema de Gestión Empresarial</p>
         </div>
         <Card className="w-full">
         <CardHeader className="space-y-1">

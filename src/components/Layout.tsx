@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { useUnreadEmails } from "@/hooks/useUnreadEmails";
 import { CentroNotificaciones } from "@/components/CentroNotificaciones";
+import logoAlmasa from "@/assets/logo-almasa.png";
 import {
   Collapsible,
   CollapsibleContent,
@@ -184,7 +185,7 @@ const Layout = ({ children }: LayoutProps) => {
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <Button
               variant="ghost"
               size="icon"
@@ -193,7 +194,12 @@ const Layout = ({ children }: LayoutProps) => {
             >
               {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </Button>
-            <h1 className="text-xl font-bold">Abarrotes La Manita</h1>
+            <Link to="/dashboard" className="flex items-center gap-3">
+              <img src={logoAlmasa} alt="ALMASA" className="h-10" />
+              <span className="text-sm text-muted-foreground hidden lg:inline">
+                Abarrotes la Manita SA de CV
+              </span>
+            </Link>
           </div>
           <div className="flex items-center gap-2">
             <CentroNotificaciones />

@@ -59,18 +59,25 @@ serve(async (req) => {
     // Store tokens in database using service role
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    const { error: upsertError } = await supabase
+    // Update existing record (account must already exist in gmail_cuentas)
+    const { error: updateError, data } = await supabase
       .from("gmail_cuentas")
-      .upsert({
-        email: email,
+      .update({
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token || null,
         token_expires_at: expiresAt.toISOString(),
-      }, { onConflict: "email" });
+      })
+      .eq("email", email)
+      .select();
 
-    if (upsertError) {
-      console.error("Error saving tokens:", upsertError);
+    if (updateError) {
+      console.error("Error saving tokens:", updateError);
       throw new Error("Error al guardar credenciales");
+    }
+
+    if (!data || data.length === 0) {
+      console.error("No account found for email:", email);
+      throw new Error("Cuenta de correo no encontrada. Asegúrate de que esté registrada primero.");
     }
 
     console.log("Tokens saved successfully for:", email);

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Layout from "@/components/Layout";
 import { Package, Truck, Calendar, BarChart3 } from "lucide-react";
@@ -8,7 +9,15 @@ import CalendarioEntregasTab from "@/components/compras/CalendarioEntregasTab";
 import ComprasAnalyticsTab from "@/components/compras/ComprasAnalyticsTab";
 
 const Compras = () => {
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState("proveedores");
+
+  // Auto-switch to ordenes tab when ?aprobar= param is present
+  useEffect(() => {
+    if (searchParams.get("aprobar")) {
+      setActiveTab("ordenes");
+    }
+  }, [searchParams]);
 
   return (
     <Layout>

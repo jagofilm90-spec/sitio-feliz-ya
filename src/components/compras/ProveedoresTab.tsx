@@ -22,8 +22,9 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Edit, Globe } from "lucide-react";
+import { Plus, Search, Edit, Globe, Package } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import ProveedorProductosSelector from "./ProveedorProductosSelector";
 
 interface Proveedor {
   id: string;
@@ -42,7 +43,9 @@ interface Proveedor {
 const ProveedoresTab = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isProductosDialogOpen, setIsProductosDialogOpen] = useState(false);
   const [editingProveedor, setEditingProveedor] = useState<Proveedor | null>(null);
+  const [productosProveedor, setProductosProveedor] = useState<Proveedor | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [newProveedor, setNewProveedor] = useState({
     nombre: "",
@@ -330,16 +333,30 @@ const ProveedoresTab = () => {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setEditingProveedor(proveedor);
-                        setIsEditDialogOpen(true);
-                      }}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setProductosProveedor(proveedor);
+                          setIsProductosDialogOpen(true);
+                        }}
+                        title="Gestionar productos"
+                      >
+                        <Package className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setEditingProveedor(proveedor);
+                          setIsEditDialogOpen(true);
+                        }}
+                        title="Editar proveedor"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -495,6 +512,21 @@ const ProveedoresTab = () => {
                 Guardar Cambios
               </Button>
             </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog for managing supplier products */}
+      <Dialog open={isProductosDialogOpen} onOpenChange={setIsProductosDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Productos del Proveedor</DialogTitle>
+          </DialogHeader>
+          {productosProveedor && (
+            <ProveedorProductosSelector 
+              proveedorId={productosProveedor.id} 
+              proveedorNombre={productosProveedor.nombre}
+            />
           )}
         </DialogContent>
       </Dialog>

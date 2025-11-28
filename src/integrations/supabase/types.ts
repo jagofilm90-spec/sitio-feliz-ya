@@ -1550,6 +1550,42 @@ export type Database = {
         }
         Relationships: []
       }
+      proveedor_productos: {
+        Row: {
+          created_at: string
+          id: string
+          producto_id: string
+          proveedor_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          producto_id: string
+          proveedor_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          producto_id?: string
+          proveedor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proveedor_productos_producto_id_fkey"
+            columns: ["producto_id"]
+            isOneToOne: false
+            referencedRelation: "productos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proveedor_productos_proveedor_id_fkey"
+            columns: ["proveedor_id"]
+            isOneToOne: false
+            referencedRelation: "proveedores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       proveedores: {
         Row: {
           activo: boolean

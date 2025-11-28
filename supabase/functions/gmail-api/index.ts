@@ -262,6 +262,34 @@ serve(async (req) => {
       );
     }
 
+    if (action === "delete") {
+      if (!messageId) {
+        throw new Error("messageId requerido");
+      }
+
+      // Move to trash (not permanent delete)
+      const trashResponse = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/trash`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }
+      );
+
+      if (!trashResponse.ok) {
+        const errorText = await trashResponse.text();
+        console.error("Trash failed:", errorText);
+        throw new Error("Error al eliminar correo");
+      }
+
+      console.log("Email moved to trash:", messageId);
+
+      return new Response(
+        JSON.stringify({ success: true, messageId }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     throw new Error(`Acción no reconocida: ${action}`);
   } catch (error: unknown) {
     console.error("Error in gmail-api:", error);

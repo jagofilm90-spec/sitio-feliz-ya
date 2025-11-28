@@ -544,7 +544,26 @@ serve(async (req) => {
       );
 
       if (!msgResponse.ok) {
-        throw new Error("Error al leer correo");
+        const errorText = await msgResponse.text();
+        console.error("Gmail read error:", msgResponse.status, errorText);
+        
+        // If 404, the email was deleted or doesn't exist
+        if (msgResponse.status === 404) {
+          return new Response(
+            JSON.stringify({ error: "Correo no encontrado o eliminado" }),
+            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
+        // If 401, token might be invalid
+        if (msgResponse.status === 401) {
+          return new Response(
+            JSON.stringify({ error: "Token expirado, reconecta la cuenta" }),
+            { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
+        throw new Error(`Error al leer correo: ${msgResponse.status}`);
       }
 
       const msgData = await msgResponse.json();

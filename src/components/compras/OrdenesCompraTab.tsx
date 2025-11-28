@@ -79,6 +79,16 @@ const OrdenesCompraTab = () => {
   const [precioIncluyeIva, setPrecioIncluyeIva] = useState(false);
   const [generatingFolio, setGeneratingFolio] = useState(false);
   
+  // Conversion precio por kg state
+  const [usarPrecioPorKg, setUsarPrecioPorKg] = useState(false);
+  const [precioPorKg, setPrecioPorKg] = useState("");
+  const [kgPorUnidad, setKgPorUnidad] = useState("");
+  
+  // Auto-calculate precio unitario when using precio por kg
+  const precioUnitarioCalculado = usarPrecioPorKg && precioPorKg && kgPorUnidad
+    ? (parseFloat(precioPorKg) * parseFloat(kgPorUnidad)).toFixed(2)
+    : "";
+  
   // Multiple deliveries state
   const [entregasMultiples, setEntregasMultiples] = useState(false);
   const [bultosPorEntrega, setBultosPorEntrega] = useState("");
@@ -357,10 +367,14 @@ const OrdenesCompraTab = () => {
   });
 
   const agregarProducto = () => {
-    if (!productoSeleccionado || !cantidad || !precioUnitario) {
+    const precioFinal = usarPrecioPorKg ? precioUnitarioCalculado : precioUnitario;
+    
+    if (!productoSeleccionado || !cantidad || !precioFinal) {
       toast({
         title: "Campos incompletos",
-        description: "Selecciona un producto, cantidad y precio",
+        description: usarPrecioPorKg 
+          ? "Selecciona un producto, cantidad, precio/kg y kg/unidad"
+          : "Selecciona un producto, cantidad y precio",
         variant: "destructive",
       });
       return;
@@ -370,7 +384,7 @@ const OrdenesCompraTab = () => {
     if (!producto) return;
 
     const cantidadNum = parseInt(cantidad);
-    const precioNum = parseFloat(precioUnitario);
+    const precioNum = parseFloat(precioFinal);
     const subtotal = cantidadNum * precioNum;
 
     setProductosEnOrden([
@@ -392,6 +406,9 @@ const OrdenesCompraTab = () => {
     setCantidad("");
     setPrecioUnitario("");
     setPrecioIncluyeIva(false);
+    setUsarPrecioPorKg(false);
+    setPrecioPorKg("");
+    setKgPorUnidad("");
   };
 
   const eliminarProducto = (index: number) => {
@@ -416,6 +433,9 @@ const OrdenesCompraTab = () => {
     setEntregasMultiples(false);
     setBultosPorEntrega("");
     setEntregasProgramadas([]);
+    setUsarPrecioPorKg(false);
+    setPrecioPorKg("");
+    setKgPorUnidad("");
   };
 
   // Update orden de compra
@@ -841,80 +861,144 @@ const OrdenesCompraTab = () => {
                   </Badge>
                 )}
               </div>
-              <div className="grid grid-cols-12 gap-2">
-                <div className="col-span-5">
-                  <Label>Producto</Label>
-                  <Select
-                    value={productoSeleccionado}
-                    onValueChange={(value) => {
-                      setProductoSeleccionado(value);
-                      const prod = productosDisponibles.find((p) => p.id === value);
-                      if (prod?.ultimo_costo_compra) {
-                        setPrecioUnitario(prod.ultimo_costo_compra.toString());
-                      }
-                    }}
-                    disabled={!proveedorId}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={proveedorId ? "Seleccionar" : "Primero selecciona proveedor"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {productosDisponibles.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.nombre}
-                          {p.marca && <span className="text-xs text-muted-foreground ml-1">({p.marca})</span>}
-                          {p.ultimo_costo_compra && (
-                            <span className="text-xs text-muted-foreground ml-2">
-                              - Último: ${p.ultimo_costo_compra}
-                            </span>
-                          )}
-                        </SelectItem>
-                      ))}
-                      {productosDisponibles.length === 0 && proveedorId && (
-                        <div className="p-2 text-sm text-muted-foreground">
-                          No hay productos asociados a este proveedor
-                        </div>
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="col-span-2">
-                  <Label>Cantidad</Label>
-                  <Input
-                    type="number"
-                    value={cantidad}
-                    onChange={(e) => setCantidad(e.target.value)}
-                    placeholder="0"
-                    min="1"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <Label>Precio Unitario</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={precioUnitario}
-                    onChange={(e) => setPrecioUnitario(e.target.value)}
-                    placeholder="0.00"
-                    min="0"
-                  />
-                </div>
-                <div className="col-span-2 flex flex-col gap-1">
-                  <Label className="text-xs">IVA incluido</Label>
-                  <div className="flex items-center gap-2 h-10">
-                    <Switch
-                      checked={precioIncluyeIva}
-                      onCheckedChange={setPrecioIncluyeIva}
+              <div className="space-y-3">
+                {/* Row 1: Product and Quantity */}
+                <div className="grid grid-cols-12 gap-2">
+                  <div className="col-span-7">
+                    <Label>Producto</Label>
+                    <Select
+                      value={productoSeleccionado}
+                      onValueChange={(value) => {
+                        setProductoSeleccionado(value);
+                        const prod = productosDisponibles.find((p) => p.id === value);
+                        if (prod?.ultimo_costo_compra) {
+                          setPrecioUnitario(prod.ultimo_costo_compra.toString());
+                        }
+                      }}
+                      disabled={!proveedorId}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={proveedorId ? "Seleccionar" : "Primero selecciona proveedor"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {productosDisponibles.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.nombre}
+                            {p.marca && <span className="text-xs text-muted-foreground ml-1">({p.marca})</span>}
+                            {p.ultimo_costo_compra && (
+                              <span className="text-xs text-muted-foreground ml-2">
+                                - Último: ${p.ultimo_costo_compra}
+                              </span>
+                            )}
+                          </SelectItem>
+                        ))}
+                        {productosDisponibles.length === 0 && proveedorId && (
+                          <div className="p-2 text-sm text-muted-foreground">
+                            No hay productos asociados a este proveedor
+                          </div>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-3">
+                    <Label>Cantidad (unidades)</Label>
+                    <Input
+                      type="number"
+                      value={cantidad}
+                      onChange={(e) => setCantidad(e.target.value)}
+                      placeholder="0"
+                      min="1"
                     />
-                    <span className="text-xs text-muted-foreground">
-                      {precioIncluyeIva ? "Sí" : "No"}
-                    </span>
+                  </div>
+                  <div className="col-span-2 flex flex-col gap-1">
+                    <Label className="text-xs">Precio por kg</Label>
+                    <div className="flex items-center gap-2 h-10">
+                      <Switch
+                        checked={usarPrecioPorKg}
+                        onCheckedChange={(checked) => {
+                          setUsarPrecioPorKg(checked);
+                          if (checked) {
+                            setPrecioUnitario("");
+                          } else {
+                            setPrecioPorKg("");
+                            setKgPorUnidad("");
+                          }
+                        }}
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        {usarPrecioPorKg ? "Sí" : "No"}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <div className="col-span-1 flex items-end">
-                  <Button type="button" onClick={agregarProducto} className="w-full">
-                    <Plus className="h-4 w-4" />
-                  </Button>
+
+                {/* Row 2: Pricing fields */}
+                <div className="grid grid-cols-12 gap-2 items-end">
+                  {usarPrecioPorKg ? (
+                    <>
+                      <div className="col-span-3">
+                        <Label>Precio por kg (proveedor)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={precioPorKg}
+                          onChange={(e) => setPrecioPorKg(e.target.value)}
+                          placeholder="$/kg"
+                          min="0"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Label>Kg por unidad</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={kgPorUnidad}
+                          onChange={(e) => setKgPorUnidad(e.target.value)}
+                          placeholder="5"
+                          min="0"
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <Label>Precio por unidad (calculado)</Label>
+                        <Input
+                          type="text"
+                          value={precioUnitarioCalculado ? `$${parseFloat(precioUnitarioCalculado).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : ""}
+                          disabled
+                          className="bg-muted font-medium"
+                          placeholder="Auto"
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="col-span-4">
+                      <Label>Precio Unitario</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={precioUnitario}
+                        onChange={(e) => setPrecioUnitario(e.target.value)}
+                        placeholder="0.00"
+                        min="0"
+                      />
+                    </div>
+                  )}
+                  <div className="col-span-2 flex flex-col gap-1">
+                    <Label className="text-xs">IVA incluido</Label>
+                    <div className="flex items-center gap-2 h-10">
+                      <Switch
+                        checked={precioIncluyeIva}
+                        onCheckedChange={setPrecioIncluyeIva}
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        {precioIncluyeIva ? "Sí" : "No"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className={usarPrecioPorKg ? "col-span-2" : "col-span-6"}>
+                    <Button type="button" onClick={agregarProducto} className="w-full">
+                      <Plus className="h-4 w-4 mr-1" /> Agregar
+                    </Button>
+                  </div>
                 </div>
               </div>
 

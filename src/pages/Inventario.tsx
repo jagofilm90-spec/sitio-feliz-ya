@@ -29,10 +29,11 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, ArrowUp, ArrowDown, Minus, Package, List } from "lucide-react";
+import { Plus, Search, ArrowUp, ArrowDown, Minus, Package, List, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { NotificacionesSistema } from "@/components/NotificacionesSistema";
 import { InventarioPorCategoria } from "@/components/inventario/InventarioPorCategoria";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const Inventario = () => {
   const [movimientos, setMovimientos] = useState<any[]>([]);
@@ -41,6 +42,7 @@ const Inventario = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [lotesProximosVencer, setLotesProximosVencer] = useState<any[]>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [editingMovimiento, setEditingMovimiento] = useState<any | null>(null);
   const [filterTipo, setFilterTipo] = useState<string>("todos");
@@ -178,6 +180,7 @@ const Inventario = () => {
 
   const resetForm = () => {
     setSelectedProduct(null);
+    setLotesProximosVencer([]);
     setIsEditing(false);
     setEditingMovimiento(null);
     setFormData({
@@ -192,10 +195,29 @@ const Inventario = () => {
     });
   };
 
-  const handleProductChange = (productoId: string) => {
+  const handleProductChange = async (productoId: string) => {
     const producto = productos.find((p) => p.id === productoId);
     setSelectedProduct(producto);
     setFormData({ ...formData, producto_id: productoId });
+    
+    // Buscar lotes próximos a vencer (30 días) o ya vencidos
+    if (producto?.maneja_caducidad) {
+      const hoy = new Date();
+      const en30Dias = new Date();
+      en30Dias.setDate(en30Dias.getDate() + 30);
+      
+      const { data: lotes } = await supabase
+        .from("inventario_lotes")
+        .select("*")
+        .eq("producto_id", productoId)
+        .gt("cantidad_disponible", 0)
+        .lte("fecha_caducidad", en30Dias.toISOString().split('T')[0])
+        .order("fecha_caducidad", { ascending: true });
+      
+      setLotesProximosVencer(lotes || []);
+    } else {
+      setLotesProximosVencer([]);
+    }
   };
 
   const handleEditMovimiento = (movimiento: any) => {
@@ -346,6 +368,38 @@ const Inventario = () => {
                   </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSave} className="space-y-4">
+                  {lotesProximosVencer.length > 0 && (
+                    <Alert variant="destructive" className="border-orange-500 bg-orange-50 text-orange-900">
+                      <AlertTriangle className="h-4 w-4 !text-orange-600" />
+                      <AlertTitle className="text-orange-800">
+                        ¡Atención! Lotes próximos a vencer
+                      </AlertTitle>
+                      <AlertDescription className="text-orange-700">
+                        <ul className="mt-2 space-y-1 text-sm">
+                          {lotesProximosVencer.map((lote) => {
+                            const fechaCaducidad = new Date(lote.fecha_caducidad);
+                            const hoy = new Date();
+                            const diasRestantes = Math.ceil((fechaCaducidad.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
+                            const vencido = diasRestantes < 0;
+                            
+                            return (
+                              <li key={lote.id} className="flex justify-between">
+                                <span>
+                                  Lote: {lote.lote_referencia || 'Sin ref.'} - {lote.cantidad_disponible} unidades
+                                </span>
+                                <span className={vencido ? "font-bold text-red-600" : "font-medium"}>
+                                  {vencido 
+                                    ? `¡VENCIDO hace ${Math.abs(diasRestantes)} días!`
+                                    : `Vence en ${diasRestantes} días (${fechaCaducidad.toLocaleDateString('es-MX')})`
+                                  }
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </AlertDescription>
+                    </Alert>
+                  )}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="producto_id">Producto *</Label>

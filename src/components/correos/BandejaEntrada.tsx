@@ -308,15 +308,9 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
       // Suppress notifications during this action
       suppressNotificationsRef.current = true;
       
-      // Optimistic update: immediately update local cache
-      queryClient.setQueryData(
-        ["gmail-inbox", selectedAccount, activeSearch],
-        (oldData: Email[] | undefined) => {
-          if (!oldData) return oldData;
-          return oldData.map(e => 
-            e.id === selectedEmailId ? { ...e, isUnread: false } : e
-          );
-        }
+      // Optimistic update: immediately update local state
+      setAllEmails(prev => 
+        prev.map(e => e.id === selectedEmailId ? { ...e, isUnread: false } : e)
       );
       
       // Optimistic update: decrement unread count and sync the ref

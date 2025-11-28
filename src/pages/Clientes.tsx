@@ -3,6 +3,7 @@ import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -28,7 +29,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Edit, Trash2, MapPin } from "lucide-react";
+import { Plus, Search, Edit, Trash2, MapPin, Truck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import ClienteSucursalesDialog from "@/components/clientes/ClienteSucursalesDialog";
 import GoogleMapsAddressAutocomplete from "@/components/GoogleMapsAddressAutocomplete";
@@ -43,12 +44,13 @@ const Clientes = () => {
   const [zonas, setZonas] = useState<Zona[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<any>(null);
   const [sucursalesDialogOpen, setSucursalesDialogOpen] = useState(false);
   const [selectedClienteForSucursales, setSelectedClienteForSucursales] = useState<{ id: string; nombre: string } | null>(null);
   const { toast } = useToast();
 
+  // Form state
   const [formData, setFormData] = useState<{
     codigo: string;
     nombre: string;
@@ -71,6 +73,16 @@ const [dialogOpen, setDialogOpen] = useState(false);
     termino_credito: "contado",
     limite_credito: "",
     zona_id: "",
+  });
+
+  // Delivery options state
+  const [entregarMismaDireccion, setEntregarMismaDireccion] = useState(true);
+  const [sucursalData, setSucursalData] = useState({
+    nombre: "",
+    direccion: "",
+    zona_id: "",
+    telefono: "",
+    contacto: "",
   });
 
   useEffect(() => {
@@ -133,6 +145,8 @@ const [dialogOpen, setDialogOpen] = useState(false);
         zona_id: formData.zona_id || null,
       };
 
+      let clienteId: string;
+
       if (editingClient) {
         const { error } = await supabase
           .from("clientes")
@@ -140,14 +154,44 @@ const [dialogOpen, setDialogOpen] = useState(false);
           .eq("id", editingClient.id);
 
         if (error) throw error;
+        clienteId = editingClient.id;
         toast({ title: "Cliente actualizado correctamente" });
       } else {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from("clientes")
-          .insert([clientData]);
+          .insert([clientData])
+          .select()
+          .single();
 
         if (error) throw error;
-        toast({ title: "Cliente creado correctamente" });
+        clienteId = data.id;
+
+        // If NOT delivering to fiscal address AND sucursal data is filled, create sucursal
+        if (!entregarMismaDireccion && sucursalData.nombre && sucursalData.direccion) {
+          const { error: sucError } = await supabase
+            .from("cliente_sucursales")
+            .insert([{
+              cliente_id: clienteId,
+              nombre: sucursalData.nombre,
+              direccion: sucursalData.direccion,
+              zona_id: sucursalData.zona_id || null,
+              telefono: sucursalData.telefono || null,
+              contacto: sucursalData.contacto || null,
+            }]);
+
+          if (sucError) {
+            console.error("Error creating sucursal:", sucError);
+            toast({
+              title: "Cliente creado",
+              description: "Pero hubo un error al crear la sucursal de entrega",
+              variant: "destructive",
+            });
+          } else {
+            toast({ title: "Cliente y sucursal creados correctamente" });
+          }
+        } else {
+          toast({ title: "Cliente creado correctamente" });
+        }
       }
 
       setDialogOpen(false);
@@ -175,6 +219,14 @@ const [dialogOpen, setDialogOpen] = useState(false);
       termino_credito: client.termino_credito,
       limite_credito: client.limite_credito.toString(),
       zona_id: client.zona_id || "",
+    });
+    setEntregarMismaDireccion(true);
+    setSucursalData({
+      nombre: "",
+      direccion: "",
+      zona_id: "",
+      telefono: "",
+      contacto: "",
     });
     setDialogOpen(true);
   };
@@ -213,6 +265,14 @@ const [dialogOpen, setDialogOpen] = useState(false);
       termino_credito: "contado",
       limite_credito: "",
       zona_id: "",
+    });
+    setEntregarMismaDireccion(true);
+    setSucursalData({
+      nombre: "",
+      direccion: "",
+      zona_id: "",
+      telefono: "",
+      contacto: "",
     });
   };
 
@@ -257,6 +317,7 @@ const [dialogOpen, setDialogOpen] = useState(false);
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSave} className="space-y-4">
+                {/* Datos del Cliente */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="codigo">Código *</Label>
@@ -297,11 +358,11 @@ const [dialogOpen, setDialogOpen] = useState(false);
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="direccion">Dirección Fiscal</Label>
-                  <GoogleMapsAddressAutocomplete
+                  <Input
                     id="direccion"
                     value={formData.direccion}
-                    onChange={(value) => setFormData({ ...formData, direccion: value })}
-                    placeholder="Buscar dirección..."
+                    onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
+                    placeholder="Dirección fiscal del cliente"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -352,25 +413,97 @@ const [dialogOpen, setDialogOpen] = useState(false);
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="zona_id">Zona de Entrega</Label>
-                  <Select
-                    value={formData.zona_id}
-                    onValueChange={(value) => setFormData({ ...formData, zona_id: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecciona una zona" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {zonas.map((zona) => (
-                        <SelectItem key={zona.id} value={zona.id}>
-                          {zona.nombre}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex justify-end gap-2">
+
+                {/* Sección de Entrega - Solo para nuevos clientes */}
+                {!editingClient && (
+                  <div className="border-t pt-4 mt-4">
+                    <h4 className="font-medium mb-3 flex items-center gap-2">
+                      <Truck className="h-4 w-4" />
+                      Dirección de Entrega
+                    </h4>
+                    
+                    <div className="flex items-center space-x-2 mb-4">
+                      <Checkbox
+                        id="entregarMismaDireccion"
+                        checked={entregarMismaDireccion}
+                        onCheckedChange={(checked) => setEntregarMismaDireccion(checked === true)}
+                      />
+                      <Label htmlFor="entregarMismaDireccion" className="text-sm font-normal cursor-pointer">
+                        Entregar en la misma dirección fiscal
+                      </Label>
+                    </div>
+
+                    {!entregarMismaDireccion && (
+                      <div className="space-y-4 p-4 bg-muted/30 rounded-lg border">
+                        <p className="text-sm text-muted-foreground">
+                          Agrega una sucursal de entrega diferente a la dirección fiscal
+                        </p>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="suc_nombre">Nombre de Sucursal *</Label>
+                            <Input
+                              id="suc_nombre"
+                              value={sucursalData.nombre}
+                              onChange={(e) => setSucursalData({ ...sucursalData, nombre: e.target.value })}
+                              placeholder="Ej: Sucursal Centro"
+                              required={!entregarMismaDireccion}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="suc_zona">Zona de Entrega</Label>
+                            <Select
+                              value={sucursalData.zona_id}
+                              onValueChange={(value) => setSucursalData({ ...sucursalData, zona_id: value })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecciona zona" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {zonas.map((zona) => (
+                                  <SelectItem key={zona.id} value={zona.id}>
+                                    {zona.nombre}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="suc_direccion">Dirección de Entrega *</Label>
+                          <GoogleMapsAddressAutocomplete
+                            id="suc_direccion"
+                            value={sucursalData.direccion}
+                            onChange={(value) => setSucursalData({ ...sucursalData, direccion: value })}
+                            placeholder="Buscar dirección de entrega..."
+                            required={!entregarMismaDireccion}
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="suc_contacto">Contacto</Label>
+                            <Input
+                              id="suc_contacto"
+                              value={sucursalData.contacto}
+                              onChange={(e) => setSucursalData({ ...sucursalData, contacto: e.target.value })}
+                              placeholder="Nombre del contacto"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="suc_telefono">Teléfono</Label>
+                            <Input
+                              id="suc_telefono"
+                              value={sucursalData.telefono}
+                              onChange={(e) => setSucursalData({ ...sucursalData, telefono: e.target.value })}
+                              placeholder="Teléfono de contacto"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2 pt-2">
                   <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                     Cancelar
                   </Button>
@@ -416,7 +549,7 @@ const [dialogOpen, setDialogOpen] = useState(false);
                 </TableRow>
               ) : filteredClientes.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center">
+                  <TableCell colSpan={8} className="text-center">
                     No hay clientes registrados
                   </TableCell>
                 </TableRow>

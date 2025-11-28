@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import DOMPurify from "dompurify";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -436,7 +437,7 @@ const EmailDetailView = ({
           <CardContent className="pt-4">
             <div
               className="prose prose-sm max-w-none dark:prose-invert"
-              dangerouslySetInnerHTML={{ __html: email.body }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(email.body) }}
             />
           </CardContent>
         </Card>

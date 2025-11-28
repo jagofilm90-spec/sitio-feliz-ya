@@ -1158,6 +1158,36 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
   const canAuthorize = isAdmin && orden?.status === "pendiente_autorizacion";
   const canSendToSupplier = orden?.status === "autorizada";
   const canSendDirectly = isAdmin && orden?.status === "pendiente";
+  const proveedorTieneEmail = !!(orden?.proveedores?.email);
+
+  // Mark as sent without email (for informal suppliers)
+  const handleMarcarComoEnviada = async () => {
+    try {
+      await supabase
+        .from("ordenes_compra")
+        .update({ 
+          status: "enviada",
+          email_enviado_en: null // No email was sent
+        })
+        .eq("id", orden.id);
+
+      queryClient.invalidateQueries({ queryKey: ["ordenes_compra"] });
+
+      toast({
+        title: "Orden registrada",
+        description: "La orden se marcó como enviada para control interno",
+      });
+      
+      onOpenChange(false);
+      resetForm();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo actualizar la orden",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <>
@@ -1167,7 +1197,12 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
           <DialogTitle className="flex items-center gap-2 flex-wrap">
             Gestionar Orden {orden?.folio}
             {getStatusBadge()}
-            {orden?.status === "enviada" && (
+            {!proveedorTieneEmail && (
+              <Badge variant="outline" className="text-muted-foreground">
+                Sin correo
+              </Badge>
+            )}
+            {orden?.status === "enviada" && orden?.email_enviado_en && (
               <div className="flex items-center gap-2 ml-auto">
                 {orden?.email_leido_en && (
                   <Badge variant="outline" className="text-blue-600 border-blue-300">
@@ -1187,6 +1222,11 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
                   </Badge>
                 )}
               </div>
+            )}
+            {orden?.status === "enviada" && !orden?.email_enviado_en && (
+              <Badge variant="outline" className="text-muted-foreground ml-auto">
+                Control interno
+              </Badge>
             )}
           </DialogTitle>
           <DialogDescription>
@@ -1254,7 +1294,7 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
             )}
 
             {/* Button to send to supplier - visible when authorized */}
-            {canSendToSupplier && (
+            {canSendToSupplier && proveedorTieneEmail && (
               <Button
                 variant="outline"
                 className="w-full justify-start text-green-600 hover:text-green-700 border-green-200"
@@ -1265,8 +1305,20 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
               </Button>
             )}
 
+            {/* Button to mark as sent without email - for informal suppliers */}
+            {canSendToSupplier && !proveedorTieneEmail && (
+              <Button
+                variant="outline"
+                className="w-full justify-start text-green-600 hover:text-green-700 border-green-200"
+                onClick={handleMarcarComoEnviada}
+              >
+                <CheckCircle className="mr-2 h-4 w-4" />
+                Marcar como Enviada (control interno)
+              </Button>
+            )}
+
             {/* Admin can send directly without authorization */}
-            {canSendDirectly && (
+            {canSendDirectly && proveedorTieneEmail && (
               <Button
                 variant="outline"
                 className="w-full justify-start"
@@ -1274,6 +1326,18 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
               >
                 <Mail className="mr-2 h-4 w-4" />
                 Enviar Orden al Proveedor (sin autorizar)
+              </Button>
+            )}
+
+            {/* Admin can mark as sent without email */}
+            {canSendDirectly && !proveedorTieneEmail && (
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={handleMarcarComoEnviada}
+              >
+                <CheckCircle className="mr-2 h-4 w-4" />
+                Marcar como Enviada (control interno)
               </Button>
             )}
 
@@ -1371,12 +1435,18 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
             <div className="bg-green-50 dark:bg-green-950/20 p-4 rounded-lg space-y-2">
               <p className="font-medium text-green-700 dark:text-green-400">¿Autorizar esta orden?</p>
               <p className="text-sm text-muted-foreground">
-                Al autorizar, tu nombre aparecerá como firma en el PDF y la orden se enviará automáticamente al proveedor.
+                {proveedorTieneEmail 
+                  ? "Al autorizar, tu nombre aparecerá como firma en el PDF. El creador podrá enviarla al proveedor por correo."
+                  : "Al autorizar, tu nombre aparecerá como firma en el PDF. Este proveedor no tiene correo registrado (control interno)."}
               </p>
               <div className="text-sm text-muted-foreground space-y-1 mt-2">
                 <p><strong>Folio:</strong> {orden?.folio}</p>
                 <p><strong>Proveedor:</strong> {orden?.proveedores?.nombre}</p>
-                <p><strong>Correo proveedor:</strong> {orden?.proveedores?.email || 'Sin correo'}</p>
+                {proveedorTieneEmail ? (
+                  <p><strong>Correo proveedor:</strong> {orden?.proveedores?.email}</p>
+                ) : (
+                  <p className="text-amber-600"><strong>⚠ Sin correo:</strong> Control interno</p>
+                )}
                 <p><strong>Total:</strong> ${orden?.total?.toLocaleString()}</p>
               </div>
             </div>

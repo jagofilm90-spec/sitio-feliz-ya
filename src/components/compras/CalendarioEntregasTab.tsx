@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar, MoreVertical } from "lucide-react";
+import { Calendar, MoreVertical, Truck } from "lucide-react";
 import OrdenAccionesDialog from "./OrdenAccionesDialog";
 import { useState } from "react";
 
@@ -19,8 +19,38 @@ const CalendarioEntregasTab = () => {
   const [accionesDialogOpen, setAccionesDialogOpen] = useState(false);
   const [ordenSeleccionada, setOrdenSeleccionada] = useState<any>(null);
 
-  const { data: ordenesConEntrega = [] } = useQuery({
-    queryKey: ["ordenes_calendario"],
+  // Fetch scheduled deliveries from ordenes_compra_entregas
+  const { data: entregasProgramadas = [] } = useQuery({
+    queryKey: ["entregas_programadas_calendario"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ordenes_compra_entregas")
+        .select(
+          `
+          *,
+          ordenes_compra (
+            id,
+            folio,
+            total,
+            status,
+            proveedores (nombre),
+            ordenes_compra_detalles (
+              cantidad_ordenada,
+              productos (nombre)
+            )
+          )
+        `
+        )
+        .order("fecha_programada");
+
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Also fetch single-delivery orders (legacy or non-multiple)
+  const { data: ordenesSimples = [] } = useQuery({
+    queryKey: ["ordenes_calendario_simples"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("ordenes_compra")
@@ -34,6 +64,7 @@ const CalendarioEntregasTab = () => {
           )
         `
         )
+        .eq("entregas_multiples", false)
         .not("fecha_entrega_programada", "is", null)
         .order("fecha_entrega_programada");
 
@@ -43,20 +74,54 @@ const CalendarioEntregasTab = () => {
   });
 
   const getStatusColor = (status: string) => {
-    const colors: Record<string, any> = {
+    const colors: Record<string, string> = {
+      programada: "secondary",
       pendiente: "secondary",
       parcial: "default",
       recibida: "default",
+      entregada: "default",
       devuelta: "destructive",
     };
     return colors[status] || "secondary";
   };
 
+  // Combine both data sources into unified format
+  const todasLasEntregas = [
+    // Multiple delivery entries
+    ...entregasProgramadas.map((entrega: any) => ({
+      id: entrega.id,
+      fecha: entrega.fecha_programada,
+      folio: entrega.ordenes_compra?.folio,
+      proveedor: entrega.ordenes_compra?.proveedores?.nombre,
+      productos: entrega.ordenes_compra?.ordenes_compra_detalles,
+      total: entrega.ordenes_compra?.total,
+      status: entrega.status,
+      orden: entrega.ordenes_compra,
+      numeroEntrega: entrega.numero_entrega,
+      cantidadBultos: entrega.cantidad_bultos,
+      esMultiple: true,
+    })),
+    // Simple delivery entries
+    ...ordenesSimples.map((orden: any) => ({
+      id: orden.id,
+      fecha: orden.fecha_entrega_programada,
+      folio: orden.folio,
+      proveedor: orden.proveedores?.nombre,
+      productos: orden.ordenes_compra_detalles,
+      total: orden.total,
+      status: orden.status,
+      orden: orden,
+      numeroEntrega: null,
+      cantidadBultos: null,
+      esMultiple: false,
+    })),
+  ];
+
   const agruparPorFecha = () => {
-    const grupos: Record<string, typeof ordenesConEntrega> = {};
-    ordenesConEntrega.forEach((orden) => {
-      if (orden.fecha_entrega_programada) {
-        const fecha = new Date(orden.fecha_entrega_programada).toLocaleDateString(
+    const grupos: Record<string, typeof todasLasEntregas> = {};
+    todasLasEntregas.forEach((entrega) => {
+      if (entrega.fecha) {
+        const fecha = new Date(entrega.fecha).toLocaleDateString(
           "es-MX",
           {
             weekday: "long",
@@ -68,7 +133,7 @@ const CalendarioEntregasTab = () => {
         if (!grupos[fecha]) {
           grupos[fecha] = [];
         }
-        grupos[fecha].push(orden);
+        grupos[fecha].push(entrega);
       }
     });
     return grupos;
@@ -94,12 +159,12 @@ const CalendarioEntregasTab = () => {
         </div>
       ) : (
         <div className="space-y-6">
-          {Object.entries(gruposPorFecha).map(([fecha, ordenes]) => (
+          {Object.entries(gruposPorFecha).map(([fecha, entregas]) => (
             <div key={fecha} className="border rounded-lg overflow-hidden">
               <div className="bg-muted px-4 py-3">
                 <h3 className="font-semibold capitalize">{fecha}</h3>
                 <p className="text-sm text-muted-foreground">
-                  {ordenes.length} {ordenes.length === 1 ? "entrega" : "entregas"}
+                  {entregas.length} {entregas.length === 1 ? "entrega" : "entregas"}
                 </p>
               </div>
               <Table>
@@ -108,35 +173,51 @@ const CalendarioEntregasTab = () => {
                     <TableHead>Folio</TableHead>
                     <TableHead>Proveedor</TableHead>
                     <TableHead>Productos</TableHead>
-                    <TableHead>Total</TableHead>
+                    <TableHead>Bultos</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {ordenes.map((orden) => (
-                    <TableRow key={orden.id}>
-                      <TableCell className="font-medium">{orden.folio}</TableCell>
-                      <TableCell>{orden.proveedores?.nombre}</TableCell>
+                  {entregas.map((entrega) => (
+                    <TableRow key={entrega.id}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          {entrega.folio}
+                          {entrega.esMultiple && (
+                            <Badge variant="outline" className="text-xs">
+                              <Truck className="h-3 w-3 mr-1" />
+                              #{entrega.numeroEntrega}
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>{entrega.proveedor}</TableCell>
                       <TableCell>
                         <div className="text-sm">
-                          {orden.ordenes_compra_detalles
+                          {entrega.productos
                             ?.slice(0, 2)
-                            .map((d: any) => d.productos.nombre)
+                            .map((d: any) => d.productos?.nombre)
                             .join(", ")}
-                          {orden.ordenes_compra_detalles &&
-                            orden.ordenes_compra_detalles.length > 2 && (
+                          {entrega.productos &&
+                            entrega.productos.length > 2 && (
                               <span className="text-muted-foreground">
                                 {" "}
-                                +{orden.ordenes_compra_detalles.length - 2} más
+                                +{entrega.productos.length - 2} más
                               </span>
                             )}
                         </div>
                       </TableCell>
-                      <TableCell>${orden.total.toLocaleString()}</TableCell>
                       <TableCell>
-                        <Badge variant={getStatusColor(orden.status)}>
-                          {orden.status}
+                        {entrega.cantidadBultos ? (
+                          <span className="font-medium">{entrega.cantidadBultos.toLocaleString()} bultos</span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getStatusColor(entrega.status) as "default" | "secondary" | "destructive" | "outline"}>
+                          {entrega.status}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -144,7 +225,7 @@ const CalendarioEntregasTab = () => {
                           variant="ghost"
                           size="sm"
                           onClick={() => {
-                            setOrdenSeleccionada(orden);
+                            setOrdenSeleccionada(entrega.orden);
                             setAccionesDialogOpen(true);
                           }}
                         >

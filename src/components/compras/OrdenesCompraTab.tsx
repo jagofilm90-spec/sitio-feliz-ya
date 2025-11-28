@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Card } from "@/components/ui/card";
@@ -55,6 +56,7 @@ interface EntregaProgramada {
 const OrdenesCompraTab = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [accionesDialogOpen, setAccionesDialogOpen] = useState(false);
   const [ordenSeleccionada, setOrdenSeleccionada] = useState<any>(null);
@@ -149,6 +151,20 @@ const OrdenesCompraTab = () => {
       return data;
     },
   });
+
+  // Handle ?aprobar= URL parameter to auto-open order for authorization
+  useEffect(() => {
+    const aprobarId = searchParams.get("aprobar");
+    if (aprobarId && ordenes.length > 0) {
+      const ordenParaAprobar = ordenes.find((o: any) => o.id === aprobarId);
+      if (ordenParaAprobar) {
+        setOrdenSeleccionada(ordenParaAprobar);
+        setAccionesDialogOpen(true);
+        // Clear the URL parameter
+        setSearchParams({});
+      }
+    }
+  }, [searchParams, ordenes]);
 
   // Calculate deliveries based on total quantity and bultos per delivery
   const calcularEntregas = () => {

@@ -98,22 +98,24 @@ const ProgramarEntregasDialog = ({ open, onOpenChange, orden }: ProgramarEntrega
           };
         });
 
-        // Call edge function to send email (if exists)
+        // Call edge function to send email
         try {
+          const htmlBody = `
+            <h2>Fechas de entrega actualizadas</h2>
+            <p>Le informamos las nuevas fechas programadas para la orden <strong>${orden.folio}</strong>:</p>
+            <ul>
+              ${entregasNuevas.map(e => `<li>Tráiler ${e.numero}: ${e.bultos?.toLocaleString()} bultos - <strong>${e.fecha}</strong></li>`).join("")}
+            </ul>
+            <p>Saludos cordiales,<br>Abarrotes La Manita</p>
+          `;
+          
           await supabase.functions.invoke("gmail-api", {
             body: {
-              action: "sendEmail",
-              email: orden.proveedores.email,
+              action: "send",
+              accountEmail: "compras@almasa.com.mx",
+              to: orden.proveedores.email,
               subject: `Nuevas fechas programadas - ${orden.folio}`,
-              body: `
-                <h2>Fechas de entrega actualizadas</h2>
-                <p>Le informamos las nuevas fechas programadas para la orden <strong>${orden.folio}</strong>:</p>
-                <ul>
-                  ${entregasNuevas.map(e => `<li>Tráiler ${e.numero}: ${e.bultos?.toLocaleString()} bultos - <strong>${e.fecha}</strong></li>`).join("")}
-                </ul>
-                <p>Saludos cordiales,<br>Abarrotes La Manita</p>
-              `,
-              fromEmail: "compras@almasa.com.mx"
+              body: htmlBody
             }
           });
           

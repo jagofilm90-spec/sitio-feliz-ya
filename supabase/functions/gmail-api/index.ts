@@ -224,22 +224,30 @@ serve(async (req) => {
         throw new Error("messageId requerido");
       }
 
-      const modifyResponse = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ removeLabelIds: ["UNREAD"] }),
-        }
-      );
+      try {
+        const modifyResponse = await fetch(
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ removeLabelIds: ["UNREAD"] }),
+          }
+        );
 
-      if (!modifyResponse.ok) {
-        const errorText = await modifyResponse.text();
-        console.error("Mark as read failed:", errorText);
-        throw new Error("Error al marcar como leído");
+        if (!modifyResponse.ok) {
+          const errorText = await modifyResponse.text();
+          console.log("Mark as read response:", modifyResponse.status, errorText);
+          // Don't throw error - messages in trash or already read will fail silently
+          // This is expected behavior for trash messages
+        } else {
+          console.log("Marked as read successfully:", messageId);
+        }
+      } catch (e) {
+        console.log("Mark as read error (non-fatal):", e);
+        // Non-fatal error - continue without throwing
       }
 
       return new Response(

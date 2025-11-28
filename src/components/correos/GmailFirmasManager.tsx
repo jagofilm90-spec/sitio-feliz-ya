@@ -1,4 +1,5 @@
 import { useState } from "react";
+import DOMPurify from "dompurify";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -153,7 +154,7 @@ const GmailFirmasManager = ({ cuentas }: GmailFirmasManagerProps) => {
                     {firma?.firma_html ? (
                       <div 
                         className="p-3 bg-muted rounded-md text-sm prose prose-sm max-w-none"
-                        dangerouslySetInnerHTML={{ __html: firma.firma_html }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(firma.firma_html) }}
                       />
                     ) : (
                       <p className="text-sm text-muted-foreground italic">

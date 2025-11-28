@@ -15,13 +15,23 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { 
   CheckCircle, 
   Package, 
   AlertTriangle, 
   Calendar,
   Loader2,
-  Truck
+  Truck,
+  Lock,
+  CalendarClock
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
@@ -34,6 +44,9 @@ interface RecepcionProducto {
   cantidad_recibida_anterior: number;
   cantidad_pendiente: number;
   cantidad_recibida_ahora: number;
+  maneja_caducidad: boolean;
+  fecha_caducidad: string;
+  razon_diferencia: string;
 }
 
 interface RegistrarRecepcionDialogProps {
@@ -42,6 +55,15 @@ interface RegistrarRecepcionDialogProps {
   orden: any;
 }
 
+const RAZONES_DIFERENCIA = [
+  { value: "devolucion", label: "Devolución" },
+  { value: "roto", label: "Producto roto/dañado" },
+  { value: "no_llego", label: "No llegó" },
+  { value: "error_cantidad", label: "Error del proveedor en cantidad" },
+  { value: "rechazado", label: "Rechazado por calidad" },
+  { value: "otro", label: "Otro" },
+];
+
 const RegistrarRecepcionDialog = ({ open, onOpenChange, orden }: RegistrarRecepcionDialogProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -49,10 +71,36 @@ const RegistrarRecepcionDialog = ({ open, onOpenChange, orden }: RegistrarRecepc
   const [productos, setProductos] = useState<RecepcionProducto[]>([]);
   const [fechaNuevaEntrega, setFechaNuevaEntrega] = useState("");
   const [notasRecepcion, setNotasRecepcion] = useState("");
+  
+  // New security/control fields
+  const [numeroSellos, setNumeroSellos] = useState("");
+  const [nombreEntregador, setNombreEntregador] = useState("");
+
+  // Fetch product details to check maneja_caducidad
+  const { data: productosInfo } = useQuery({
+    queryKey: ["productos-caducidad", orden?.id],
+    queryFn: async () => {
+      if (!orden?.ordenes_compra_detalles) return {};
+      
+      const productoIds = orden.ordenes_compra_detalles.map((d: any) => d.producto_id);
+      const { data, error } = await supabase
+        .from("productos")
+        .select("id, maneja_caducidad")
+        .in("id", productoIds);
+      
+      if (error) throw error;
+      
+      return data.reduce((acc: any, p: any) => {
+        acc[p.id] = p.maneja_caducidad;
+        return acc;
+      }, {});
+    },
+    enabled: open && !!orden?.ordenes_compra_detalles,
+  });
 
   // Initialize products when dialog opens
   useEffect(() => {
-    if (open && orden?.ordenes_compra_detalles) {
+    if (open && orden?.ordenes_compra_detalles && productosInfo) {
       const productosIniciales = orden.ordenes_compra_detalles.map((d: any) => ({
         detalle_id: d.id,
         producto_id: d.producto_id,
@@ -62,19 +110,29 @@ const RegistrarRecepcionDialog = ({ open, onOpenChange, orden }: RegistrarRecepc
         cantidad_recibida_anterior: d.cantidad_recibida || 0,
         cantidad_pendiente: d.cantidad_ordenada - (d.cantidad_recibida || 0),
         cantidad_recibida_ahora: 0,
+        maneja_caducidad: productosInfo[d.producto_id] || false,
+        fecha_caducidad: "",
+        razon_diferencia: "",
       }));
       setProductos(productosIniciales);
       setFechaNuevaEntrega("");
       setNotasRecepcion("");
+      setNumeroSellos("");
+      setNombreEntregador(orden.proveedores?.nombre || "");
     }
-  }, [open, orden]);
+  }, [open, orden, productosInfo]);
 
   const handleCantidadChange = (detalleId: string, cantidad: number) => {
     setProductos(prev => prev.map(p => {
       if (p.detalle_id === detalleId) {
         // Can't receive more than what's pending
         const cantidadValida = Math.min(Math.max(0, cantidad), p.cantidad_pendiente);
-        return { ...p, cantidad_recibida_ahora: cantidadValida };
+        return { 
+          ...p, 
+          cantidad_recibida_ahora: cantidadValida,
+          // Reset razon if receiving full amount
+          razon_diferencia: cantidadValida === p.cantidad_pendiente ? "" : p.razon_diferencia
+        };
       }
       return p;
     }));
@@ -83,7 +141,29 @@ const RegistrarRecepcionDialog = ({ open, onOpenChange, orden }: RegistrarRecepc
   const handleRecibirTodo = (detalleId: string) => {
     setProductos(prev => prev.map(p => {
       if (p.detalle_id === detalleId) {
-        return { ...p, cantidad_recibida_ahora: p.cantidad_pendiente };
+        return { 
+          ...p, 
+          cantidad_recibida_ahora: p.cantidad_pendiente,
+          razon_diferencia: "" // No need for reason if receiving all
+        };
+      }
+      return p;
+    }));
+  };
+
+  const handleFechaCaducidadChange = (detalleId: string, fecha: string) => {
+    setProductos(prev => prev.map(p => {
+      if (p.detalle_id === detalleId) {
+        return { ...p, fecha_caducidad: fecha };
+      }
+      return p;
+    }));
+  };
+
+  const handleRazonDiferenciaChange = (detalleId: string, razon: string) => {
+    setProductos(prev => prev.map(p => {
+      if (p.detalle_id === detalleId) {
+        return { ...p, razon_diferencia: razon };
       }
       return p;
     }));
@@ -98,20 +178,55 @@ const RegistrarRecepcionDialog = ({ open, onOpenChange, orden }: RegistrarRecepc
     p.cantidad_pendiente - p.cantidad_recibida_ahora > 0
   );
 
-  const handleGuardar = async () => {
-    if (totalRecibidoAhora === 0) {
-      toast({
-        title: "Sin cambios",
-        description: "Indica la cantidad recibida de al menos un producto",
-        variant: "destructive",
-      });
-      return;
+  // Validation function
+  const validarFormulario = (): string | null => {
+    // 1. Validate nombre del entregador
+    if (!nombreEntregador.trim()) {
+      return "Indica el nombre de quien entrega la mercancía";
     }
 
+    // 2. Validate número de sellos
+    if (!numeroSellos.trim()) {
+      return "Indica el número de sellos de seguridad del camión";
+    }
+
+    // 3. Validate at least one product is being received
+    if (totalRecibidoAhora === 0) {
+      return "Indica la cantidad recibida de al menos un producto";
+    }
+
+    // 4. Validate fecha de caducidad for products that require it
+    for (const producto of productos) {
+      if (producto.cantidad_recibida_ahora > 0) {
+        if (producto.maneja_caducidad && !producto.fecha_caducidad) {
+          return `Indica la fecha de caducidad para "${producto.producto_nombre}"`;
+        }
+      }
+    }
+
+    // 5. Validate razon_diferencia when cantidad doesn't match
+    for (const producto of productos) {
+      if (producto.cantidad_recibida_ahora > 0 && 
+          producto.cantidad_recibida_ahora < producto.cantidad_pendiente &&
+          !producto.razon_diferencia) {
+        return `Indica la razón de la diferencia para "${producto.producto_nombre}" (esperados: ${producto.cantidad_pendiente}, recibidos: ${producto.cantidad_recibida_ahora})`;
+      }
+    }
+
+    // 6. Validate fecha nueva entrega if there's pending merchandise
     if (quedaPendiente && !fechaNuevaEntrega) {
+      return "Indica cuándo llegará la mercancía pendiente";
+    }
+
+    return null;
+  };
+
+  const handleGuardar = async () => {
+    const errorValidacion = validarFormulario();
+    if (errorValidacion) {
       toast({
-        title: "Fecha requerida",
-        description: "Indica cuándo llegará la mercancía pendiente",
+        title: "Datos incompletos",
+        description: errorValidacion,
         variant: "destructive",
       });
       return;
@@ -136,13 +251,27 @@ const RegistrarRecepcionDialog = ({ open, onOpenChange, orden }: RegistrarRecepc
       // Check if order is now complete or partial
       const todoRecibido = !quedaPendiente;
       
+      // Build reception notes with control info
+      const notasControlInterno = [
+        `Entregado por: ${nombreEntregador}`,
+        `Sellos de seguridad: ${numeroSellos}`,
+        notasRecepcion ? `Notas: ${notasRecepcion}` : null,
+        // Add any difference reasons
+        ...productos
+          .filter(p => p.razon_diferencia && p.cantidad_recibida_ahora < p.cantidad_pendiente)
+          .map(p => `${p.producto_nombre}: ${RAZONES_DIFERENCIA.find(r => r.value === p.razon_diferencia)?.label || p.razon_diferencia} (faltaron ${p.cantidad_pendiente - p.cantidad_recibida_ahora})`)
+      ].filter(Boolean).join(" | ");
+      
       if (todoRecibido) {
         // Mark order as fully received
         await supabase
           .from("ordenes_compra")
           .update({ 
             status: "recibida",
-            fecha_entrega_real: new Date().toISOString().split('T')[0]
+            fecha_entrega_real: new Date().toISOString().split('T')[0],
+            notas: orden.notas 
+              ? `${orden.notas}\n\n[RECEPCIÓN ${new Date().toLocaleDateString('es-MX')}] ${notasControlInterno}`
+              : `[RECEPCIÓN ${new Date().toLocaleDateString('es-MX')}] ${notasControlInterno}`
           })
           .eq("id", orden.id);
       } else {
@@ -151,7 +280,10 @@ const RegistrarRecepcionDialog = ({ open, onOpenChange, orden }: RegistrarRecepc
           .from("ordenes_compra")
           .update({ 
             status: "parcial",
-            fecha_entrega_programada: fechaNuevaEntrega
+            fecha_entrega_programada: fechaNuevaEntrega,
+            notas: orden.notas 
+              ? `${orden.notas}\n\n[RECEPCIÓN PARCIAL ${new Date().toLocaleDateString('es-MX')}] ${notasControlInterno}`
+              : `[RECEPCIÓN PARCIAL ${new Date().toLocaleDateString('es-MX')}] ${notasControlInterno}`
           })
           .eq("id", orden.id);
 
@@ -241,7 +373,7 @@ const RegistrarRecepcionDialog = ({ open, onOpenChange, orden }: RegistrarRecepc
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh]">
+      <DialogContent className="max-w-3xl max-h-[90vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
@@ -249,11 +381,49 @@ const RegistrarRecepcionDialog = ({ open, onOpenChange, orden }: RegistrarRecepc
             <Badge variant="outline">{orden.folio}</Badge>
           </DialogTitle>
           <DialogDescription>
-            Indica las cantidades recibidas. Si hay entregas parciales, programa la siguiente entrega.
+            Registra los datos de control de la entrega. Todos los campos marcados con * son obligatorios.
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[50vh] pr-4">
+        <ScrollArea className="max-h-[60vh] pr-4">
+          {/* Control Data Section - NEW */}
+          <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 mb-4">
+            <h4 className="font-medium mb-3 flex items-center gap-2 text-blue-700 dark:text-blue-300">
+              <Lock className="h-4 w-4" />
+              Datos de Control de Recepción
+            </h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm">
+                  Nombre de quien entrega *
+                </Label>
+                <Input
+                  value={nombreEntregador}
+                  onChange={(e) => setNombreEntregador(e.target.value)}
+                  placeholder="ej: Juan Pérez (chofer)"
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Nombre del chofer o persona que entrega
+                </p>
+              </div>
+              <div>
+                <Label className="text-sm">
+                  Número de sellos de seguridad *
+                </Label>
+                <Input
+                  value={numeroSellos}
+                  onChange={(e) => setNumeroSellos(e.target.value)}
+                  placeholder="ej: 123456, 789012"
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Números de los sellos del camión
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Order Info */}
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div className="p-3 bg-muted/50 rounded-lg">
@@ -277,73 +447,144 @@ const RegistrarRecepcionDialog = ({ open, onOpenChange, orden }: RegistrarRecepc
               Productos en la Orden
             </h4>
             
-            {productos.map((producto) => (
-              <div 
-                key={producto.detalle_id} 
-                className={`p-4 rounded-lg border ${
-                  producto.cantidad_pendiente === 0 
-                    ? 'bg-green-50 dark:bg-green-950/20 border-green-200' 
-                    : 'bg-muted/30 border-border'
-                }`}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <p className="font-medium">{producto.producto_nombre}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Código: {producto.producto_codigo}
-                    </p>
-                  </div>
-                  {producto.cantidad_pendiente === 0 && (
-                    <Badge className="bg-green-100 text-green-700">
-                      <CheckCircle className="h-3 w-3 mr-1" />
-                      Completo
-                    </Badge>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-4 gap-2 text-sm mt-3">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Ordenado</p>
-                    <p className="font-medium">{producto.cantidad_ordenada.toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Recibido antes</p>
-                    <p className="font-medium">{producto.cantidad_recibida_anterior.toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Pendiente</p>
-                    <p className={`font-medium ${producto.cantidad_pendiente > 0 ? 'text-amber-600' : 'text-green-600'}`}>
-                      {producto.cantidad_pendiente.toLocaleString()}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Recibir ahora</p>
-                    {producto.cantidad_pendiente > 0 ? (
-                      <div className="flex items-center gap-1">
-                        <Input
-                          type="number"
-                          min={0}
-                          max={producto.cantidad_pendiente}
-                          value={producto.cantidad_recibida_ahora || ""}
-                          onChange={(e) => handleCantidadChange(producto.detalle_id, parseInt(e.target.value) || 0)}
-                          className="h-8 w-20"
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 text-xs px-2"
-                          onClick={() => handleRecibirTodo(producto.detalle_id)}
-                        >
-                          Todo
-                        </Button>
-                      </div>
-                    ) : (
-                      <p className="text-green-600">—</p>
+            {productos.map((producto) => {
+              const hayDiferencia = producto.cantidad_recibida_ahora > 0 && 
+                                   producto.cantidad_recibida_ahora < producto.cantidad_pendiente;
+              
+              return (
+                <div 
+                  key={producto.detalle_id} 
+                  className={`p-4 rounded-lg border ${
+                    producto.cantidad_pendiente === 0 
+                      ? 'bg-green-50 dark:bg-green-950/20 border-green-200' 
+                      : 'bg-muted/30 border-border'
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <p className="font-medium">{producto.producto_nombre}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Código: {producto.producto_codigo}
+                        {producto.maneja_caducidad && (
+                          <Badge variant="outline" className="ml-2 text-xs">
+                            <CalendarClock className="h-3 w-3 mr-1" />
+                            Requiere caducidad
+                          </Badge>
+                        )}
+                      </p>
+                    </div>
+                    {producto.cantidad_pendiente === 0 && (
+                      <Badge className="bg-green-100 text-green-700">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Completo
+                      </Badge>
                     )}
                   </div>
+
+                  <div className="grid grid-cols-4 gap-2 text-sm mt-3">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Ordenado</p>
+                      <p className="font-medium">{producto.cantidad_ordenada.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Recibido antes</p>
+                      <p className="font-medium">{producto.cantidad_recibida_anterior.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Pendiente</p>
+                      <p className={`font-medium ${producto.cantidad_pendiente > 0 ? 'text-amber-600' : 'text-green-600'}`}>
+                        {producto.cantidad_pendiente.toLocaleString()}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Recibir ahora</p>
+                      {producto.cantidad_pendiente > 0 ? (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={producto.cantidad_pendiente}
+                            value={producto.cantidad_recibida_ahora || ""}
+                            onChange={(e) => handleCantidadChange(producto.detalle_id, parseInt(e.target.value) || 0)}
+                            className="h-8 w-20"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 text-xs px-2"
+                            onClick={() => handleRecibirTodo(producto.detalle_id)}
+                          >
+                            Todo
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className="text-green-600">—</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Additional fields when receiving this product */}
+                  {producto.cantidad_recibida_ahora > 0 && (
+                    <div className="mt-3 pt-3 border-t border-dashed space-y-3">
+                      {/* Fecha de caducidad - only if product requires it */}
+                      {producto.maneja_caducidad && (
+                        <div className="flex items-center gap-3">
+                          <Label className="text-sm whitespace-nowrap min-w-[140px]">
+                            Fecha de caducidad *
+                          </Label>
+                          <Input
+                            type="date"
+                            value={producto.fecha_caducidad}
+                            onChange={(e) => handleFechaCaducidadChange(producto.detalle_id, e.target.value)}
+                            className="h-8 max-w-[180px]"
+                            min={new Date().toISOString().split('T')[0]}
+                          />
+                          {!producto.fecha_caducidad && (
+                            <Badge variant="destructive" className="text-xs">
+                              <AlertTriangle className="h-3 w-3 mr-1" />
+                              Requerido
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Razón de diferencia - only if cantidad doesn't match */}
+                      {hayDiferencia && (
+                        <div className="flex items-center gap-3">
+                          <Label className="text-sm whitespace-nowrap min-w-[140px]">
+                            Razón del faltante *
+                          </Label>
+                          <Select
+                            value={producto.razon_diferencia}
+                            onValueChange={(value) => handleRazonDiferenciaChange(producto.detalle_id, value)}
+                          >
+                            <SelectTrigger className="h-8 max-w-[220px]">
+                              <SelectValue placeholder="Selecciona razón..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {RAZONES_DIFERENCIA.map((razon) => (
+                                <SelectItem key={razon.value} value={razon.value}>
+                                  {razon.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Badge variant="outline" className="text-xs text-amber-600">
+                            Faltan {producto.cantidad_pendiente - producto.cantidad_recibida_ahora}
+                          </Badge>
+                          {!producto.razon_diferencia && (
+                            <Badge variant="destructive" className="text-xs">
+                              <AlertTriangle className="h-3 w-3 mr-1" />
+                              Requerido
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Summary */}
@@ -385,11 +626,12 @@ const RegistrarRecepcionDialog = ({ open, onOpenChange, orden }: RegistrarRecepc
                     />
                   </div>
                   <div>
-                    <Label>Notas (opcional)</Label>
-                    <Input
+                    <Label>Notas adicionales (opcional)</Label>
+                    <Textarea
                       value={notasRecepcion}
                       onChange={(e) => setNotasRecepcion(e.target.value)}
-                      placeholder="ej: Proveedor entregará en 5 días"
+                      placeholder="ej: Proveedor entregará en 5 días, producto llegó mojado, etc."
+                      rows={2}
                     />
                   </div>
                 </div>

@@ -114,14 +114,26 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
 
   const deleteOrden = useMutation({
     mutationFn: async () => {
-      // First delete order details
+      // First delete related notifications
+      await supabase
+        .from("notificaciones")
+        .delete()
+        .eq("orden_compra_id", orden.id);
+
+      // Delete order deliveries (entregas múltiples)
+      await supabase
+        .from("ordenes_compra_entregas")
+        .delete()
+        .eq("orden_compra_id", orden.id);
+
+      // Delete order details
       const { error: detallesError } = await supabase
         .from("ordenes_compra_detalles")
         .delete()
         .eq("orden_compra_id", orden.id);
       if (detallesError) throw detallesError;
 
-      // Then delete the order
+      // Finally delete the order
       const { error } = await supabase
         .from("ordenes_compra")
         .delete()

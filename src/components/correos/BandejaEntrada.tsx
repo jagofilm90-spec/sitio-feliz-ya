@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -57,9 +58,19 @@ interface BandejaEntradaProps {
 
 const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
   const queryClient = useQueryClient();
-  const [selectedAccount, setSelectedAccount] = useState<string>(
-    cuentas[0]?.email || ""
-  );
+  const [searchParams, setSearchParams] = useSearchParams();
+  
+  // Get initial account from URL params or default to first account
+  const getInitialAccount = () => {
+    const cuentaParam = searchParams.get("cuenta");
+    if (cuentaParam) {
+      const found = cuentas.find(c => c.email === cuentaParam);
+      if (found) return found.email;
+    }
+    return cuentas[0]?.email || "";
+  };
+  
+  const [selectedAccount, setSelectedAccount] = useState<string>(getInitialAccount);
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
   const [selectedEmailIndex, setSelectedEmailIndex] = useState<number>(-1);
   const [composeOpen, setComposeOpen] = useState(false);
@@ -363,7 +374,26 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
     setActiveSearch("");
     setSelectedEmailIds(new Set());
     setSelectionMode(false);
+    // Update URL param
+    setSearchParams({ cuenta: email });
   };
+  
+  // Listen for URL param changes to switch accounts
+  useEffect(() => {
+    const cuentaParam = searchParams.get("cuenta");
+    if (cuentaParam && cuentaParam !== selectedAccount) {
+      const found = cuentas.find(c => c.email === cuentaParam);
+      if (found) {
+        setSelectedAccount(found.email);
+        setSelectedEmailId(null);
+        setSelectedEmailIndex(-1);
+        setSearchQuery("");
+        setActiveSearch("");
+        setSelectedEmailIds(new Set());
+        setSelectionMode(false);
+      }
+    }
+  }, [searchParams, cuentas]);
 
   // Toggle selection of an email
   const handleToggleSelect = (id: string) => {

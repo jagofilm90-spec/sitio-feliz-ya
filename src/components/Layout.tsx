@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useState } from "react";
-import { useNavigate, Link, useLocation } from "react-router-dom";
+import { useNavigate, Link, useLocation, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -95,6 +95,13 @@ const Layout = ({ children }: LayoutProps) => {
     // Correos is handled separately with collapsible
   ];
 
+  const handleEmailAccountClick = (email: string, isMobile: boolean) => {
+    navigate(`/correos?cuenta=${encodeURIComponent(email)}`);
+    if (isMobile) {
+      setMobileMenuOpen(false);
+    }
+  };
+
   const renderEmailMenuItem = (isMobile: boolean = false) => {
     const isActive = location.pathname === "/correos";
     
@@ -137,25 +144,23 @@ const Layout = ({ children }: LayoutProps) => {
           </div>
           <CollapsibleContent className="pl-6 space-y-1">
             {emailCuentas.map((cuenta) => (
-              <Link 
+              <div 
                 key={cuenta.id} 
-                to="/correos"
-                onClick={isMobile ? () => setMobileMenuOpen(false) : undefined}
+                onClick={() => handleEmailAccountClick(cuenta.email, isMobile)}
+                className="flex items-center justify-between py-1.5 px-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors cursor-pointer"
               >
-                <div className="flex items-center justify-between py-1.5 px-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors">
-                  <span className="truncate max-w-[140px]" title={cuenta.email}>
-                    {cuenta.nombre}
-                  </span>
-                  {(emailCounts[cuenta.email] || 0) > 0 && (
-                    <Badge 
-                      variant="secondary" 
-                      className="h-5 min-w-5 flex items-center justify-center px-1.5 bg-primary/10 text-primary"
-                    >
-                      {emailCounts[cuenta.email]}
-                    </Badge>
-                  )}
-                </div>
-              </Link>
+                <span className="truncate max-w-[140px]" title={cuenta.email}>
+                  {cuenta.nombre}
+                </span>
+                {(emailCounts[cuenta.email] || 0) > 0 && (
+                  <Badge 
+                    variant="secondary" 
+                    className="h-5 min-w-5 flex items-center justify-center px-1.5 bg-primary/10 text-primary"
+                  >
+                    {emailCounts[cuenta.email]}
+                  </Badge>
+                )}
+              </div>
             ))}
           </CollapsibleContent>
         </div>

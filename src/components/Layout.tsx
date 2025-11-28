@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { useUnreadEmails } from "@/hooks/useUnreadEmails";
 import { CentroNotificaciones } from "@/components/CentroNotificaciones";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import logoAlmasa from "@/assets/logo-almasa.png";
 import {
   Collapsible,
@@ -202,6 +203,7 @@ const Layout = ({ children }: LayoutProps) => {
             </Link>
           </div>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <CentroNotificaciones />
             <span className="text-sm text-muted-foreground hidden md:inline">
               {user?.email}

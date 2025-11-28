@@ -75,41 +75,30 @@ const CorreosCorporativos = () => {
       }
 
       if (response.data?.authUrl) {
-        // Try to open OAuth window
-        const width = 600;
-        const height = 700;
-        const left = window.screenX + (window.outerWidth - width) / 2;
-        const top = window.screenY + (window.outerHeight - height) / 2;
+        // Open OAuth in a new top-level window (not iframe)
+        // Using _blank ensures it opens as a true top-level window
+        const newWindow = window.open(response.data.authUrl, "_blank", "noopener,noreferrer");
         
-        const popup = window.open(
-          response.data.authUrl,
-          "gmail-auth",
-          `width=${width},height=${height},left=${left},top=${top}`
-        );
-
-        // If popup was blocked, open in same window
-        if (!popup || popup.closed) {
+        if (!newWindow) {
+          // If popup was blocked, show the URL to user
           toast({
             title: "Popup bloqueado",
-            description: "Serás redirigido a Google para autorizar. Regresa a esta página después.",
+            description: "Por favor permite popups para este sitio y vuelve a intentar.",
+            variant: "destructive",
           });
-          // Open in same window as fallback
-          window.location.href = response.data.authUrl;
-          return;
+        } else {
+          toast({
+            title: "Ventana de autorización abierta",
+            description: "Completa el proceso en la nueva ventana y regresa aquí.",
+          });
         }
-
-        // Poll for popup closure and refresh data
-        const checkPopup = setInterval(() => {
-          if (popup?.closed) {
-            clearInterval(checkPopup);
-            setConnectingEmail(null);
-            queryClient.invalidateQueries({ queryKey: ["gmail-cuentas"] });
-            toast({
-              title: "Proceso completado",
-              description: "Verifica el estado de conexión de la cuenta",
-            });
-          }
-        }, 500);
+        
+        setConnectingEmail(null);
+        
+        // Auto-refresh data after a delay to check for updates
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ["gmail-cuentas"] });
+        }, 5000);
       } else {
         throw new Error("No se recibió URL de autorización");
       }

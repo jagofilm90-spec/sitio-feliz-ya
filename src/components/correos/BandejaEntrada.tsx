@@ -12,13 +12,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
-import { Inbox, RefreshCw, PenSquare, Loader2, ChevronDown, Search, Trash2, Mail, Bell, CheckCheck, CheckSquare, Square, Filter } from "lucide-react";
+import { Inbox, RefreshCw, PenSquare, Loader2, ChevronDown, Search, Trash2, Mail, Bell, CheckCheck, CheckSquare, Square, Filter, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import EmailListView from "./EmailListView";
 import EmailDetailView from "./EmailDetailView";
 import ComposeEmailDialog from "./ComposeEmailDialog";
 import TrashListView from "./TrashListView";
 import { playNotificationSound } from "@/utils/notificationSound";
+import { showGlobalRetrying, showGlobalSuccess, hideGlobalRetrying } from "@/hooks/useNetworkRetry";
 
 interface Email {
   id: string;
@@ -108,6 +109,8 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
   }, [searchParams, cuentas]);
 
   const selectedCuenta = cuentas.find((c) => c.email === selectedAccount);
+  // Track retry attempts for visual indicator
+  const retryAttemptRef = useRef(0);
 
   // Fetch unread counts for all accounts IN PARALLEL - much faster initial load
   const { data: unreadCounts } = useQuery({
@@ -125,6 +128,12 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
         )
       );
       
+      // If we were retrying and now succeeded, show success
+      if (retryAttemptRef.current > 0) {
+        showGlobalSuccess();
+        retryAttemptRef.current = 0;
+      }
+      
       const counts: Record<string, number> = {};
       results.forEach((result, index) => {
         if (result.status === "fulfilled") {
@@ -137,6 +146,14 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
     },
     staleTime: 1000 * 15, // 15 seconds
     refetchInterval: 1000 * 30, // Every 30 seconds - TIEMPO REAL
+    retry: 3,
+    retryDelay: (attemptIndex) => {
+      retryAttemptRef.current = attemptIndex + 1;
+      if (attemptIndex > 0) {
+        showGlobalRetrying("correos");
+      }
+      return Math.min(1000 * 2 ** attemptIndex, 10000);
+    },
   });
 
   // Detect new emails and show notifications
@@ -210,6 +227,9 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
   const [allEmails, setAllEmails] = useState<Email[]>([]);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
+  // Track retry attempts for email list
+  const emailRetryAttemptRef = useRef(0);
+
   // Fetch email list - every 60 seconds
   const {
     data: emailsData,
@@ -234,6 +254,12 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
         throw new Error(response.error.message);
       }
 
+      // If we were retrying and now succeeded, show success
+      if (emailRetryAttemptRef.current > 0) {
+        showGlobalSuccess();
+        emailRetryAttemptRef.current = 0;
+      }
+
       return {
         messages: (response.data?.messages as Email[]) || [],
         nextPageToken: response.data?.nextPageToken || null,
@@ -244,6 +270,14 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
     gcTime: 1000 * 60 * 10, // Keep in cache for 10 minutes
     refetchInterval: 1000 * 30, // Refetch every 30 seconds - TIEMPO REAL
     refetchOnWindowFocus: true, // Refresh when user returns
+    retry: 3,
+    retryDelay: (attemptIndex) => {
+      emailRetryAttemptRef.current = attemptIndex + 1;
+      if (attemptIndex > 0) {
+        showGlobalRetrying("correos");
+      }
+      return Math.min(1000 * 2 ** attemptIndex, 10000);
+    },
   });
 
   // Update allEmails and nextPageToken when data loads or account/search changes

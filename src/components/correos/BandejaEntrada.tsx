@@ -372,17 +372,22 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
         },
       });
 
-      // Handle 404 - email was deleted
+      // Handle 404 - email was deleted (check both error object and data)
+      const errorMessage = response.error?.message || 
+        (response.data as { error?: string } | null)?.error || '';
+      
+      if (errorMessage.toLowerCase().includes("no encontrado") || 
+          errorMessage.toLowerCase().includes("eliminado") ||
+          errorMessage.toLowerCase().includes("not found")) {
+        // Remove from local list
+        setAllEmails(prev => prev.filter(e => e.id !== selectedEmailId));
+        toast.info("Este correo ya no existe o fue eliminado");
+        setSelectedEmailId(null);
+        setSelectedEmailIndex(-1);
+        return null;
+      }
+
       if (response.error) {
-        const errorData = response.data as { error?: string } | null;
-        if (errorData?.error?.includes("no encontrado") || errorData?.error?.includes("eliminado")) {
-          // Remove from local list
-          setAllEmails(prev => prev.filter(e => e.id !== selectedEmailId));
-          toast.info("Este correo ya no existe o fue eliminado");
-          setSelectedEmailId(null);
-          setSelectedEmailIndex(-1);
-          return null;
-        }
         throw new Error(response.error.message);
       }
 

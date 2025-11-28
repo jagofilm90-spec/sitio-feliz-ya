@@ -23,6 +23,7 @@ import {
   ShoppingBag,
   PieChart,
   Bug,
+  Mail,
 } from "lucide-react";
 
 interface LayoutProps {
@@ -81,6 +82,7 @@ const Layout = ({ children }: LayoutProps) => {
     { icon: UserCog, label: "Empleados", path: "/empleados" },
     { icon: Shield, label: "Usuarios", path: "/usuarios" },
     { icon: MessageCircle, label: "Chat", path: "/chat" },
+    { icon: Mail, label: "Correos", path: "/correos" },
   ];
 
   if (loading) {

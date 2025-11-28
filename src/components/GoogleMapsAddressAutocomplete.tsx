@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { MapPin, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface GoogleMapsAddressAutocompleteProps {
   value: string;
@@ -11,46 +12,12 @@ interface GoogleMapsAddressAutocompleteProps {
   className?: string;
 }
 
-declare global {
-  interface Window {
-    google: typeof google;
-    initGoogleMaps: () => void;
-  }
+interface Prediction {
+  place_id: string;
+  description: string;
+  main_text?: string;
+  secondary_text?: string;
 }
-
-let isGoogleMapsLoaded = false;
-let isGoogleMapsLoading = false;
-const loadCallbacks: (() => void)[] = [];
-
-const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
-  return new Promise((resolve) => {
-    if (isGoogleMapsLoaded) {
-      resolve();
-      return;
-    }
-
-    if (isGoogleMapsLoading) {
-      loadCallbacks.push(resolve);
-      return;
-    }
-
-    isGoogleMapsLoading = true;
-
-    window.initGoogleMaps = () => {
-      isGoogleMapsLoaded = true;
-      isGoogleMapsLoading = false;
-      resolve();
-      loadCallbacks.forEach((cb) => cb());
-      loadCallbacks.length = 0;
-    };
-
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initGoogleMaps`;
-    script.async = true;
-    script.defer = true;
-    document.head.appendChild(script);
-  });
-};
 
 const GoogleMapsAddressAutocomplete = ({
   value,
@@ -60,91 +27,130 @@ const GoogleMapsAddressAutocomplete = ({
   required,
   className,
 }: GoogleMapsAddressAutocompleteProps) => {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [inputValue, setInputValue] = useState(value);
+  const [predictions, setPredictions] = useState<Prediction[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
+  // Sync external value changes
   useEffect(() => {
-    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-    
-    if (!apiKey) {
-      setError("Google Maps API key no configurada");
-      setIsLoading(false);
+    setInputValue(value);
+  }, [value]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const searchAddresses = async (input: string) => {
+    if (input.length < 3) {
+      setPredictions([]);
       return;
     }
 
-    loadGoogleMapsScript(apiKey)
-      .then(() => {
-        setIsLoading(false);
-        if (inputRef.current && window.google) {
-          autocompleteRef.current = new window.google.maps.places.Autocomplete(
-            inputRef.current,
-            {
-              types: ["address"],
-              componentRestrictions: { country: "mx" },
-              fields: ["formatted_address", "geometry", "name"],
-            }
-          );
-
-          autocompleteRef.current.addListener("place_changed", () => {
-            const place = autocompleteRef.current?.getPlace();
-            if (place?.formatted_address) {
-              onChange(place.formatted_address);
-            } else if (place?.name) {
-              onChange(place.name);
-            }
-          });
-        }
-      })
-      .catch((err) => {
-        console.error("Error loading Google Maps:", err);
-        setError("Error al cargar Google Maps");
-        setIsLoading(false);
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('google-places-autocomplete', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        body: null,
       });
 
-    return () => {
-      if (autocompleteRef.current) {
-        window.google?.maps.event.clearInstanceListeners(autocompleteRef.current);
+      // Use fetch directly since supabase.functions.invoke doesn't support query params well for GET
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-places-autocomplete?input=${encodeURIComponent(input)}`;
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+      });
+      
+      const result = await response.json();
+      
+      if (result.predictions) {
+        setPredictions(result.predictions);
+        setShowDropdown(result.predictions.length > 0);
+      } else {
+        setPredictions([]);
       }
-    };
-  }, [onChange]);
+    } catch (error) {
+      console.error('Error searching addresses:', error);
+      setPredictions([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  if (error) {
-    return (
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    setInputValue(newValue);
+    onChange(newValue);
+
+    // Debounce the search
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+    debounceRef.current = setTimeout(() => {
+      searchAddresses(newValue);
+    }, 300);
+  };
+
+  const handleSelectPrediction = (prediction: Prediction) => {
+    setInputValue(prediction.description);
+    onChange(prediction.description);
+    setPredictions([]);
+    setShowDropdown(false);
+  };
+
+  return (
+    <div ref={containerRef} className="relative">
       <div className="relative">
-        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        {isLoading ? (
+          <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />
+        ) : (
+          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        )}
         <Input
           id={id}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
+          value={inputValue}
+          onChange={handleInputChange}
+          onFocus={() => predictions.length > 0 && setShowDropdown(true)}
           placeholder={placeholder}
           required={required}
           className={`pl-10 ${className || ""}`}
           autoComplete="off"
         />
       </div>
-    );
-  }
-
-  return (
-    <div className="relative">
-      {isLoading ? (
-        <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />
-      ) : (
-        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      
+      {showDropdown && predictions.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-60 overflow-auto">
+          {predictions.map((prediction) => (
+            <button
+              key={prediction.place_id}
+              type="button"
+              className="w-full px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground transition-colors text-sm"
+              onClick={() => handleSelectPrediction(prediction)}
+            >
+              <div className="flex items-start gap-2">
+                <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0 text-muted-foreground" />
+                <div className="flex flex-col">
+                  <span className="font-medium">{prediction.main_text || prediction.description}</span>
+                  {prediction.secondary_text && (
+                    <span className="text-xs text-muted-foreground">{prediction.secondary_text}</span>
+                  )}
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
       )}
-      <Input
-        ref={inputRef}
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={isLoading ? "Cargando Google Maps..." : placeholder}
-        required={required}
-        disabled={isLoading}
-        className={`pl-10 ${className || ""}`}
-        autoComplete="off"
-      />
     </div>
   );
 };

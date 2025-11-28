@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar, CheckCircle, XCircle, Mail, Loader2, Pencil, Trash2, FileText, ShieldCheck, ShieldX, Send, Truck } from "lucide-react";
+import { Calendar, CheckCircle, XCircle, Mail, Loader2, Pencil, Trash2, FileText, ShieldCheck, ShieldX, Send, Truck, Plus, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import ProgramarEntregasDialog from "./ProgramarEntregasDialog";
 import logoAlmasa from "@/assets/logo-almasa.png";
@@ -55,6 +55,11 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [programarEntregasOpen, setProgramarEntregasOpen] = useState(false);
+  
+  // Email CC functionality
+  const [emailTo, setEmailTo] = useState("");
+  const [ccEmails, setCcEmails] = useState<string[]>([]);
+  const [newCcEmail, setNewCcEmail] = useState("");
 
   // Fetch pending deliveries count
   const { data: entregasPendientes = 0 } = useQuery({
@@ -199,6 +204,28 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
     setNuevaFecha("");
     setMotivoDevolucion("");
     setMotivoRechazo("");
+    setEmailTo("");
+    setCcEmails([]);
+    setNewCcEmail("");
+  };
+
+  // Initialize email when action changes
+  useEffect(() => {
+    if (accion === "enviar_email" && orden?.proveedores?.email) {
+      setEmailTo(orden.proveedores.email);
+    }
+  }, [accion, orden?.proveedores?.email]);
+
+  const handleAddCcEmail = () => {
+    const email = newCcEmail.trim();
+    if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && !ccEmails.includes(email)) {
+      setCcEmails([...ccEmails, email]);
+      setNewCcEmail("");
+    }
+  };
+
+  const handleRemoveCcEmail = (emailToRemove: string) => {
+    setCcEmails(ccEmails.filter(e => e !== emailToRemove));
   };
 
   const handleCambiarFecha = () => {
@@ -930,10 +957,11 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
   };
 
   const handleEnviarOrden = async () => {
-    if (!orden?.proveedores?.email) {
+    const destinatario = emailTo.trim();
+    if (!destinatario) {
       toast({
         title: "Sin correo",
-        description: "El proveedor no tiene un correo registrado",
+        description: "Ingresa un correo de destino",
         variant: "destructive",
       });
       return;
@@ -981,16 +1009,22 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
         }
       ];
 
-      // 1. Send email to supplier
+      // 1. Send email to supplier (with CC if provided)
+      const emailPayload: any = {
+        action: 'send',
+        email: 'compras@almasa.com.mx',
+        to: destinatario,
+        subject: `Orden de Compra ${orden.folio} - Abarrotes La Manita`,
+        body: htmlBody,
+        attachments: attachments,
+      };
+      
+      if (ccEmails.length > 0) {
+        emailPayload.cc = ccEmails.join(',');
+      }
+
       const { data, error } = await supabase.functions.invoke('gmail-api', {
-        body: {
-          action: 'send',
-          email: 'compras@almasa.com.mx',
-          to: orden.proveedores.email,
-          subject: `Orden de Compra ${orden.folio} - Abarrotes La Manita`,
-          body: htmlBody,
-          attachments: attachments,
-        },
+        body: emailPayload,
       });
 
       if (error) throw error;
@@ -1004,7 +1038,8 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
           <div style="background-color: #e8f5e9; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2e7d32;">
             <p style="margin: 5px 0;"><strong>Folio:</strong> ${orden.folio}</p>
             <p style="margin: 5px 0;"><strong>Proveedor:</strong> ${orden.proveedores?.nombre}</p>
-            <p style="margin: 5px 0;"><strong>Email del proveedor:</strong> ${orden.proveedores?.email}</p>
+            <p style="margin: 5px 0;"><strong>Email del proveedor:</strong> ${destinatario}</p>
+            ${ccEmails.length > 0 ? `<p style="margin: 5px 0;"><strong>CC:</strong> ${ccEmails.join(', ')}</p>` : ''}
             <p style="margin: 5px 0;"><strong>Total:</strong> $${orden.total?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
             <p style="margin: 5px 0;"><strong>Fecha de la orden:</strong> ${new Date(orden.fecha_orden).toLocaleDateString('es-MX')}</p>
             <p style="margin: 5px 0;"><strong>Enviado:</strong> ${new Date().toLocaleString('es-MX')}</p>
@@ -1045,9 +1080,10 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
 
       queryClient.invalidateQueries({ queryKey: ["ordenes_compra"] });
 
+      const ccInfo = ccEmails.length > 0 ? ` (CC: ${ccEmails.join(', ')})` : '';
       toast({
         title: "Orden enviada",
-        description: `La orden se envió a ${orden.proveedores.email} y una copia a compras@almasa.com.mx`,
+        description: `La orden se envió a ${destinatario}${ccInfo} y una copia a compras@almasa.com.mx`,
       });
       
       onOpenChange(false);
@@ -1369,10 +1405,9 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
         ) : accion === "enviar_email" ? (
           <div className="space-y-4">
             <div className="bg-muted/50 p-4 rounded-lg space-y-2">
-              <p className="font-medium">¿Estás seguro de que los datos son correctos?</p>
+              <p className="font-medium">Detalles del envío</p>
               <div className="text-sm text-muted-foreground space-y-1">
                 <p><strong>Proveedor:</strong> {orden?.proveedores?.nombre}</p>
-                <p><strong>Correo destino:</strong> {orden?.proveedores?.email || <span className="text-destructive">Sin correo registrado</span>}</p>
                 <p><strong>Total de la orden:</strong> ${orden?.total?.toLocaleString()}</p>
                 <p><strong>Productos:</strong> {orden?.ordenes_compra_detalles?.length || 0} items</p>
               </div>
@@ -1380,10 +1415,61 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
                 Se enviará desde: <strong>compras@almasa.com.mx</strong>
               </p>
             </div>
+            
+            {/* Email destination */}
+            <div className="space-y-2">
+              <Label htmlFor="emailTo">Correo destino *</Label>
+              <Input
+                id="emailTo"
+                type="email"
+                value={emailTo}
+                onChange={(e) => setEmailTo(e.target.value)}
+                placeholder="correo@proveedor.com"
+              />
+            </div>
+
+            {/* CC Emails */}
+            <div className="space-y-2">
+              <Label>CC (con copia)</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="email"
+                  value={newCcEmail}
+                  onChange={(e) => setNewCcEmail(e.target.value)}
+                  placeholder="Agregar correo en copia..."
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddCcEmail();
+                    }
+                  }}
+                />
+                <Button type="button" variant="outline" size="icon" onClick={handleAddCcEmail}>
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              {ccEmails.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {ccEmails.map((email) => (
+                    <Badge key={email} variant="secondary" className="flex items-center gap-1">
+                      {email}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveCcEmail(email)}
+                        className="ml-1 hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-2">
               <Button 
                 onClick={handleEnviarOrden} 
-                disabled={enviandoEmail || !orden?.proveedores?.email}
+                disabled={enviandoEmail || !emailTo.trim()}
               >
                 {enviandoEmail ? (
                   <>
@@ -1391,11 +1477,11 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
                     Enviando...
                   </>
                 ) : (
-                  "Sí, enviar"
+                  "Enviar orden"
                 )}
               </Button>
               <Button variant="ghost" onClick={() => setAccion(null)}>
-                No, regresar
+                Cancelar
               </Button>
             </div>
           </div>

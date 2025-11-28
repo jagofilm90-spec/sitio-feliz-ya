@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
-import { Inbox, RefreshCw, PenSquare, Loader2, ChevronDown, Search, Trash2, Mail, Bell } from "lucide-react";
+import { Inbox, RefreshCw, PenSquare, Loader2, ChevronDown, Search, Trash2, Mail, Bell, CheckCheck } from "lucide-react";
 import { toast } from "sonner";
 import EmailListView from "./EmailListView";
 import EmailDetailView from "./EmailDetailView";
@@ -61,11 +61,13 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
     cuentas[0]?.email || ""
   );
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
+  const [selectedEmailIndex, setSelectedEmailIndex] = useState<number>(-1);
   const [composeOpen, setComposeOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeSearch, setActiveSearch] = useState("");
   const [activeTab, setActiveTab] = useState("inbox");
   const [isFromTrash, setIsFromTrash] = useState(false);
+  const [markingAllAsRead, setMarkingAllAsRead] = useState(false);
   
   // Track previous unread counts to detect new emails
   const previousUnreadCountsRef = useRef<Record<string, number>>({});
@@ -73,7 +75,7 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
 
   const selectedCuenta = cuentas.find((c) => c.email === selectedAccount);
 
-  // Fetch unread counts for all accounts with real-time polling
+  // Fetch unread counts for all accounts with real-time polling - every 60 seconds
   const { data: unreadCounts } = useQuery({
     queryKey: ["gmail-unread-counts"],
     queryFn: async () => {
@@ -92,8 +94,8 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
       }
       return counts;
     },
-    staleTime: 1000 * 30, // 30 seconds
-    refetchInterval: 1000 * 30, // Poll every 30 seconds for real-time feel
+    staleTime: 1000 * 60, // 60 seconds
+    refetchInterval: 1000 * 60, // Poll every 60 seconds
   });
 
   // Detect new emails and show notifications
@@ -152,7 +154,7 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
     previousUnreadCountsRef.current = { ...unreadCounts };
   }, [unreadCounts, cuentas]);
 
-  // Fetch email list
+  // Fetch email list - every 60 seconds
   const {
     data: emails,
     isLoading,
@@ -179,7 +181,8 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
       return (response.data?.messages as Email[]) || [];
     },
     enabled: !!selectedAccount && activeTab === "inbox",
-    staleTime: 1000 * 60 * 2,
+    staleTime: 1000 * 60, // 60 seconds
+    refetchInterval: 1000 * 60, // Refetch every 60 seconds
   });
 
   // Fetch selected email detail
@@ -225,12 +228,14 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
   const handleAccountChange = (email: string) => {
     setSelectedAccount(email);
     setSelectedEmailId(null);
+    setSelectedEmailIndex(-1);
     setSearchQuery("");
     setActiveSearch("");
   };
 
   const handleEmailDeleted = () => {
     setSelectedEmailId(null);
+    setSelectedEmailIndex(-1);
     setIsFromTrash(false);
     queryClient.invalidateQueries({
       queryKey: ["gmail-inbox", selectedAccount],
@@ -243,6 +248,7 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
 
   const handleBack = () => {
     setSelectedEmailId(null);
+    setSelectedEmailIndex(-1);
     setIsFromTrash(false);
   };
 
@@ -256,9 +262,66 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
     setActiveSearch("");
   };
 
-  const handleSelectEmail = (id: string, fromTrash: boolean = false) => {
+  const handleSelectEmail = (id: string, fromTrash: boolean = false, index: number = -1) => {
     setSelectedEmailId(id);
+    setSelectedEmailIndex(index);
     setIsFromTrash(fromTrash);
+  };
+
+  // Navigate to next email
+  const handleNavigateNext = () => {
+    if (emails && selectedEmailIndex < emails.length - 1) {
+      const nextIndex = selectedEmailIndex + 1;
+      setSelectedEmailIndex(nextIndex);
+      setSelectedEmailId(emails[nextIndex].id);
+    }
+  };
+
+  // Navigate to previous email
+  const handleNavigatePrev = () => {
+    if (emails && selectedEmailIndex > 0) {
+      const prevIndex = selectedEmailIndex - 1;
+      setSelectedEmailIndex(prevIndex);
+      setSelectedEmailId(emails[prevIndex].id);
+    }
+  };
+
+  // Mark all emails as read
+  const handleMarkAllAsRead = async () => {
+    if (!emails || emails.length === 0) return;
+    
+    const unreadEmails = emails.filter(e => e.isUnread);
+    if (unreadEmails.length === 0) {
+      toast.info("No hay correos sin leer");
+      return;
+    }
+
+    setMarkingAllAsRead(true);
+    try {
+      // Mark all unread emails as read
+      await Promise.all(
+        unreadEmails.map(email =>
+          supabase.functions.invoke("gmail-api", {
+            body: {
+              action: "markAsRead",
+              email: selectedAccount,
+              messageId: email.id,
+            },
+          })
+        )
+      );
+
+      toast.success(`${unreadEmails.length} correo(s) marcado(s) como leído(s)`);
+      
+      // Refresh data
+      queryClient.invalidateQueries({ queryKey: ["gmail-unread-counts"] });
+      queryClient.invalidateQueries({ queryKey: ["gmail-inbox", selectedAccount] });
+    } catch (error) {
+      console.error("Error marking all as read:", error);
+      toast.error("Error al marcar correos como leídos");
+    } finally {
+      setMarkingAllAsRead(false);
+    }
   };
 
   // Show email detail view
@@ -267,8 +330,13 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
       <EmailDetailView
         email={emailDetail}
         cuentaEmail={selectedAccount}
+        cuentas={cuentas}
         onBack={handleBack}
         onDeleted={handleEmailDeleted}
+        onNavigateNext={handleNavigateNext}
+        onNavigatePrev={handleNavigatePrev}
+        hasNext={emails ? selectedEmailIndex < emails.length - 1 : false}
+        hasPrev={selectedEmailIndex > 0}
         isFromTrash={isFromTrash}
       />
     );
@@ -325,6 +393,21 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
             <Button
               variant="outline"
               size="sm"
+              onClick={handleMarkAllAsRead}
+              disabled={markingAllAsRead || isLoading}
+              title="Marcar todos como leídos"
+            >
+              {markingAllAsRead ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <CheckCheck className="h-4 w-4 mr-2" />
+              )}
+              Marcar leídos
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => {
                 refetch();
                 queryClient.invalidateQueries({ queryKey: ["gmail-unread-counts"] });
@@ -339,7 +422,7 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
 
             <Button size="sm" onClick={() => setComposeOpen(true)}>
               <PenSquare className="h-4 w-4 mr-2" />
-              Redactar
+              Nuevo correo
             </Button>
           </div>
         </div>
@@ -393,7 +476,7 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
             <EmailListView
               emails={emails}
               isLoading={isLoading}
-              onSelectEmail={(id) => handleSelectEmail(id, false)}
+              onSelectEmail={(id, index) => handleSelectEmail(id, false, index)}
               onRefresh={() => refetch()}
               isRefreshing={isRefetching}
             />
@@ -416,11 +499,12 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
         )}
       </div>
 
-      {/* Compose email dialog */}
+      {/* Compose email dialog with account selector */}
       <ComposeEmailDialog
         open={composeOpen}
         onOpenChange={setComposeOpen}
         fromEmail={selectedAccount}
+        cuentas={cuentas}
         onSuccess={() => refetch()}
       />
     </>

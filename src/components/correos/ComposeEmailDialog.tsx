@@ -22,7 +22,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Send, X, Loader2, Paperclip, FileText, Image, File, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { Send, X, Loader2, Paperclip, FileText, Image, File, Trash2, ChevronDown, ChevronUp, Cloud } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { logEmailAction } from "@/hooks/useGmailPermisos";
@@ -32,6 +32,8 @@ interface AttachmentFile {
   mimeType: string;
   content: string;
   size: number;
+  isDriveLink?: boolean;
+  driveLink?: string;
 }
 
 interface GmailCuenta {
@@ -67,6 +69,7 @@ interface ComposeEmailDialogProps {
 }
 
 const MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024;
+const MAX_SINGLE_FILE_FOR_EMAIL = 24 * 1024 * 1024; // Files larger than this go to Drive
 
 const ComposeEmailDialog = ({
   open,
@@ -89,6 +92,7 @@ const ComposeEmailDialog = ({
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
+  const [uploadingToDrive, setUploadingToDrive] = useState(false);
 
   // Fetch signature for selected account
   const { data: firmaData } = useQuery({
@@ -144,6 +148,54 @@ const ComposeEmailDialog = ({
     let totalSize = attachments.reduce((sum, att) => sum + att.size, 0);
 
     for (const file of Array.from(files)) {
+      // Check if file is too large for email attachment
+      if (file.size > MAX_SINGLE_FILE_FOR_EMAIL) {
+        // Upload to Google Drive
+        toast({
+          title: "Subiendo a Drive",
+          description: `${file.name} es muy grande (${formatFileSize(file.size)}). Subiendo a Google Drive...`,
+        });
+        
+        setUploadingToDrive(true);
+        try {
+          const base64 = await fileToBase64(file);
+          const response = await supabase.functions.invoke("gmail-api", {
+            body: {
+              action: "uploadToDrive",
+              email: selectedFromEmail,
+              fileContent: base64,
+              fileName: file.name,
+              mimeType: file.type || "application/octet-stream",
+            },
+          });
+
+          if (response.error) throw new Error(response.error.message);
+          
+          newAttachments.push({
+            filename: file.name,
+            mimeType: file.type || "application/octet-stream",
+            content: "",
+            size: file.size,
+            isDriveLink: true,
+            driveLink: response.data.shareLink,
+          });
+          
+          toast({
+            title: "Archivo subido a Drive",
+            description: `${file.name} se compartirá como enlace`,
+          });
+        } catch (error: any) {
+          toast({
+            title: "Error al subir a Drive",
+            description: error.message || "No se pudo subir el archivo",
+            variant: "destructive",
+          });
+        } finally {
+          setUploadingToDrive(false);
+        }
+        continue;
+      }
+
       if (totalSize + file.size > MAX_ATTACHMENT_SIZE) {
         toast({
           title: "Límite de tamaño excedido",
@@ -219,6 +271,16 @@ const ComposeEmailDialog = ({
     try {
       let emailBody = body.replace(/\n/g, "<br>");
       
+      // Add Drive links for large files
+      const driveAttachments = attachments.filter(a => a.isDriveLink);
+      if (driveAttachments.length > 0) {
+        emailBody += "<br><br><strong>📎 Archivos compartidos vía Google Drive:</strong><ul>";
+        for (const att of driveAttachments) {
+          emailBody += `<li><a href="${att.driveLink}">${att.filename}</a> (${formatFileSize(att.size)})</li>`;
+        }
+        emailBody += "</ul>";
+      }
+      
       if (firmaData) {
         emailBody += `<br><br>${firmaData}`;
       }
@@ -232,6 +294,9 @@ const ComposeEmailDialog = ({
         emailBody += `<br><br>---<br><em>Mensaje reenviado:</em><br>${forwardData.originalBody}`;
       }
 
+      // Only send non-Drive attachments as actual email attachments
+      const emailAttachments = attachments.filter(a => !a.isDriveLink);
+
       const response = await supabase.functions.invoke("gmail-api", {
         body: {
           action: "send",
@@ -241,7 +306,7 @@ const ComposeEmailDialog = ({
           bcc: bcc.trim() || undefined,
           subject: subject.trim(),
           body: emailBody,
-          attachments: attachments.length > 0 ? attachments : undefined,
+          attachments: emailAttachments.length > 0 ? emailAttachments : undefined,
         },
       });
 
@@ -388,10 +453,14 @@ const ComposeEmailDialog = ({
                 variant="outline"
                 size="sm"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={sending}
+                disabled={sending || uploadingToDrive}
               >
-                <Paperclip className="h-4 w-4 mr-2" />
-                Adjuntar archivo
+                {uploadingToDrive ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Paperclip className="h-4 w-4 mr-2" />
+                )}
+                {uploadingToDrive ? "Subiendo a Drive..." : "Adjuntar archivo"}
               </Button>
               <input ref={fileInputRef} type="file" multiple onChange={handleFileSelect} className="hidden" />
             </div>
@@ -399,13 +468,16 @@ const ComposeEmailDialog = ({
             {attachments.length > 0 && (
               <div className="flex flex-wrap gap-2 p-3 bg-muted rounded-md">
                 {attachments.map((att, i) => {
-                  const FileIcon = getFileIcon(att.mimeType);
+                  const FileIcon = att.isDriveLink ? Cloud : getFileIcon(att.mimeType);
                   return (
-                    <div key={i} className="flex items-center gap-2 bg-background px-3 py-2 rounded-md border">
-                      <FileIcon className="h-4 w-4 text-muted-foreground" />
+                    <div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-md border ${att.isDriveLink ? 'bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800' : 'bg-background'}`}>
+                      <FileIcon className={`h-4 w-4 ${att.isDriveLink ? 'text-blue-600' : 'text-muted-foreground'}`} />
                       <div className="flex flex-col">
                         <span className="text-xs font-medium truncate max-w-[150px]">{att.filename}</span>
-                        <span className="text-xs text-muted-foreground">{formatFileSize(att.size)}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {formatFileSize(att.size)}
+                          {att.isDriveLink && <span className="ml-1 text-blue-600">(Drive)</span>}
+                        </span>
                       </div>
                       <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeAttachment(i)} disabled={sending}>
                         <Trash2 className="h-3 w-3" />
@@ -415,7 +487,9 @@ const ComposeEmailDialog = ({
                 })}
               </div>
             )}
-            <p className="text-xs text-muted-foreground">Cualquier tipo de archivo (máx. 25MB total)</p>
+            <p className="text-xs text-muted-foreground">
+              Cualquier tipo de archivo. Archivos &gt;24MB se suben automáticamente a Google Drive como enlace.
+            </p>
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
@@ -423,7 +497,7 @@ const ComposeEmailDialog = ({
               <X className="h-4 w-4 mr-2" />
               Cancelar
             </Button>
-            <Button onClick={handleSend} disabled={sending}>
+            <Button onClick={handleSend} disabled={sending || uploadingToDrive}>
               {sending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
               Enviar
             </Button>

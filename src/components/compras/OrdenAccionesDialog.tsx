@@ -13,9 +13,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar, CheckCircle, XCircle, Mail, Loader2, Pencil, Trash2, FileText, ShieldCheck, ShieldX, Send, Truck, Plus, X } from "lucide-react";
+import { Calendar, CheckCircle, XCircle, Mail, Loader2, Pencil, Trash2, FileText, ShieldCheck, ShieldX, Send, Truck, Plus, X, Package } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import ProgramarEntregasDialog from "./ProgramarEntregasDialog";
+import RegistrarRecepcionDialog from "./RegistrarRecepcionDialog";
 import logoAlmasa from "@/assets/logo-almasa.png";
 
 // Helper function to convert image to base64
@@ -55,6 +56,7 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [programarEntregasOpen, setProgramarEntregasOpen] = useState(false);
+  const [registrarRecepcionOpen, setRegistrarRecepcionOpen] = useState(false);
   
   // Email CC functionality
   const [emailTo, setEmailTo] = useState("");
@@ -1109,6 +1111,7 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
       autorizada: { variant: "default", label: "Autorizada" },
       rechazada: { variant: "destructive", label: "Rechazada" },
       enviada: { variant: "default", label: "Enviada" },
+      parcial: { variant: "secondary", label: "Recepción Parcial" },
       recibida: { variant: "default", label: "Recibida" },
       devuelta: { variant: "destructive", label: "Devuelta" },
     };
@@ -1245,11 +1248,16 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
             <Button
               variant="outline"
               className="w-full justify-start"
-              onClick={() => setAccion("recibir")}
+              onClick={() => setRegistrarRecepcionOpen(true)}
               disabled={orden?.status === "recibida"}
             >
-              <CheckCircle className="mr-2 h-4 w-4" />
-              Marcar como Recibida
+              <Package className="mr-2 h-4 w-4" />
+              Registrar Recepción
+              {orden?.status === "parcial" && (
+                <Badge variant="secondary" className="ml-2 bg-amber-100 text-amber-700">
+                  Parcial
+                </Badge>
+              )}
             </Button>
             <Button
               variant="outline"
@@ -1509,19 +1517,7 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
               </Button>
             </div>
           </div>
-        ) : accion === "recibir" ? (
-          <div className="space-y-4">
-            <p>¿Confirmas que la mercancía fue recibida el día de hoy?</p>
-            <div className="flex gap-2">
-              <Button onClick={handleMarcarRecibida} disabled={updateOrden.isPending}>
-                Sí, Marcar como Recibida
-              </Button>
-              <Button variant="ghost" onClick={() => setAccion(null)}>
-                Cancelar
-              </Button>
-            </div>
-          </div>
-        ) : (
+        ) : accion === "devolver" ? (
           <div className="space-y-4">
             <div>
               <Label>Motivo de Devolución</Label>
@@ -1545,13 +1541,19 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
               </Button>
             </div>
           </div>
-        )}
+        ) : null}
       </DialogContent>
     </Dialog>
 
     <ProgramarEntregasDialog
       open={programarEntregasOpen}
       onOpenChange={setProgramarEntregasOpen}
+      orden={orden}
+    />
+
+    <RegistrarRecepcionDialog
+      open={registrarRecepcionOpen}
+      onOpenChange={setRegistrarRecepcionOpen}
       orden={orden}
     />
     </>

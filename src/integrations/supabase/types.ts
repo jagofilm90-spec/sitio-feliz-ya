@@ -1116,54 +1116,69 @@ export type Database = {
       }
       ordenes_compra: {
         Row: {
+          autorizado_por: string | null
           creado_por: string
           created_at: string
           entregas_multiples: boolean | null
+          fecha_autorizacion: string | null
           fecha_entrega_programada: string | null
           fecha_entrega_real: string | null
           fecha_orden: string
+          fecha_rechazo: string | null
           folio: string
           id: string
           impuestos: number
           motivo_devolucion: string | null
+          motivo_rechazo: string | null
           notas: string | null
           proveedor_id: string
+          rechazado_por: string | null
           status: string
           subtotal: number
           total: number
           updated_at: string
         }
         Insert: {
+          autorizado_por?: string | null
           creado_por: string
           created_at?: string
           entregas_multiples?: boolean | null
+          fecha_autorizacion?: string | null
           fecha_entrega_programada?: string | null
           fecha_entrega_real?: string | null
           fecha_orden?: string
+          fecha_rechazo?: string | null
           folio: string
           id?: string
           impuestos?: number
           motivo_devolucion?: string | null
+          motivo_rechazo?: string | null
           notas?: string | null
           proveedor_id: string
+          rechazado_por?: string | null
           status?: string
           subtotal?: number
           total?: number
           updated_at?: string
         }
         Update: {
+          autorizado_por?: string | null
           creado_por?: string
           created_at?: string
           entregas_multiples?: boolean | null
+          fecha_autorizacion?: string | null
           fecha_entrega_programada?: string | null
           fecha_entrega_real?: string | null
           fecha_orden?: string
+          fecha_rechazo?: string | null
           folio?: string
           id?: string
           impuestos?: number
           motivo_devolucion?: string | null
+          motivo_rechazo?: string | null
           notas?: string | null
           proveedor_id?: string
+          rechazado_por?: string | null
           status?: string
           subtotal?: number
           total?: number
@@ -1171,10 +1186,24 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "ordenes_compra_autorizado_por_fkey"
+            columns: ["autorizado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "ordenes_compra_proveedor_id_fkey"
             columns: ["proveedor_id"]
             isOneToOne: false
             referencedRelation: "proveedores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ordenes_compra_rechazado_por_fkey"
+            columns: ["rechazado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

@@ -40,6 +40,8 @@ interface ProductoEnOrden {
   precio_unitario: number;
   ultimo_costo?: number;
   subtotal: number;
+  aplica_iva: boolean;
+  aplica_ieps: boolean;
 }
 
 const OrdenesCompraTab = () => {
@@ -118,7 +120,13 @@ const OrdenesCompraTab = () => {
       if (!user) throw new Error("No user");
 
       const subtotal = productosEnOrden.reduce((sum, p) => sum + p.subtotal, 0);
-      const impuestos = subtotal * 0.16; // 16% IVA
+      // Calculate IVA only for products with aplica_iva = true
+      const ivaAmount = productosEnOrden.reduce((sum, p) => 
+        sum + (p.aplica_iva ? p.subtotal * 0.16 : 0), 0);
+      // Calculate IEPS only for products with aplica_ieps = true  
+      const iepsAmount = productosEnOrden.reduce((sum, p) => 
+        sum + (p.aplica_ieps ? p.subtotal * 0.08 : 0), 0);
+      const impuestos = ivaAmount + iepsAmount;
       const total = subtotal + impuestos;
 
       // Create orden
@@ -213,6 +221,8 @@ const OrdenesCompraTab = () => {
         precio_unitario: precioNum,
         ultimo_costo: producto.ultimo_costo_compra,
         subtotal,
+        aplica_iva: producto.aplica_iva ?? false,
+        aplica_ieps: producto.aplica_ieps ?? false,
       },
     ]);
 
@@ -243,7 +253,13 @@ const OrdenesCompraTab = () => {
       if (!editingOrdenId) throw new Error("No order to update");
 
       const subtotal = productosEnOrden.reduce((sum, p) => sum + p.subtotal, 0);
-      const impuestos = subtotal * 0.16;
+      // Calculate IVA only for products with aplica_iva = true
+      const ivaAmount = productosEnOrden.reduce((sum, p) => 
+        sum + (p.aplica_iva ? p.subtotal * 0.16 : 0), 0);
+      // Calculate IEPS only for products with aplica_ieps = true  
+      const iepsAmount = productosEnOrden.reduce((sum, p) => 
+        sum + (p.aplica_ieps ? p.subtotal * 0.08 : 0), 0);
+      const impuestos = ivaAmount + iepsAmount;
       const total = subtotal + impuestos;
 
       // Update orden
@@ -344,7 +360,11 @@ const OrdenesCompraTab = () => {
   };
 
   const subtotalOrden = productosEnOrden.reduce((sum, p) => sum + p.subtotal, 0);
-  const impuestosOrden = subtotalOrden * 0.16;
+  const ivaOrden = productosEnOrden.reduce((sum, p) => 
+    sum + (p.aplica_iva ? p.subtotal * 0.16 : 0), 0);
+  const iepsOrden = productosEnOrden.reduce((sum, p) => 
+    sum + (p.aplica_ieps ? p.subtotal * 0.08 : 0), 0);
+  const impuestosOrden = ivaOrden + iepsOrden;
   const totalOrden = subtotalOrden + impuestosOrden;
 
   const filteredOrdenes = ordenes.filter(
@@ -616,10 +636,24 @@ const OrdenesCompraTab = () => {
                     <span>Subtotal:</span>
                     <span>${subtotalOrden.toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span>IVA (16%):</span>
-                    <span>${impuestosOrden.toLocaleString()}</span>
-                  </div>
+                  {ivaOrden > 0 && (
+                    <div className="flex justify-between">
+                      <span>IVA (16%):</span>
+                      <span>${ivaOrden.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {iepsOrden > 0 && (
+                    <div className="flex justify-between">
+                      <span>IEPS (8%):</span>
+                      <span>${iepsOrden.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {ivaOrden === 0 && iepsOrden === 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Impuestos:</span>
+                      <span>$0</span>
+                    </div>
+                  )}
                   <div className="flex justify-between font-bold text-lg">
                     <span>Total:</span>
                     <span>${totalOrden.toLocaleString()}</span>

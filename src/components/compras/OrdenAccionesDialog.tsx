@@ -145,6 +145,17 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
     setEnviandoEmail(true);
 
     try {
+      // Fetch scheduled deliveries if order has multiple deliveries
+      let entregasProgramadas: any[] = [];
+      if (orden.entregas_multiples) {
+        const { data: entregas } = await supabase
+          .from("ordenes_compra_entregas")
+          .select("*")
+          .eq("orden_compra_id", orden.id)
+          .order("numero_entrega", { ascending: true });
+        entregasProgramadas = entregas || [];
+      }
+
       // Build order details HTML
       const detalles = orden.ordenes_compra_detalles || [];
       const productosHTML = detalles.map((d: any) => 
@@ -156,14 +167,50 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
         </tr>`
       ).join('');
 
-      const fechaEntrega = orden.fecha_entrega_programada 
-        ? new Date(orden.fecha_entrega_programada).toLocaleDateString('es-MX', { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-          })
-        : 'Por confirmar';
+      // Build delivery schedule section
+      let entregasHTML = '';
+      if (entregasProgramadas.length > 0) {
+        const entregasRows = entregasProgramadas.map((e: any) => {
+          const fecha = new Date(e.fecha_programada).toLocaleDateString('es-MX', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          });
+          return `<tr>
+            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${e.numero_entrega}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${fecha}</td>
+            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${e.cantidad_bultos} bultos</td>
+          </tr>`;
+        }).join('');
+
+        entregasHTML = `
+          <h3 style="color: #333; margin-top: 20px;">Calendario de Entregas Programadas</h3>
+          <table style="width: 100%; border-collapse: collapse; margin: 10px 0;">
+            <thead>
+              <tr style="background-color: #e8f5e9;">
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: center;">Entrega #</th>
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Fecha Programada</th>
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: center;">Cantidad</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${entregasRows}
+            </tbody>
+          </table>
+        `;
+      } else {
+        // Single delivery date
+        const fechaEntrega = orden.fecha_entrega_programada 
+          ? new Date(orden.fecha_entrega_programada).toLocaleDateString('es-MX', { 
+              weekday: 'long', 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric' 
+            })
+          : 'Por confirmar';
+        entregasHTML = `<p><strong>Fecha de entrega programada:</strong> ${fechaEntrega}</p>`;
+      }
 
       const htmlBody = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -199,7 +246,7 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
             </tfoot>
           </table>
 
-          <p><strong>Fecha de entrega programada:</strong> ${fechaEntrega}</p>
+          ${entregasHTML}
           
           ${orden.notas ? `<p><strong>Notas:</strong> ${orden.notas}</p>` : ''}
 

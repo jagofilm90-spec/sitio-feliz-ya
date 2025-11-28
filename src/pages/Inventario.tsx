@@ -101,11 +101,11 @@ const Inventario = () => {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validar fecha de caducidad si el producto la requiere
-    if (selectedProduct?.maneja_caducidad && !formData.fecha_caducidad) {
+    // Validar fecha de caducidad si el producto la requiere y es una entrada
+    if (formData.tipo_movimiento === "entrada" && selectedProduct?.maneja_caducidad && !formData.fecha_caducidad) {
       toast({
         title: "Error",
-        description: "Este producto requiere fecha de caducidad",
+        description: "Este producto requiere fecha de caducidad para registrar entradas",
         variant: "destructive",
       });
       return;
@@ -395,7 +395,7 @@ const Inventario = () => {
                         required
                       />
                     </div>
-                    {selectedProduct?.maneja_caducidad && (
+                    {formData.tipo_movimiento === "entrada" && selectedProduct?.maneja_caducidad && (
                       <div className="space-y-2">
                         <Label htmlFor="fecha_caducidad">Fecha de Caducidad *</Label>
                         <Input
@@ -406,7 +406,7 @@ const Inventario = () => {
                           required
                         />
                         <p className="text-xs text-muted-foreground">
-                          Este producto requiere fecha de caducidad
+                          Este producto requiere fecha de caducidad para entradas
                         </p>
                       </div>
                     )}

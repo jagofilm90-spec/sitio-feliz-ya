@@ -1,19 +1,21 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
-import { Inbox, RefreshCw, PenSquare, Loader2 } from "lucide-react";
+import { Inbox, RefreshCw, PenSquare, Loader2, ChevronDown, Search, Trash2, Mail } from "lucide-react";
 import EmailListView from "./EmailListView";
 import EmailDetailView from "./EmailDetailView";
 import ComposeEmailDialog from "./ComposeEmailDialog";
+import TrashListView from "./TrashListView";
 
 interface Email {
   id: string;
@@ -33,7 +35,8 @@ interface EmailDetail {
   subject: string;
   body: string;
   date: string;
-  attachments: { filename: string; mimeType: string }[];
+  attachments: { filename: string; mimeType: string; attachmentId: string; size: number }[];
+  isUnread: boolean;
 }
 
 interface GmailCuenta {
@@ -57,8 +60,35 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
   );
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
   const [composeOpen, setComposeOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeSearch, setActiveSearch] = useState("");
+  const [activeTab, setActiveTab] = useState("inbox");
+  const [isFromTrash, setIsFromTrash] = useState(false);
 
   const selectedCuenta = cuentas.find((c) => c.email === selectedAccount);
+
+  // Fetch unread counts for all accounts
+  const { data: unreadCounts } = useQuery({
+    queryKey: ["gmail-unread-counts"],
+    queryFn: async () => {
+      const counts: Record<string, number> = {};
+      for (const cuenta of cuentas) {
+        try {
+          const response = await supabase.functions.invoke("gmail-api", {
+            body: { action: "getUnreadCount", email: cuenta.email },
+          });
+          if (response.data?.unreadCount !== undefined) {
+            counts[cuenta.email] = response.data.unreadCount;
+          }
+        } catch (e) {
+          console.error("Error fetching unread count for", cuenta.email, e);
+        }
+      }
+      return counts;
+    },
+    staleTime: 1000 * 60, // 1 minute
+    refetchInterval: 1000 * 60 * 2, // Refetch every 2 minutes
+  });
 
   // Fetch email list
   const {
@@ -67,7 +97,7 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
     refetch,
     isRefetching,
   } = useQuery({
-    queryKey: ["gmail-inbox", selectedAccount],
+    queryKey: ["gmail-inbox", selectedAccount, activeSearch],
     queryFn: async () => {
       if (!selectedAccount) return [];
 
@@ -76,6 +106,7 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
           action: "list",
           email: selectedAccount,
           maxResults: 50,
+          searchQuery: activeSearch || undefined,
         },
       });
 
@@ -85,8 +116,8 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
 
       return (response.data?.messages as Email[]) || [];
     },
-    enabled: !!selectedAccount,
-    staleTime: 1000 * 60 * 2, // 2 minutes
+    enabled: !!selectedAccount && activeTab === "inbox",
+    staleTime: 1000 * 60 * 2,
   });
 
   // Fetch selected email detail
@@ -112,20 +143,60 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
     enabled: !!selectedEmailId && !!selectedAccount,
   });
 
+  // Mark email as read when viewing
+  useEffect(() => {
+    if (emailDetail?.isUnread && selectedEmailId && !isFromTrash) {
+      supabase.functions.invoke("gmail-api", {
+        body: {
+          action: "markAsRead",
+          email: selectedAccount,
+          messageId: selectedEmailId,
+        },
+      }).then(() => {
+        // Invalidate queries to refresh unread counts
+        queryClient.invalidateQueries({ queryKey: ["gmail-unread-counts"] });
+        queryClient.invalidateQueries({ queryKey: ["gmail-inbox", selectedAccount] });
+      });
+    }
+  }, [emailDetail?.isUnread, selectedEmailId, selectedAccount, isFromTrash, queryClient]);
+
   const handleAccountChange = (email: string) => {
     setSelectedAccount(email);
     setSelectedEmailId(null);
+    setSearchQuery("");
+    setActiveSearch("");
   };
 
   const handleEmailDeleted = () => {
     setSelectedEmailId(null);
+    setIsFromTrash(false);
     queryClient.invalidateQueries({
       queryKey: ["gmail-inbox", selectedAccount],
     });
+    queryClient.invalidateQueries({
+      queryKey: ["gmail-trash", selectedAccount],
+    });
+    queryClient.invalidateQueries({ queryKey: ["gmail-unread-counts"] });
   };
 
   const handleBack = () => {
     setSelectedEmailId(null);
+    setIsFromTrash(false);
+  };
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setActiveSearch(searchQuery);
+  };
+
+  const clearSearch = () => {
+    setSearchQuery("");
+    setActiveSearch("");
+  };
+
+  const handleSelectEmail = (id: string, fromTrash: boolean = false) => {
+    setSelectedEmailId(id);
+    setIsFromTrash(fromTrash);
   };
 
   // Show email detail view
@@ -136,6 +207,7 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
         cuentaEmail={selectedAccount}
         onBack={handleBack}
         onDeleted={handleEmailDeleted}
+        isFromTrash={isFromTrash}
       />
     );
   }
@@ -143,34 +215,58 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
   return (
     <>
       <div className="space-y-4">
-        {/* Header with account selector and actions */}
+        {/* Header with account dropdown and actions */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <Inbox className="h-5 w-5 text-primary" />
-            <Select value={selectedAccount} onValueChange={handleAccountChange}>
-              <SelectTrigger className="w-[280px]">
-                <SelectValue placeholder="Selecciona una cuenta" />
-              </SelectTrigger>
-              <SelectContent>
+            <Mail className="h-5 w-5 text-primary" />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="w-[300px] justify-between">
+                  <div className="flex items-center gap-2">
+                    <span>{selectedCuenta?.nombre || "Seleccionar cuenta"}</span>
+                    {unreadCounts?.[selectedAccount] ? (
+                      <Badge variant="destructive" className="text-xs">
+                        {unreadCounts[selectedAccount]}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <ChevronDown className="h-4 w-4 opacity-50" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-[300px] bg-popover" align="start">
                 {cuentas.map((cuenta) => (
-                  <SelectItem key={cuenta.id} value={cuenta.email}>
-                    <div className="flex items-center gap-2">
-                      <span>{cuenta.nombre}</span>
+                  <DropdownMenuItem
+                    key={cuenta.id}
+                    onClick={() => handleAccountChange(cuenta.email)}
+                    className="flex items-center justify-between"
+                  >
+                    <div className="flex flex-col">
+                      <span className="font-medium">{cuenta.nombre}</span>
+                      <span className="text-xs text-muted-foreground">{cuenta.email}</span>
+                    </div>
+                    {unreadCounts?.[cuenta.email] ? (
+                      <Badge variant="destructive" className="text-xs">
+                        {unreadCounts[cuenta.email]}
+                      </Badge>
+                    ) : (
                       <Badge variant="outline" className="text-xs">
                         {cuenta.proposito}
                       </Badge>
-                    </div>
-                  </SelectItem>
+                    )}
+                  </DropdownMenuItem>
                 ))}
-              </SelectContent>
-            </Select>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => refetch()}
+              onClick={() => {
+                refetch();
+                queryClient.invalidateQueries({ queryKey: ["gmail-unread-counts"] });
+              }}
               disabled={isRefetching}
             >
               <RefreshCw
@@ -186,20 +282,69 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
           </div>
         </div>
 
-        {/* Email subtitle */}
-        <div className="text-sm text-muted-foreground">
-          Mostrando correos de:{" "}
-          <span className="font-medium">{selectedAccount}</span>
-        </div>
+        {/* Search bar */}
+        <form onSubmit={handleSearch} className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar correos por remitente, asunto o contenido..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Button type="submit" variant="secondary">
+            Buscar
+          </Button>
+          {activeSearch && (
+            <Button type="button" variant="ghost" onClick={clearSearch}>
+              Limpiar
+            </Button>
+          )}
+        </form>
 
-        {/* Email list */}
-        <EmailListView
-          emails={emails}
-          isLoading={isLoading}
-          onSelectEmail={setSelectedEmailId}
-          onRefresh={() => refetch()}
-          isRefreshing={isRefetching}
-        />
+        {activeSearch && (
+          <div className="text-sm text-muted-foreground">
+            Resultados para: <span className="font-medium">"{activeSearch}"</span>
+          </div>
+        )}
+
+        {/* Tabs for Inbox and Trash */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList>
+            <TabsTrigger value="inbox" className="gap-2">
+              <Inbox className="h-4 w-4" />
+              Bandeja de entrada
+              {unreadCounts?.[selectedAccount] ? (
+                <Badge variant="destructive" className="text-xs ml-1">
+                  {unreadCounts[selectedAccount]}
+                </Badge>
+              ) : null}
+            </TabsTrigger>
+            <TabsTrigger value="trash" className="gap-2">
+              <Trash2 className="h-4 w-4" />
+              Papelera
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="inbox" className="mt-4">
+            <EmailListView
+              emails={emails}
+              isLoading={isLoading}
+              onSelectEmail={(id) => handleSelectEmail(id, false)}
+              onRefresh={() => refetch()}
+              isRefreshing={isRefetching}
+            />
+          </TabsContent>
+
+          <TabsContent value="trash" className="mt-4">
+            <TrashListView
+              email={selectedAccount}
+              onSelectEmail={(id) => handleSelectEmail(id, true)}
+              onEmailRecovered={handleEmailDeleted}
+            />
+          </TabsContent>
+        </Tabs>
 
         {/* Loading overlay for email detail */}
         {isLoadingDetail && (

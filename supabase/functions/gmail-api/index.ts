@@ -33,12 +33,10 @@ async function getValidAccessToken(supabase: any, cuenta: any): Promise<string |
   const now = new Date();
   const tokenExpiry = new Date(cuenta.token_expires_at);
 
-  // If token is still valid (with 5 min buffer), return it
   if (tokenExpiry > new Date(now.getTime() + 5 * 60 * 1000)) {
     return cuenta.access_token;
   }
 
-  // Token expired, refresh it
   if (!cuenta.refresh_token) {
     console.error("No refresh token available for:", cuenta.email);
     return null;
@@ -49,7 +47,6 @@ async function getValidAccessToken(supabase: any, cuenta: any): Promise<string |
     return null;
   }
 
-  // Update tokens in database
   const newExpiry = new Date(Date.now() + newTokens.expires_in * 1000);
   await supabase
     .from("gmail_cuentas")
@@ -62,6 +59,16 @@ async function getValidAccessToken(supabase: any, cuenta: any): Promise<string |
   return newTokens.access_token;
 }
 
+// Helper function to decode base64 URL-safe to UTF-8 string
+const decodeBase64Utf8 = (base64Data: string): string => {
+  const binary = atob(base64Data.replace(/-/g, "+").replace(/_/g, "/"));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new TextDecoder("utf-8").decode(bytes);
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -73,7 +80,7 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
-    const { action, email, to, subject, body: emailBody, maxResults, messageId } = await req.json();
+    const { action, email, to, subject, body: emailBody, maxResults, messageId, searchQuery, attachmentId, filename, attachments: emailAttachments } = await req.json();
 
     // Get account credentials
     const { data: cuenta, error: cuentaError } = await supabase
@@ -92,14 +99,16 @@ serve(async (req) => {
       throw new Error(`No se pudo obtener token válido para ${email}. Reconecte la cuenta.`);
     }
 
+    // LIST - List inbox emails with optional search
     if (action === "list") {
-      // List recent emails
-      const listResponse = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults || 20}`,
-        {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }
-      );
+      let url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults || 50}&labelIds=INBOX`;
+      if (searchQuery) {
+        url += `&q=${encodeURIComponent(searchQuery)}`;
+      }
+
+      const listResponse = await fetch(url, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
 
       if (!listResponse.ok) {
         throw new Error("Error al listar correos");
@@ -108,8 +117,7 @@ serve(async (req) => {
       const listData = await listResponse.json();
       const messages = [];
 
-      // Get details for each message
-      for (const msg of (listData.messages || []).slice(0, maxResults || 20)) {
+      for (const msg of (listData.messages || []).slice(0, maxResults || 50)) {
         const msgResponse = await fetch(
           `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
           {
@@ -120,6 +128,55 @@ serve(async (req) => {
         if (msgResponse.ok) {
           const msgData = await msgResponse.json();
           const headers = msgData.payload?.headers || [];
+          const labelIds = msgData.labelIds || [];
+          
+          messages.push({
+            id: msg.id,
+            threadId: msg.threadId,
+            from: headers.find((h: any) => h.name === "From")?.value || "",
+            subject: headers.find((h: any) => h.name === "Subject")?.value || "",
+            date: headers.find((h: any) => h.name === "Date")?.value || "",
+            snippet: msgData.snippet || "",
+            isUnread: labelIds.includes("UNREAD"),
+            hasAttachments: msgData.payload?.parts?.some((p: any) => p.filename && p.body?.attachmentId) || false,
+          });
+        }
+      }
+
+      return new Response(
+        JSON.stringify({ messages }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // LIST TRASH - List emails in trash
+    if (action === "listTrash") {
+      const listResponse = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults || 50}&labelIds=TRASH`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }
+      );
+
+      if (!listResponse.ok) {
+        throw new Error("Error al listar papelera");
+      }
+
+      const listData = await listResponse.json();
+      const messages = [];
+
+      for (const msg of (listData.messages || []).slice(0, maxResults || 50)) {
+        const msgResponse = await fetch(
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }
+        );
+
+        if (msgResponse.ok) {
+          const msgData = await msgResponse.json();
+          const headers = msgData.payload?.headers || [];
+          
           messages.push({
             id: msg.id,
             threadId: msg.threadId,
@@ -137,22 +194,114 @@ serve(async (req) => {
       );
     }
 
+    // GET UNREAD COUNT - Get unread message count
+    if (action === "getUnreadCount") {
+      const profileResponse = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/labels/INBOX`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }
+      );
+
+      if (!profileResponse.ok) {
+        throw new Error("Error al obtener conteo de no leídos");
+      }
+
+      const labelData = await profileResponse.json();
+
+      return new Response(
+        JSON.stringify({ 
+          unreadCount: labelData.messagesUnread || 0,
+          totalCount: labelData.messagesTotal || 0,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // MARK AS READ
+    if (action === "markAsRead") {
+      if (!messageId) {
+        throw new Error("messageId requerido");
+      }
+
+      const modifyResponse = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ removeLabelIds: ["UNREAD"] }),
+        }
+      );
+
+      if (!modifyResponse.ok) {
+        const errorText = await modifyResponse.text();
+        console.error("Mark as read failed:", errorText);
+        throw new Error("Error al marcar como leído");
+      }
+
+      return new Response(
+        JSON.stringify({ success: true }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // SEND - Send email with optional attachments
     if (action === "send") {
       if (!to || !subject) {
         throw new Error("Destinatario y asunto requeridos");
       }
 
-      // Construct email
-      const emailLines = [
-        `From: ${email}`,
-        `To: ${to}`,
-        `Subject: ${subject}`,
-        "Content-Type: text/html; charset=utf-8",
-        "",
-        emailBody || "",
-      ];
+      const boundary = "boundary_" + Date.now();
+      let emailContent: string;
 
-      const rawEmail = btoa(emailLines.join("\r\n"))
+      if (emailAttachments && emailAttachments.length > 0) {
+        // Email with attachments - multipart/mixed
+        let mimeMessage = [
+          `From: ${email}`,
+          `To: ${to}`,
+          `Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`,
+          `MIME-Version: 1.0`,
+          `Content-Type: multipart/mixed; boundary="${boundary}"`,
+          "",
+          `--${boundary}`,
+          `Content-Type: text/html; charset=UTF-8`,
+          `Content-Transfer-Encoding: base64`,
+          "",
+          btoa(unescape(encodeURIComponent(emailBody || ""))),
+        ].join("\r\n");
+
+        // Add attachments
+        for (const att of emailAttachments) {
+          mimeMessage += [
+            "",
+            `--${boundary}`,
+            `Content-Type: ${att.mimeType}; name="${att.filename}"`,
+            `Content-Disposition: attachment; filename="${att.filename}"`,
+            `Content-Transfer-Encoding: base64`,
+            "",
+            att.content, // Already base64 encoded
+          ].join("\r\n");
+        }
+
+        mimeMessage += `\r\n--${boundary}--`;
+        emailContent = mimeMessage;
+      } else {
+        // Simple email without attachments
+        emailContent = [
+          `From: ${email}`,
+          `To: ${to}`,
+          `Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`,
+          `Content-Type: text/html; charset=utf-8`,
+          `Content-Transfer-Encoding: base64`,
+          "",
+          btoa(unescape(encodeURIComponent(emailBody || ""))),
+        ].join("\r\n");
+      }
+
+      const rawEmail = btoa(emailContent)
         .replace(/\+/g, "-")
         .replace(/\//g, "_")
         .replace(/=+$/, "");
@@ -184,6 +333,7 @@ serve(async (req) => {
       );
     }
 
+    // READ - Read full email
     if (action === "read") {
       if (!messageId) {
         throw new Error("messageId requerido");
@@ -202,18 +352,7 @@ serve(async (req) => {
 
       const msgData = await msgResponse.json();
       const headers = msgData.payload?.headers || [];
-      
-      // Helper function to decode base64 URL-safe to UTF-8 string
-      const decodeBase64Utf8 = (base64Data: string): string => {
-        const binary = atob(base64Data.replace(/-/g, "+").replace(/_/g, "/"));
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-          bytes[i] = binary.charCodeAt(i);
-        }
-        return new TextDecoder("utf-8").decode(bytes);
-      };
 
-      // Extract body from message parts
       let bodyHtml = "";
       let bodyText = "";
       
@@ -242,11 +381,16 @@ serve(async (req) => {
         msgData.payload.parts.forEach(extractBody);
       }
       
-      // Extract attachments
-      const attachments: { filename: string; mimeType: string }[] = [];
+      // Extract attachments with attachmentId for download
+      const attachments: { filename: string; mimeType: string; attachmentId: string; size: number }[] = [];
       const extractAttachments = (part: any) => {
         if (part.filename && part.body?.attachmentId) {
-          attachments.push({ filename: part.filename, mimeType: part.mimeType });
+          attachments.push({ 
+            filename: part.filename, 
+            mimeType: part.mimeType,
+            attachmentId: part.body.attachmentId,
+            size: part.body.size || 0,
+          });
         }
         if (part.parts) {
           part.parts.forEach(extractAttachments);
@@ -264,6 +408,7 @@ serve(async (req) => {
         date: headers.find((h: any) => h.name === "Date")?.value || "",
         body: bodyHtml || bodyText.replace(/\n/g, "<br>") || msgData.snippet || "",
         attachments,
+        isUnread: msgData.labelIds?.includes("UNREAD") || false,
       };
 
       return new Response(
@@ -272,12 +417,41 @@ serve(async (req) => {
       );
     }
 
+    // DOWNLOAD ATTACHMENT
+    if (action === "downloadAttachment") {
+      if (!messageId || !attachmentId) {
+        throw new Error("messageId y attachmentId requeridos");
+      }
+
+      const attachmentResponse = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/attachments/${attachmentId}`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }
+      );
+
+      if (!attachmentResponse.ok) {
+        throw new Error("Error al descargar adjunto");
+      }
+
+      const attachmentData = await attachmentResponse.json();
+      
+      return new Response(
+        JSON.stringify({ 
+          data: attachmentData.data, // base64 URL-safe encoded
+          size: attachmentData.size,
+          filename: filename || "attachment",
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // DELETE - Move to trash
     if (action === "delete") {
       if (!messageId) {
         throw new Error("messageId requerido");
       }
 
-      // Move to trash (not permanent delete)
       const trashResponse = await fetch(
         `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/trash`,
         {
@@ -293,6 +467,34 @@ serve(async (req) => {
       }
 
       console.log("Email moved to trash:", messageId);
+
+      return new Response(
+        JSON.stringify({ success: true, messageId }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // UNTRASH - Recover from trash
+    if (action === "untrash") {
+      if (!messageId) {
+        throw new Error("messageId requerido");
+      }
+
+      const untrashResponse = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/untrash`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }
+      );
+
+      if (!untrashResponse.ok) {
+        const errorText = await untrashResponse.text();
+        console.error("Untrash failed:", errorText);
+        throw new Error("Error al recuperar correo");
+      }
+
+      console.log("Email recovered from trash:", messageId);
 
       return new Response(
         JSON.stringify({ success: true, messageId }),

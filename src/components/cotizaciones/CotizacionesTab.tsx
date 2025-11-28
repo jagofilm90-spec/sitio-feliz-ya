@@ -16,8 +16,19 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -30,8 +41,9 @@ import {
   MoreVertical,
   Loader2,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
-import { format, isAfter, isBefore } from "date-fns";
+import { format, isBefore } from "date-fns";
 import { es } from "date-fns/locale";
 import CrearCotizacionDialog from "./CrearCotizacionDialog";
 import CotizacionDetalleDialog from "./CotizacionDetalleDialog";
@@ -54,6 +66,9 @@ const CotizacionesTab = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [crearOpen, setCrearOpen] = useState(false);
   const [selectedCotizacion, setSelectedCotizacion] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [cotizacionToDelete, setCotizacionToDelete] = useState<Cotizacion | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const { data: cotizaciones, isLoading, refetch } = useQuery({
     queryKey: ["cotizaciones"],
@@ -107,6 +122,51 @@ const CotizacionesTab = () => {
       title: "Próximamente",
       description: "La conversión a pedido estará disponible pronto",
     });
+  };
+
+  const handleDeleteClick = (cotizacion: Cotizacion) => {
+    setCotizacionToDelete(cotizacion);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!cotizacionToDelete) return;
+
+    setDeleting(true);
+    try {
+      // First delete details
+      const { error: detallesError } = await supabase
+        .from("cotizaciones_detalles")
+        .delete()
+        .eq("cotizacion_id", cotizacionToDelete.id);
+
+      if (detallesError) throw detallesError;
+
+      // Then delete the cotizacion
+      const { error } = await supabase
+        .from("cotizaciones")
+        .delete()
+        .eq("id", cotizacionToDelete.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Cotización eliminada",
+        description: `La cotización ${cotizacionToDelete.folio} ha sido eliminada`,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["cotizaciones"] });
+    } catch (error: any) {
+      toast({
+        title: "Error al eliminar",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
+      setDeleteDialogOpen(false);
+      setCotizacionToDelete(null);
+    }
   };
 
   return (
@@ -215,6 +275,14 @@ const CotizacionesTab = () => {
                                 Convertir a pedido
                               </DropdownMenuItem>
                             )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => handleDeleteClick(c)}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Eliminar
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -255,6 +323,35 @@ const CotizacionesTab = () => {
           }}
         />
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar cotización?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción eliminará la cotización <strong>{cotizacionToDelete?.folio}</strong> de forma permanente. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Eliminando...
+                </>
+              ) : (
+                "Eliminar"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };

@@ -1,13 +1,17 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -16,6 +20,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -28,11 +42,16 @@ import {
   Calendar,
   Building,
   User,
+  Trash2,
+  Mail,
+  Plus,
+  X,
 } from "lucide-react";
 import { format, isBefore } from "date-fns";
 import { es } from "date-fns/locale";
 import { formatCurrency } from "@/lib/utils";
 import logoAlmasa from "@/assets/logo-almasa.png";
+import { useGmailPermisos, logEmailAction } from "@/hooks/useGmailPermisos";
 
 // Helper function to convert image to base64
 const getLogoBase64 = async (): Promise<string> => {
@@ -65,7 +84,31 @@ const CotizacionDetalleDialog = ({
   onUpdate,
 }: CotizacionDetalleDialogProps) => {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [sending, setSending] = useState(false);
+  const [showEmailDialog, setShowEmailDialog] = useState(false);
+  const [emailTo, setEmailTo] = useState("");
+  const [additionalEmails, setAdditionalEmails] = useState<string[]>([]);
+  const [newEmail, setNewEmail] = useState("");
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  
+  const { filterCuentasByPermiso } = useGmailPermisos();
+
+  // Fetch Gmail accounts
+  const { data: gmailCuentas = [] } = useQuery({
+    queryKey: ["gmail_cuentas"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("gmail_cuentas")
+        .select("*")
+        .eq("activo", true);
+      if (error) throw error;
+      return data;
+    },
+  });
 
   const { data: cotizacion, isLoading } = useQuery({
     queryKey: ["cotizacion", cotizacionId],
@@ -114,9 +157,75 @@ const CotizacionDetalleDialog = ({
     return <Badge variant="secondary">Borrador</Badge>;
   };
 
+  const addAdditionalEmail = () => {
+    if (newEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+      if (!additionalEmails.includes(newEmail)) {
+        setAdditionalEmails([...additionalEmails, newEmail]);
+      }
+      setNewEmail("");
+    } else {
+      toast({
+        title: "Email inválido",
+        description: "Por favor ingresa un email válido",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const removeAdditionalEmail = (email: string) => {
+    setAdditionalEmails(additionalEmails.filter(e => e !== email));
+  };
+
+  const handleOpenEmailDialog = () => {
+    if (!cotizacion) return;
+    setEmailTo(cotizacion.cliente?.email || "");
+    setAdditionalEmails([]);
+    setEmailSubject(`Cotización ${cotizacion.folio} - Abarrotes La Manita`);
+    setEmailBody(`Estimado cliente,\n\nAdjunto encontrará la cotización ${cotizacion.folio} solicitada.\n\nEsta cotización tiene vigencia hasta el ${format(new Date(cotizacion.fecha_vigencia), "dd 'de' MMMM 'de' yyyy", { locale: es })}.\n\nQuedamos a sus órdenes para cualquier duda o aclaración.\n\nSaludos cordiales,\nAbarrotes La Manita`);
+    setShowEmailDialog(true);
+  };
+
   const handleEnviarEmail = async () => {
+    if (!cotizacion) return;
+    
+    const allEmails = [emailTo, ...additionalEmails].filter(e => e);
+    if (allEmails.length === 0) {
+      toast({
+        title: "Email requerido",
+        description: "Ingresa al menos un email para enviar la cotización",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setSending(true);
     try {
+      // Get the account to send from (pedidos@almasa.com.mx)
+      const cuentaEnvio = filterCuentasByPermiso(gmailCuentas).find(
+        c => c.email === "pedidos@almasa.com.mx" || c.proposito === "pedidos"
+      ) || gmailCuentas[0];
+
+      if (!cuentaEnvio) {
+        throw new Error("No hay cuenta de Gmail configurada para enviar emails");
+      }
+
+      // Generate PDF content
+      const pdfContent = await generarPDFContent();
+
+      // Send email via edge function
+      const { error: sendError } = await supabase.functions.invoke("gmail-api", {
+        body: {
+          action: "send",
+          cuentaId: cuentaEnvio.id,
+          to: allEmails.join(", "),
+          subject: emailSubject,
+          body: emailBody,
+          html: `<pre style="font-family: Arial, sans-serif; white-space: pre-wrap;">${emailBody}</pre>`,
+        },
+      });
+
+      if (sendError) throw sendError;
+
       // Update status to enviada
       const { error } = await supabase
         .from("cotizaciones")
@@ -125,9 +234,43 @@ const CotizacionDetalleDialog = ({
 
       if (error) throw error;
 
+      // Log email action
+      await logEmailAction(cuentaEnvio.id, "enviar", {
+        emailTo: allEmails.join(", "),
+        emailSubject,
+      });
+
       toast({
         title: "Cotización enviada",
-        description: "El estado ha sido actualizado a 'Enviada'",
+        description: `Se envió la cotización a ${allEmails.length} destinatario(s)`,
+      });
+
+      setShowEmailDialog(false);
+      onUpdate();
+    } catch (error: any) {
+      toast({
+        title: "Error al enviar",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleMarcarEnviada = async () => {
+    setSending(true);
+    try {
+      const { error } = await supabase
+        .from("cotizaciones")
+        .update({ status: "enviada" })
+        .eq("id", cotizacionId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Cotización actualizada",
+        description: "El estado ha sido cambiado a 'Enviada'",
       });
 
       onUpdate();
@@ -142,6 +285,44 @@ const CotizacionDetalleDialog = ({
     }
   };
 
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      // First delete details
+      const { error: detallesError } = await supabase
+        .from("cotizaciones_detalles")
+        .delete()
+        .eq("cotizacion_id", cotizacionId);
+
+      if (detallesError) throw detallesError;
+
+      // Then delete the cotizacion
+      const { error } = await supabase
+        .from("cotizaciones")
+        .delete()
+        .eq("id", cotizacionId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Cotización eliminada",
+        description: `La cotización ${cotizacion?.folio} ha sido eliminada`,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["cotizaciones"] });
+      onOpenChange(false);
+    } catch (error: any) {
+      toast({
+        title: "Error al eliminar",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
+      setDeleteDialogOpen(false);
+    }
+  };
+
   const handleConvertirPedido = async () => {
     toast({
       title: "Próximamente",
@@ -149,42 +330,41 @@ const CotizacionDetalleDialog = ({
     });
   };
 
-  const handleDescargarPDF = async () => {
-    if (!cotizacion) return;
+  const generarPDFContent = async () => {
+    if (!cotizacion) return "";
 
-    try {
-      const logoBase64 = await getLogoBase64();
+    const logoBase64 = await getLogoBase64();
 
-      const productosHTML = cotizacion.detalles?.map((d: any) => 
-        `<tr>
-          <td style="text-align: center;">${d.producto?.codigo || '-'}</td>
-          <td>${d.producto?.nombre || 'Producto'}</td>
-          <td style="text-align: center;">${d.cantidad} ${d.producto?.unidad || ''}</td>
-          <td style="text-align: right;">$${d.precio_unitario?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-          <td style="text-align: right;">$${d.subtotal?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-        </tr>`
-      ).join('') || '';
+    const productosHTML = cotizacion.detalles?.map((d: any) => 
+      `<tr>
+        <td style="text-align: center;">${d.producto?.codigo || '-'}</td>
+        <td>${d.producto?.nombre || 'Producto'}</td>
+        <td style="text-align: center;">${d.cantidad} ${d.producto?.unidad || ''}</td>
+        <td style="text-align: right;">$${d.precio_unitario?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+        <td style="text-align: right;">$${d.subtotal?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+      </tr>`
+    ).join('') || '';
 
-      // Parse dates correctly to avoid timezone issues
-      const parseDateLocal = (dateStr: string) => {
-        const [year, month, day] = dateStr.split('-').map(Number);
-        return new Date(year, month - 1, day);
-      };
+    // Parse dates correctly to avoid timezone issues
+    const parseDateLocal = (dateStr: string) => {
+      const [year, month, day] = dateStr.split('-').map(Number);
+      return new Date(year, month - 1, day);
+    };
 
-      const fechaCreacion = parseDateLocal(cotizacion.fecha_creacion).toLocaleDateString('es-MX', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
+    const fechaCreacion = parseDateLocal(cotizacion.fecha_creacion).toLocaleDateString('es-MX', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
 
-      const fechaVigencia = parseDateLocal(cotizacion.fecha_vigencia).toLocaleDateString('es-MX', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
+    const fechaVigencia = parseDateLocal(cotizacion.fecha_vigencia).toLocaleDateString('es-MX', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
 
-      const pdfContent = `
+    return `
         <!DOCTYPE html>
         <html>
         <head>
@@ -514,7 +694,14 @@ const CotizacionDetalleDialog = ({
         </body>
         </html>
       `;
+  };
 
+  const handleDescargarPDF = async () => {
+    if (!cotizacion) return;
+
+    try {
+      const pdfContent = await generarPDFContent();
+      
       // Open in new window for printing
       const printWindow = window.open('', '_blank');
       if (printWindow) {
@@ -673,30 +860,165 @@ const CotizacionDetalleDialog = ({
           )}
 
           {/* Actions */}
-          <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button variant="outline" onClick={handleDescargarPDF}>
-              <Download className="h-4 w-4 mr-2" />
-              Descargar PDF
+          <div className="flex justify-between items-center pt-4 border-t">
+            <Button 
+              variant="outline" 
+              className="text-destructive hover:text-destructive"
+              onClick={() => setDeleteDialogOpen(true)}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Eliminar
             </Button>
-            {cotizacion.status === "borrador" && (
-              <Button onClick={handleEnviarEmail} disabled={sending}>
-                {sending ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4 mr-2" />
-                )}
-                Marcar como enviada
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleDescargarPDF}>
+                <Download className="h-4 w-4 mr-2" />
+                PDF
               </Button>
-            )}
-            {(cotizacion.status === "enviada" || cotizacion.status === "aceptada") && (
-              <Button onClick={handleConvertirPedido}>
-                <ShoppingCart className="h-4 w-4 mr-2" />
-                Convertir a pedido
-              </Button>
-            )}
+              {cotizacion.status === "borrador" && (
+                <>
+                  <Button variant="outline" onClick={handleMarcarEnviada} disabled={sending}>
+                    {sending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+                    Marcar enviada
+                  </Button>
+                  <Button onClick={handleOpenEmailDialog}>
+                    <Mail className="h-4 w-4 mr-2" />
+                    Enviar por email
+                  </Button>
+                </>
+              )}
+              {(cotizacion.status === "enviada" || cotizacion.status === "aceptada") && (
+                <Button onClick={handleConvertirPedido}>
+                  <ShoppingCart className="h-4 w-4 mr-2" />
+                  Convertir a pedido
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </DialogContent>
+
+      {/* Email Dialog */}
+      <Dialog open={showEmailDialog} onOpenChange={setShowEmailDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5" />
+              Enviar Cotización por Email
+            </DialogTitle>
+            <DialogDescription>
+              Envía la cotización {cotizacion.folio} al cliente
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="emailTo">Email principal *</Label>
+              <Input
+                id="emailTo"
+                type="email"
+                value={emailTo}
+                onChange={(e) => setEmailTo(e.target.value)}
+                placeholder="cliente@ejemplo.com"
+              />
+            </div>
+
+            {/* Additional emails */}
+            <div className="space-y-2">
+              <Label>Emails adicionales (CC)</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="email"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  placeholder="otro@ejemplo.com"
+                  onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addAdditionalEmail())}
+                />
+                <Button type="button" variant="outline" onClick={addAdditionalEmail}>
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              {additionalEmails.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {additionalEmails.map((email) => (
+                    <Badge key={email} variant="secondary" className="gap-1">
+                      {email}
+                      <button onClick={() => removeAdditionalEmail(email)} className="ml-1 hover:text-destructive">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="emailSubject">Asunto</Label>
+              <Input
+                id="emailSubject"
+                value={emailSubject}
+                onChange={(e) => setEmailSubject(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="emailBody">Mensaje</Label>
+              <Textarea
+                id="emailBody"
+                value={emailBody}
+                onChange={(e) => setEmailBody(e.target.value)}
+                rows={6}
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="outline" onClick={() => setShowEmailDialog(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleEnviarEmail} disabled={sending}>
+                {sending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4 mr-2" />
+                    Enviar
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar cotización?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción eliminará la cotización <strong>{cotizacion.folio}</strong> de forma permanente. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Eliminando...
+                </>
+              ) : (
+                "Eliminar"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 };

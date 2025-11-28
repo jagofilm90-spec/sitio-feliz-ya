@@ -159,8 +159,8 @@ const Layout = ({ children }: LayoutProps) => {
         {/* Mobile Menu */}
         {mobileMenuOpen && (
           <div className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm md:hidden">
-            <aside className="fixed left-0 top-16 bottom-0 w-64 border-r bg-card">
-              <nav className="flex flex-col p-4 space-y-2">
+            <aside className="fixed left-0 top-16 bottom-0 w-64 border-r bg-card overflow-y-auto">
+              <nav className="flex flex-col p-4 pb-24 space-y-2">
                 {menuItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = location.pathname === item.path;

@@ -1617,6 +1617,7 @@ export type Database = {
         Args: { _conversacion_id: string; _user_id: string }
         Returns: boolean
       }
+      generar_folio_orden_compra: { Args: never; Returns: string }
       generar_notificaciones_fumigacion: { Args: never; Returns: undefined }
       get_cliente_id_for_user: { Args: { user_uuid: string }; Returns: string }
       has_role: {

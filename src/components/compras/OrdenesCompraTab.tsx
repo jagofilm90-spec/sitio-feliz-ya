@@ -28,7 +28,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, Search, MoreVertical } from "lucide-react";
+import { Plus, Trash2, Search, MoreVertical, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import OrdenAccionesDialog from "./OrdenAccionesDialog";
@@ -62,6 +62,32 @@ const OrdenesCompraTab = () => {
   const [productoSeleccionado, setProductoSeleccionado] = useState("");
   const [cantidad, setCantidad] = useState("");
   const [precioUnitario, setPrecioUnitario] = useState("");
+  const [generatingFolio, setGeneratingFolio] = useState(false);
+
+  // Function to generate next folio
+  const generateNextFolio = async () => {
+    setGeneratingFolio(true);
+    try {
+      const { data, error } = await supabase.rpc("generar_folio_orden_compra");
+      if (error) throw error;
+      setFolio(data);
+    } catch (error: any) {
+      toast({
+        title: "Error al generar folio",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setGeneratingFolio(false);
+    }
+  };
+
+  // Open dialog for new order with auto-generated folio
+  const handleNewOrder = async () => {
+    resetForm();
+    setDialogOpen(true);
+    await generateNextFolio();
+  };
 
   // Fetch proveedores
   const { data: proveedores = [] } = useQuery({
@@ -394,7 +420,7 @@ const OrdenesCompraTab = () => {
             Gestiona tus órdenes de compra y recepciones
           </p>
         </div>
-        <Button onClick={() => { resetForm(); setDialogOpen(true); }}>
+        <Button onClick={handleNewOrder}>
           <Plus className="mr-2 h-4 w-4" />
           Nueva Orden de Compra
         </Button>
@@ -481,12 +507,22 @@ const OrdenesCompraTab = () => {
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label>Folio *</Label>
-                <Input
-                  value={folio}
-                  onChange={(e) => setFolio(e.target.value)}
-                  placeholder="OC-001"
-                  required
-                />
+                <div className="relative">
+                  <Input
+                    value={folio}
+                    onChange={(e) => setFolio(e.target.value)}
+                    placeholder="OC-YYYYMM-0001"
+                    required
+                    disabled={generatingFolio || !editingOrdenId}
+                    className={!editingOrdenId ? "bg-muted" : ""}
+                  />
+                  {generatingFolio && (
+                    <Loader2 className="absolute right-3 top-3 h-4 w-4 animate-spin text-muted-foreground" />
+                  )}
+                </div>
+                {!editingOrdenId && (
+                  <p className="text-xs text-muted-foreground mt-1">Auto-generado</p>
+                )}
               </div>
               <div>
                 <Label>Proveedor *</Label>

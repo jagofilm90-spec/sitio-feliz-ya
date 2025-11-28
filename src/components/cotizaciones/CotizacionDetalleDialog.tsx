@@ -25,7 +25,6 @@ import {
   ShoppingCart,
   Download,
   Loader2,
-  Mail,
   Calendar,
   Building,
   User,
@@ -33,6 +32,24 @@ import {
 import { format, isBefore } from "date-fns";
 import { es } from "date-fns/locale";
 import { formatCurrency } from "@/lib/utils";
+import logoAlmasa from "@/assets/logo-almasa.png";
+
+// Helper function to convert image to base64
+const getLogoBase64 = async (): Promise<string> => {
+  try {
+    const response = await fetch(logoAlmasa);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.error('Error loading logo:', error);
+    return '';
+  }
+};
 
 interface CotizacionDetalleDialogProps {
   cotizacionId: string;
@@ -132,11 +149,395 @@ const CotizacionDetalleDialog = ({
     });
   };
 
-  const handleDescargarPDF = () => {
-    toast({
-      title: "Próximamente",
-      description: "La descarga de PDF estará disponible pronto",
-    });
+  const handleDescargarPDF = async () => {
+    if (!cotizacion) return;
+
+    try {
+      const logoBase64 = await getLogoBase64();
+
+      const productosHTML = cotizacion.detalles?.map((d: any) => 
+        `<tr>
+          <td style="text-align: center;">${d.producto?.codigo || '-'}</td>
+          <td>${d.producto?.nombre || 'Producto'}</td>
+          <td style="text-align: center;">${d.cantidad} ${d.producto?.unidad || ''}</td>
+          <td style="text-align: right;">$${d.precio_unitario?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+          <td style="text-align: right;">$${d.subtotal?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+        </tr>`
+      ).join('') || '';
+
+      // Parse dates correctly to avoid timezone issues
+      const parseDateLocal = (dateStr: string) => {
+        const [year, month, day] = dateStr.split('-').map(Number);
+        return new Date(year, month - 1, day);
+      };
+
+      const fechaCreacion = parseDateLocal(cotizacion.fecha_creacion).toLocaleDateString('es-MX', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+
+      const fechaVigencia = parseDateLocal(cotizacion.fecha_vigencia).toLocaleDateString('es-MX', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+
+      const pdfContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Cotización ${cotizacion.folio}</title>
+          <style>
+            @media print {
+              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            }
+            * { box-sizing: border-box; }
+            body { 
+              font-family: 'Segoe UI', Arial, sans-serif; 
+              padding: 30px 40px; 
+              max-width: 850px; 
+              margin: 0 auto;
+              font-size: 11px;
+              color: #1a1a1a;
+              background: #fff;
+            }
+            .header { 
+              display: flex; 
+              justify-content: space-between; 
+              align-items: flex-start;
+              padding-bottom: 20px;
+              margin-bottom: 25px;
+              border-bottom: 3px solid #b22234;
+            }
+            .company-info { 
+              flex: 1;
+            }
+            .company-details { 
+              font-size: 10px; 
+              color: #444;
+              line-height: 1.5;
+            }
+            .company-details strong {
+              color: #b22234;
+            }
+            .order-box { 
+              text-align: right;
+              background: linear-gradient(135deg, #b22234 0%, #8b1a28 100%);
+              color: white;
+              padding: 15px 20px;
+              border-radius: 8px;
+              min-width: 200px;
+            }
+            .order-title { 
+              font-size: 10px; 
+              text-transform: uppercase;
+              letter-spacing: 2px;
+              opacity: 0.9;
+              margin-bottom: 5px;
+            }
+            .folio { 
+              font-size: 20px; 
+              font-weight: 700; 
+              margin: 5px 0;
+            }
+            .order-date {
+              font-size: 10px;
+              opacity: 0.9;
+            }
+            .status-badge {
+              display: inline-block;
+              background: #ffd700;
+              color: #8b1a28;
+              padding: 3px 10px;
+              border-radius: 12px;
+              font-size: 9px;
+              font-weight: 600;
+              text-transform: uppercase;
+              margin-top: 8px;
+            }
+            .info-grid {
+              display: flex;
+              gap: 20px;
+              margin-bottom: 25px;
+            }
+            .info-box {
+              flex: 1;
+              background: #f8f9fa;
+              padding: 15px;
+              border-radius: 6px;
+              border-left: 4px solid #b22234;
+            }
+            .info-box.vigencia {
+              border-left-color: #ffd700;
+            }
+            .info-box h3 { 
+              margin: 0 0 10px 0; 
+              font-size: 10px; 
+              color: #b22234;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+            }
+            .info-box p { 
+              margin: 3px 0; 
+              font-size: 11px;
+              color: #333;
+            }
+            .info-box .highlight {
+              font-weight: 600;
+              color: #b22234;
+              font-size: 12px;
+            }
+            table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              margin: 20px 0;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            }
+            th { 
+              background: linear-gradient(135deg, #b22234 0%, #8b1a28 100%);
+              color: white; 
+              padding: 12px 10px; 
+              text-align: left;
+              font-size: 10px;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+              font-weight: 600;
+            }
+            td { 
+              padding: 10px; 
+              border-bottom: 1px solid #e0e0e0;
+              font-size: 11px; 
+              background: #fff;
+            }
+            tbody tr:nth-child(even) td {
+              background: #f8f9fa;
+            }
+            tbody tr:hover td {
+              background: #f0f4f8;
+            }
+            .totals { 
+              margin-top: 20px; 
+              display: flex;
+              justify-content: flex-end;
+            }
+            .totals-box {
+              width: 280px;
+              background: #f8f9fa;
+              border-radius: 6px;
+              overflow: hidden;
+            }
+            .totals-box .row {
+              display: flex;
+              justify-content: space-between;
+              padding: 10px 15px;
+              border-bottom: 1px solid #e0e0e0;
+            }
+            .totals-box .row:last-child {
+              border-bottom: none;
+            }
+            .totals-box .total-row { 
+              background: linear-gradient(135deg, #b22234 0%, #8b1a28 100%);
+              color: white; 
+              font-weight: bold;
+              font-size: 14px;
+            }
+            .vigencia-notice {
+              margin-top: 25px;
+              padding: 15px;
+              background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+              border-left: 4px solid #ffd700;
+              border-radius: 0 6px 6px 0;
+            }
+            .vigencia-notice h4 {
+              margin: 0 0 5px 0;
+              color: #8b1a28;
+              font-size: 11px;
+            }
+            .vigencia-notice p {
+              margin: 0;
+              font-size: 12px;
+              font-weight: 600;
+              color: #333;
+            }
+            .notes { 
+              margin-top: 20px; 
+              padding: 15px; 
+              background: #f5f5f5;
+              border-left: 4px solid #666;
+              border-radius: 0 6px 6px 0;
+            }
+            .notes h4 { 
+              margin: 0 0 8px 0;
+              color: #333;
+              font-size: 11px;
+              text-transform: uppercase;
+            }
+            .notes p {
+              margin: 0;
+              color: #333;
+              line-height: 1.5;
+            }
+            .terms {
+              margin-top: 30px;
+              padding: 15px;
+              background: #f8f9fa;
+              border-radius: 6px;
+              font-size: 10px;
+              color: #666;
+            }
+            .terms h4 {
+              margin: 0 0 10px 0;
+              color: #b22234;
+              font-size: 10px;
+              text-transform: uppercase;
+            }
+            .terms ul {
+              margin: 0;
+              padding-left: 15px;
+            }
+            .terms li {
+              margin-bottom: 5px;
+            }
+            .footer { 
+              margin-top: 40px; 
+              text-align: center; 
+              font-size: 9px; 
+              color: #999;
+              border-top: 1px solid #e0e0e0;
+              padding-top: 15px;
+            }
+            .footer p {
+              margin: 3px 0;
+            }
+            @page { margin: 1cm; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="company-info">
+              ${logoBase64 ? `<img src="${logoBase64}" alt="ALMASA" style="height: 70px; margin-bottom: 10px;">` : ''}
+              <div class="company-details">
+                <strong>Abarrotes la Manita SA de CV</strong><br>
+                RFC: AMA 700701GI8<br>
+                Melchor Ocampo #59, Magdalena Mixiuhca<br>
+                Venustiano Carranza, 15850, CDMX<br>
+                Tel: 55 5552-0168 / 55 5552-7887<br>
+                compras@almasa.com.mx
+              </div>
+            </div>
+            <div class="order-box">
+              <div class="order-title">Cotización</div>
+              <div class="folio">${cotizacion.folio}</div>
+              <div class="order-date">${fechaCreacion}</div>
+              <div class="status-badge">${cotizacion.status?.toUpperCase() || 'BORRADOR'}</div>
+            </div>
+          </div>
+
+          <div class="info-grid">
+            <div class="info-box">
+              <h3>Cliente</h3>
+              <p class="highlight">${cotizacion.cliente?.nombre || 'Sin cliente'}</p>
+              <p>Código: ${cotizacion.cliente?.codigo || '-'}</p>
+              ${cotizacion.cliente?.email ? `<p>📧 ${cotizacion.cliente.email}</p>` : ''}
+              ${cotizacion.sucursal ? `<p>📍 ${cotizacion.sucursal.nombre}</p>` : ''}
+            </div>
+            <div class="info-box vigencia">
+              <h3>Vigencia</h3>
+              <p class="highlight">${fechaVigencia}</p>
+              <p style="font-size: 10px; color: #666; margin-top: 5px;">
+                Esta cotización es válida hasta la fecha indicada
+              </p>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 80px; text-align: center;">Código</th>
+                <th>Producto</th>
+                <th style="width: 100px; text-align: center;">Cantidad</th>
+                <th style="width: 100px; text-align: right;">Precio Unit.</th>
+                <th style="width: 100px; text-align: right;">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${productosHTML}
+            </tbody>
+          </table>
+
+          <div class="totals">
+            <div class="totals-box">
+              <div class="row">
+                <span>Subtotal:</span>
+                <span>$${cotizacion.subtotal?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div class="row">
+                <span>Impuestos:</span>
+                <span>$${cotizacion.impuestos?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div class="row total-row">
+                <span>TOTAL:</span>
+                <span>$${cotizacion.total?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="vigencia-notice">
+            <h4>⏰ Vigencia de la Cotización</h4>
+            <p>Esta cotización tiene validez hasta el ${fechaVigencia}</p>
+          </div>
+
+          ${cotizacion.notas ? `
+            <div class="notes">
+              <h4>📝 Notas</h4>
+              <p>${cotizacion.notas}</p>
+            </div>
+          ` : ''}
+
+          <div class="terms">
+            <h4>Términos y Condiciones</h4>
+            <ul>
+              <li>Los precios están sujetos a cambio sin previo aviso después de la fecha de vigencia.</li>
+              <li>La mercancía viaja por cuenta y riesgo del comprador.</li>
+              <li>El tiempo de entrega se confirma al momento de la orden de compra.</li>
+              <li>Para hacer válida esta cotización, favor de enviar su orden de compra.</li>
+            </ul>
+          </div>
+
+          <div class="footer">
+            <p>Documento generado el ${new Date().toLocaleString('es-MX')}</p>
+            <p><strong>Abarrotes la Manita SA de CV</strong> | compras@almasa.com.mx | Tel: 55 5552-0168</p>
+          </div>
+        </body>
+        </html>
+      `;
+
+      // Open in new window for printing
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(pdfContent);
+        printWindow.document.close();
+        
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+        
+        toast({
+          title: "PDF generado",
+          description: "Puedes imprimir o guardar como PDF desde el diálogo de impresión",
+        });
+      }
+    } catch (error: any) {
+      console.error('Error generating PDF:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo generar el PDF",
+        variant: "destructive",
+      });
+    }
   };
 
   if (isLoading) {

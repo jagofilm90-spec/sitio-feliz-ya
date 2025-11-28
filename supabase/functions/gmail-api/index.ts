@@ -221,51 +221,79 @@ serve(async (req) => {
       );
     }
 
-    // MARK AS READ - single or batch
+    // MARK AS READ - single or batch using Gmail batchModify API
     if (action === "markAsRead") {
-      const messageIds = messageId ? [messageId] : [];
+      // Support both single messageId and array of messageIds
+      const messageIds = Array.isArray(messageId) ? messageId : (messageId ? [messageId] : []);
       
       if (messageIds.length === 0) {
         throw new Error("messageId requerido");
       }
 
-      let successCount = 0;
-      let failCount = 0;
-
-      for (const msgId of messageIds) {
+      // Use batchModify for multiple messages (more efficient)
+      if (messageIds.length > 1) {
         try {
-          const modifyResponse = await fetch(
-            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}/modify`,
+          const batchResponse = await fetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/batchModify`,
             {
               method: "POST",
               headers: {
                 Authorization: `Bearer ${accessToken}`,
                 "Content-Type": "application/json",
               },
-              body: JSON.stringify({ removeLabelIds: ["UNREAD"] }),
+              body: JSON.stringify({ 
+                ids: messageIds,
+                removeLabelIds: ["UNREAD"] 
+              }),
             }
           );
 
-          if (modifyResponse.ok) {
-            successCount++;
-            console.log("Marked as read successfully:", msgId);
+          if (batchResponse.ok) {
+            console.log(`Batch marked as read: ${messageIds.length} messages`);
+            return new Response(
+              JSON.stringify({ success: true, successCount: messageIds.length, failCount: 0 }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
           } else {
-            failCount++;
-            const errorText = await modifyResponse.text();
-            console.log("Mark as read failed for", msgId, ":", modifyResponse.status, errorText);
+            const errorText = await batchResponse.text();
+            console.log("Batch mark as read failed:", batchResponse.status, errorText);
+            throw new Error("Error al marcar correos como leídos en lote");
           }
         } catch (e) {
-          failCount++;
-          console.log("Mark as read error for", msgId, ":", e);
+          console.log("Batch mark as read error:", e);
+          throw e;
         }
       }
 
-      console.log(`Marked as read: ${successCount} success, ${failCount} failed`);
+      // Single message - use individual modify
+      try {
+        const modifyResponse = await fetch(
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageIds[0]}/modify`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ removeLabelIds: ["UNREAD"] }),
+          }
+        );
 
-      return new Response(
-        JSON.stringify({ success: true, successCount, failCount }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+        if (modifyResponse.ok) {
+          console.log("Marked as read successfully:", messageIds[0]);
+          return new Response(
+            JSON.stringify({ success: true, successCount: 1, failCount: 0 }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        } else {
+          const errorText = await modifyResponse.text();
+          console.log("Mark as read failed:", modifyResponse.status, errorText);
+          throw new Error("Error al marcar correo como leído");
+        }
+      } catch (e) {
+        console.log("Mark as read error:", e);
+        throw e;
+      }
     }
     
     // TRASH - Move to trash (alias for delete)

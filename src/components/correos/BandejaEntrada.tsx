@@ -71,6 +71,8 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedEmailIds, setSelectedEmailIds] = useState<Set<string>>(new Set());
   const [deletingSelected, setDeletingSelected] = useState(false);
+  // Flag to open first unread email after account switch from notification
+  const [pendingOpenUnread, setPendingOpenUnread] = useState<string | null>(null);
   
   // Track previous unread counts to detect new emails
   const previousUnreadCountsRef = useRef<Record<string, number>>({});
@@ -143,6 +145,8 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
               onClick: () => {
                 setSelectedAccount(cuenta.email);
                 setActiveTab("inbox");
+                // Set flag to open first unread email after emails load
+                setPendingOpenUnread(cuenta.email);
               },
             },
             duration: 8000,
@@ -195,6 +199,26 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
     staleTime: 1000 * 60, // 60 seconds
     refetchInterval: 1000 * 60, // Refetch every 60 seconds
   });
+
+  // Auto-open first unread email when triggered from notification
+  useEffect(() => {
+    if (pendingOpenUnread && emails && emails.length > 0 && selectedAccount === pendingOpenUnread && !isLoading) {
+      // Find the first unread email
+      const firstUnread = emails.find(e => e.isUnread);
+      if (firstUnread) {
+        const index = emails.indexOf(firstUnread);
+        setSelectedEmailId(firstUnread.id);
+        setSelectedEmailIndex(index);
+        setIsFromTrash(false);
+      } else {
+        // If no unread, open the first email
+        setSelectedEmailId(emails[0].id);
+        setSelectedEmailIndex(0);
+        setIsFromTrash(false);
+      }
+      setPendingOpenUnread(null);
+    }
+  }, [pendingOpenUnread, emails, selectedAccount, isLoading]);
 
   // Fetch selected email detail
   const { data: emailDetail, isLoading: isLoadingDetail } = useQuery({

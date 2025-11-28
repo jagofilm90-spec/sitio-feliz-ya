@@ -644,8 +644,11 @@ const OrdenesCompraTab = () => {
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { label: string; variant: any }> = {
       pendiente: { label: "Pendiente", variant: "secondary" },
+      pendiente_autorizacion: { label: "Por Autorizar", variant: "outline" },
+      autorizada: { label: "Autorizada", variant: "default" },
+      rechazada: { label: "Rechazada", variant: "destructive" },
       enviada: { label: "Enviada", variant: "default" },
-      parcial: { label: "Parcial", variant: "default" },
+      parcial: { label: "Recep. Parcial", variant: "secondary" },
       recibida: { label: "Recibida", variant: "default" },
       devuelta: { label: "Devuelta", variant: "destructive" },
     };

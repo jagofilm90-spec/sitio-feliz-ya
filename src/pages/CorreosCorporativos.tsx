@@ -52,9 +52,9 @@ const CorreosCorporativos = () => {
   const [authEmail, setAuthEmail] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("bandeja");
 
-  const { isAdmin, filterCuentasByPermiso } = useGmailPermisos();
+  const { isAdmin, filterCuentasByPermiso, isLoading: isLoadingPermisos } = useGmailPermisos();
 
-  const { data: cuentas, isLoading, refetch } = useQuery({
+  const { data: cuentas, isLoading: isLoadingCuentas, refetch } = useQuery({
     queryKey: ["gmail-cuentas"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -280,21 +280,36 @@ const CorreosCorporativos = () => {
           </TabsList>
 
           <TabsContent value="bandeja" className="mt-6">
-            {connectedCuentas.length > 0 ? (
+            {isLoadingPermisos || isLoadingCuentas ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">Cargando cuentas de correo...</p>
+                </CardContent>
+              </Card>
+            ) : connectedCuentas.length > 0 ? (
               <BandejaEntrada cuentas={connectedCuentas} />
             ) : (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12">
                   <Mail className="h-12 w-12 text-muted-foreground mb-4" />
                   <p className="text-muted-foreground mb-2">
-                    No hay cuentas de correo conectadas
+                    No hay cuentas de correo {isAdmin ? "conectadas" : "configuradas"}
                   </p>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Ve a la pestaña "Cuentas" para conectar una cuenta de correo
-                  </p>
-                  <Button onClick={() => setActiveTab("cuentas")}>
-                    Ir a Cuentas
-                  </Button>
+                  {isAdmin ? (
+                    <>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Ve a la pestaña "Cuentas" para conectar una cuenta de correo
+                      </p>
+                      <Button onClick={() => setActiveTab("cuentas")}>
+                        Ir a Cuentas
+                      </Button>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Contacta al administrador para que te asigne acceso a las cuentas de correo
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             )}
@@ -308,7 +323,7 @@ const CorreosCorporativos = () => {
               </Button>
             </div>
 
-            {isLoading ? (
+            {isLoadingCuentas ? (
               <div className="flex items-center justify-center py-12">
                 <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>

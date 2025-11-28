@@ -73,7 +73,7 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
-    const { action, email, to, subject, body: emailBody, maxResults } = await req.json();
+    const { action, email, to, subject, body: emailBody, maxResults, messageId } = await req.json();
 
     // Get account credentials
     const { data: cuenta, error: cuentaError } = await supabase
@@ -185,8 +185,6 @@ serve(async (req) => {
     }
 
     if (action === "read") {
-      const { messageId } = await req.json();
-      
       if (!messageId) {
         throw new Error("messageId requerido");
       }

@@ -223,6 +223,8 @@ const Productos = () => {
     activo: boolean;
     requiere_fumigacion: boolean;
     fecha_ultima_fumigacion: string;
+    fecha_caducidad_inicial: string;
+    stock_inicial: string;
   }>({
     codigo: "",
     nombre: "",
@@ -240,6 +242,8 @@ const Productos = () => {
     activo: true,
     requiere_fumigacion: false,
     fecha_ultima_fumigacion: "",
+    fecha_caducidad_inicial: "",
+    stock_inicial: "",
   });
 
   useEffect(() => {
@@ -317,11 +321,43 @@ const Productos = () => {
         if (error) throw error;
         toast({ title: "Producto actualizado correctamente" });
       } else {
-        const { error } = await supabase
+        const { data: newProduct, error } = await supabase
           .from("productos")
-          .insert([productData]);
+          .insert([productData])
+          .select()
+          .single();
 
         if (error) throw error;
+
+        // Si tiene stock inicial y fecha de caducidad, crear el lote inicial
+        const stockInicial = parseInt(formData.stock_inicial) || 0;
+        if (stockInicial > 0 && newProduct) {
+          const loteData: any = {
+            producto_id: newProduct.id,
+            cantidad_disponible: stockInicial,
+            precio_compra: parseFloat(formData.precio_compra) || 0,
+            lote_referencia: "Lote inicial",
+          };
+          
+          if (formData.maneja_caducidad && formData.fecha_caducidad_inicial) {
+            loteData.fecha_caducidad = formData.fecha_caducidad_inicial;
+          }
+
+          const { error: loteError } = await supabase
+            .from("inventario_lotes")
+            .insert([loteData]);
+
+          if (loteError) {
+            console.error("Error creando lote inicial:", loteError);
+          }
+
+          // Actualizar stock_actual del producto
+          await supabase
+            .from("productos")
+            .update({ stock_actual: stockInicial })
+            .eq("id", newProduct.id);
+        }
+
         toast({ title: "Producto creado correctamente" });
       }
 
@@ -356,6 +392,8 @@ const Productos = () => {
       activo: product.activo !== false,
       requiere_fumigacion: product.requiere_fumigacion || false,
       fecha_ultima_fumigacion: product.fecha_ultima_fumigacion || "",
+      fecha_caducidad_inicial: "",
+      stock_inicial: "",
     });
     setDialogOpen(true);
   };
@@ -403,6 +441,8 @@ const Productos = () => {
       activo: true,
       requiere_fumigacion: false,
       fecha_ultima_fumigacion: "",
+      fecha_caducidad_inicial: "",
+      stock_inicial: "",
     });
   };
 
@@ -703,15 +743,50 @@ const Productos = () => {
                     />
                   </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="maneja_caducidad"
-                    checked={formData.maneja_caducidad}
-                    onChange={(e) => setFormData({ ...formData, maneja_caducidad: e.target.checked })}
-                    className="rounded"
-                  />
-                  <Label htmlFor="maneja_caducidad">Maneja fecha de caducidad</Label>
+                <div className="space-y-3 p-3 bg-muted/50 rounded-lg border">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="maneja_caducidad"
+                      checked={formData.maneja_caducidad}
+                      onChange={(e) => setFormData({ ...formData, maneja_caducidad: e.target.checked })}
+                      className="rounded"
+                    />
+                    <Label htmlFor="maneja_caducidad">Maneja fecha de caducidad</Label>
+                  </div>
+                  {!editingProduct && (
+                    <div className="grid grid-cols-2 gap-4 ml-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="stock_inicial">Stock inicial</Label>
+                        <Input
+                          id="stock_inicial"
+                          type="number"
+                          value={formData.stock_inicial}
+                          onChange={(e) => setFormData({ ...formData, stock_inicial: e.target.value })}
+                          placeholder="0"
+                          autoComplete="off"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Cantidad que ya tienes en bodega
+                        </p>
+                      </div>
+                      {formData.maneja_caducidad && (
+                        <div className="space-y-2">
+                          <Label htmlFor="fecha_caducidad_inicial">Fecha de caducidad</Label>
+                          <Input
+                            id="fecha_caducidad_inicial"
+                            type="date"
+                            value={formData.fecha_caducidad_inicial}
+                            onChange={(e) => setFormData({ ...formData, fecha_caducidad_inicial: e.target.value })}
+                            autoComplete="off"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Fecha de vencimiento del stock actual
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-3 p-3 bg-muted/50 rounded-lg border">
                   <div className="flex items-center space-x-2">

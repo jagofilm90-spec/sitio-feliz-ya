@@ -203,15 +203,25 @@ serve(async (req) => {
       const msgData = await msgResponse.json();
       const headers = msgData.payload?.headers || [];
       
+      // Helper function to decode base64 URL-safe to UTF-8 string
+      const decodeBase64Utf8 = (base64Data: string): string => {
+        const binary = atob(base64Data.replace(/-/g, "+").replace(/_/g, "/"));
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        return new TextDecoder("utf-8").decode(bytes);
+      };
+
       // Extract body from message parts
       let bodyHtml = "";
       let bodyText = "";
       
       const extractBody = (part: any) => {
         if (part.mimeType === "text/html" && part.body?.data) {
-          bodyHtml = atob(part.body.data.replace(/-/g, "+").replace(/_/g, "/"));
+          bodyHtml = decodeBase64Utf8(part.body.data);
         } else if (part.mimeType === "text/plain" && part.body?.data) {
-          bodyText = atob(part.body.data.replace(/-/g, "+").replace(/_/g, "/"));
+          bodyText = decodeBase64Utf8(part.body.data);
         }
         if (part.parts) {
           part.parts.forEach(extractBody);
@@ -220,7 +230,7 @@ serve(async (req) => {
       
       if (msgData.payload?.body?.data) {
         const mimeType = msgData.payload.mimeType;
-        const decoded = atob(msgData.payload.body.data.replace(/-/g, "+").replace(/_/g, "/"));
+        const decoded = decodeBase64Utf8(msgData.payload.body.data);
         if (mimeType === "text/html") {
           bodyHtml = decoded;
         } else {

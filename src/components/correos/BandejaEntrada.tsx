@@ -211,9 +211,33 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
     enabled: !!selectedEmailId && !!selectedAccount,
   });
 
-  // Mark email as read when viewing
+  // Mark email as read when viewing - with optimistic update
   useEffect(() => {
     if (emailDetail?.isUnread && selectedEmailId && !isFromTrash) {
+      // Optimistic update: immediately update local cache
+      queryClient.setQueryData(
+        ["gmail-inbox", selectedAccount, activeSearch],
+        (oldData: Email[] | undefined) => {
+          if (!oldData) return oldData;
+          return oldData.map(e => 
+            e.id === selectedEmailId ? { ...e, isUnread: false } : e
+          );
+        }
+      );
+      
+      // Optimistic update: decrement unread count
+      queryClient.setQueryData(
+        ["gmail-unread-counts"],
+        (oldData: Record<string, number> | undefined) => {
+          if (!oldData) return oldData;
+          return {
+            ...oldData,
+            [selectedAccount]: Math.max(0, (oldData[selectedAccount] || 0) - 1),
+          };
+        }
+      );
+
+      // Call API to mark as read
       supabase.functions.invoke("gmail-api", {
         body: {
           action: "markAsRead",
@@ -221,12 +245,11 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
           messageId: selectedEmailId,
         },
       }).then(() => {
-        // Invalidate queries to refresh unread counts
+        // Refresh to ensure sync with server
         queryClient.invalidateQueries({ queryKey: ["gmail-unread-counts"] });
-        queryClient.invalidateQueries({ queryKey: ["gmail-inbox", selectedAccount] });
       });
     }
-  }, [emailDetail?.isUnread, selectedEmailId, selectedAccount, isFromTrash, queryClient]);
+  }, [emailDetail?.isUnread, selectedEmailId, selectedAccount, isFromTrash, queryClient, activeSearch]);
 
   const handleAccountChange = (email: string) => {
     setSelectedAccount(email);
@@ -268,10 +291,35 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
   const handleDeleteSelected = async () => {
     if (selectedEmailIds.size === 0) return;
 
+    const selectedIdsArray = Array.from(selectedEmailIds);
+    const unreadSelectedCount = emails?.filter(e => selectedIdsArray.includes(e.id) && e.isUnread).length || 0;
+
     setDeletingSelected(true);
+    
+    // Optimistic update: remove emails from list
+    queryClient.setQueryData(
+      ["gmail-inbox", selectedAccount, activeSearch],
+      (oldData: Email[] | undefined) => {
+        if (!oldData) return oldData;
+        return oldData.filter(e => !selectedIdsArray.includes(e.id));
+      }
+    );
+    
+    // Optimistic update: decrement unread count
+    queryClient.setQueryData(
+      ["gmail-unread-counts"],
+      (oldData: Record<string, number> | undefined) => {
+        if (!oldData) return oldData;
+        return {
+          ...oldData,
+          [selectedAccount]: Math.max(0, (oldData[selectedAccount] || 0) - unreadSelectedCount),
+        };
+      }
+    );
+
     try {
       await Promise.all(
-        Array.from(selectedEmailIds).map(emailId =>
+        selectedIdsArray.map(emailId =>
           supabase.functions.invoke("gmail-api", {
             body: {
               action: "trash",
@@ -292,6 +340,9 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
     } catch (error) {
       console.error("Error deleting selected:", error);
       toast.error("Error al eliminar correos");
+      // Revert optimistic update on error
+      queryClient.invalidateQueries({ queryKey: ["gmail-inbox", selectedAccount] });
+      queryClient.invalidateQueries({ queryKey: ["gmail-unread-counts"] });
     } finally {
       setDeletingSelected(false);
     }
@@ -301,10 +352,37 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
   const handleMarkSelectedAsRead = async () => {
     if (selectedEmailIds.size === 0) return;
 
+    const selectedIdsArray = Array.from(selectedEmailIds);
+    const unreadSelectedCount = emails?.filter(e => selectedIdsArray.includes(e.id) && e.isUnread).length || 0;
+
     setMarkingAllAsRead(true);
+    
+    // Optimistic update: immediately update local cache
+    queryClient.setQueryData(
+      ["gmail-inbox", selectedAccount, activeSearch],
+      (oldData: Email[] | undefined) => {
+        if (!oldData) return oldData;
+        return oldData.map(e => 
+          selectedIdsArray.includes(e.id) ? { ...e, isUnread: false } : e
+        );
+      }
+    );
+    
+    // Optimistic update: decrement unread count
+    queryClient.setQueryData(
+      ["gmail-unread-counts"],
+      (oldData: Record<string, number> | undefined) => {
+        if (!oldData) return oldData;
+        return {
+          ...oldData,
+          [selectedAccount]: Math.max(0, (oldData[selectedAccount] || 0) - unreadSelectedCount),
+        };
+      }
+    );
+
     try {
       await Promise.all(
-        Array.from(selectedEmailIds).map(emailId =>
+        selectedIdsArray.map(emailId =>
           supabase.functions.invoke("gmail-api", {
             body: {
               action: "markAsRead",
@@ -319,11 +397,15 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
       setSelectedEmailIds(new Set());
       setSelectionMode(false);
       
+      // Refresh to sync with server
       queryClient.invalidateQueries({ queryKey: ["gmail-unread-counts"] });
       queryClient.invalidateQueries({ queryKey: ["gmail-inbox", selectedAccount] });
     } catch (error) {
       console.error("Error marking selected as read:", error);
       toast.error("Error al marcar correos como leídos");
+      // Revert optimistic update on error
+      queryClient.invalidateQueries({ queryKey: ["gmail-unread-counts"] });
+      queryClient.invalidateQueries({ queryKey: ["gmail-inbox", selectedAccount] });
     } finally {
       setMarkingAllAsRead(false);
     }

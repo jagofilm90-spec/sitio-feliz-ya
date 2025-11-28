@@ -22,7 +22,7 @@ interface GmailCuenta {
 
 export const useGmailPermisos = () => {
   // Get current user's role
-  const { data: userRole } = useQuery({
+  const { data: userRole, isLoading: isLoadingRole } = useQuery({
     queryKey: ["user-role"],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -38,9 +38,10 @@ export const useGmailPermisos = () => {
   });
 
   const isAdmin = userRole?.includes("admin") || false;
+  const roleLoaded = !isLoadingRole && userRole !== undefined;
 
-  // Get user's permitted accounts (if not admin)
-  const { data: permisos } = useQuery({
+  // Get user's permitted accounts (only runs when role is loaded AND user is not admin)
+  const { data: permisos, isLoading: isLoadingPermisos } = useQuery({
     queryKey: ["gmail-permisos-usuario"],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -54,13 +55,19 @@ export const useGmailPermisos = () => {
       if (error) throw error;
       return data?.map(p => p.gmail_cuenta_id) || [];
     },
-    enabled: !isAdmin,
+    enabled: roleLoaded && !isAdmin,
   });
 
   // Filter function to apply to accounts
   const filterCuentasByPermiso = (cuentas: GmailCuenta[]): GmailCuenta[] => {
+    // Still loading role - return empty to prevent flash
+    if (!roleLoaded) return [];
+    
     // Admins see all accounts
     if (isAdmin) return cuentas;
+    
+    // Still loading permissions for non-admin
+    if (isLoadingPermisos) return [];
     
     // Non-admins see only permitted accounts
     if (!permisos || permisos.length === 0) return [];
@@ -72,6 +79,7 @@ export const useGmailPermisos = () => {
     isAdmin,
     permisos,
     filterCuentasByPermiso,
+    isLoading: isLoadingRole || (!isAdmin && isLoadingPermisos),
   };
 };
 

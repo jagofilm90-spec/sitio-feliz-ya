@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Mail, RefreshCw, Paperclip } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -22,6 +23,9 @@ interface EmailListViewProps {
   onSelectEmail: (id: string, index: number) => void;
   onRefresh: () => void;
   isRefreshing: boolean;
+  selectedIds: Set<string>;
+  onToggleSelect: (id: string) => void;
+  selectionMode: boolean;
 }
 
 const EmailListView = ({
@@ -30,6 +34,9 @@ const EmailListView = ({
   onSelectEmail,
   onRefresh,
   isRefreshing,
+  selectedIds,
+  onToggleSelect,
+  selectionMode,
 }: EmailListViewProps) => {
   const formatEmailDate = (dateStr: string) => {
     try {
@@ -84,14 +91,30 @@ const EmailListView = ({
       <ScrollArea className="h-[600px]">
         <div className="divide-y">
           {emails.map((email, index) => (
-            <button
+            <div
               key={email.id}
-              className={`w-full text-left p-4 hover:bg-muted/50 transition-colors ${
-                email.isUnread ? "bg-primary/5" : ""
-              }`}
-              onClick={() => onSelectEmail(email.id, index)}
+              className="flex items-center gap-2 hover:bg-muted/50 transition-colors"
             >
-              <div className="flex items-start gap-3">
+              {selectionMode && (
+                <div className="pl-4">
+                  <Checkbox
+                    checked={selectedIds.has(email.id)}
+                    onCheckedChange={() => onToggleSelect(email.id)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+              )}
+              <button
+                className="w-full text-left p-4 flex items-start gap-3"
+                onClick={() => onSelectEmail(email.id, index)}
+              >
+                {/* Blue dot for unread */}
+                <div className="flex-shrink-0 w-2 h-2 mt-2">
+                  {email.isUnread && (
+                    <div className="w-2 h-2 rounded-full bg-primary" />
+                  )}
+                </div>
+                
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
                     <span
@@ -119,8 +142,8 @@ const EmailListView = ({
                 {email.hasAttachments && (
                   <Paperclip className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                 )}
-              </div>
-            </button>
+              </button>
+            </div>
           ))}
         </div>
       </ScrollArea>

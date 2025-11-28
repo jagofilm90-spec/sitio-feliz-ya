@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
-import { Inbox, RefreshCw, PenSquare, Loader2, ChevronDown, Search, Trash2, Mail, Bell, CheckCheck } from "lucide-react";
+import { Inbox, RefreshCw, PenSquare, Loader2, ChevronDown, Search, Trash2, Mail, Bell, CheckCheck, CheckSquare, Square } from "lucide-react";
 import { toast } from "sonner";
 import EmailListView from "./EmailListView";
 import EmailDetailView from "./EmailDetailView";
@@ -68,6 +68,9 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
   const [activeTab, setActiveTab] = useState("inbox");
   const [isFromTrash, setIsFromTrash] = useState(false);
   const [markingAllAsRead, setMarkingAllAsRead] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedEmailIds, setSelectedEmailIds] = useState<Set<string>>(new Set());
+  const [deletingSelected, setDeletingSelected] = useState(false);
   
   // Track previous unread counts to detect new emails
   const previousUnreadCountsRef = useRef<Record<string, number>>({});
@@ -231,6 +234,99 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
     setSelectedEmailIndex(-1);
     setSearchQuery("");
     setActiveSearch("");
+    setSelectedEmailIds(new Set());
+    setSelectionMode(false);
+  };
+
+  // Toggle selection of an email
+  const handleToggleSelect = (id: string) => {
+    setSelectedEmailIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  // Select all emails
+  const handleSelectAll = () => {
+    if (emails) {
+      setSelectedEmailIds(new Set(emails.map(e => e.id)));
+    }
+  };
+
+  // Clear selection
+  const handleClearSelection = () => {
+    setSelectedEmailIds(new Set());
+    setSelectionMode(false);
+  };
+
+  // Delete selected emails
+  const handleDeleteSelected = async () => {
+    if (selectedEmailIds.size === 0) return;
+
+    setDeletingSelected(true);
+    try {
+      await Promise.all(
+        Array.from(selectedEmailIds).map(emailId =>
+          supabase.functions.invoke("gmail-api", {
+            body: {
+              action: "trash",
+              email: selectedAccount,
+              messageId: emailId,
+            },
+          })
+        )
+      );
+
+      toast.success(`${selectedEmailIds.size} correo(s) eliminado(s)`);
+      setSelectedEmailIds(new Set());
+      setSelectionMode(false);
+      
+      queryClient.invalidateQueries({ queryKey: ["gmail-unread-counts"] });
+      queryClient.invalidateQueries({ queryKey: ["gmail-inbox", selectedAccount] });
+      queryClient.invalidateQueries({ queryKey: ["gmail-trash", selectedAccount] });
+    } catch (error) {
+      console.error("Error deleting selected:", error);
+      toast.error("Error al eliminar correos");
+    } finally {
+      setDeletingSelected(false);
+    }
+  };
+
+  // Mark selected emails as read
+  const handleMarkSelectedAsRead = async () => {
+    if (selectedEmailIds.size === 0) return;
+
+    setMarkingAllAsRead(true);
+    try {
+      await Promise.all(
+        Array.from(selectedEmailIds).map(emailId =>
+          supabase.functions.invoke("gmail-api", {
+            body: {
+              action: "markAsRead",
+              email: selectedAccount,
+              messageId: emailId,
+            },
+          })
+        )
+      );
+
+      toast.success(`${selectedEmailIds.size} correo(s) marcado(s) como leído(s)`);
+      setSelectedEmailIds(new Set());
+      setSelectionMode(false);
+      
+      queryClient.invalidateQueries({ queryKey: ["gmail-unread-counts"] });
+      queryClient.invalidateQueries({ queryKey: ["gmail-inbox", selectedAccount] });
+    } catch (error) {
+      console.error("Error marking selected as read:", error);
+      toast.error("Error al marcar correos como leídos");
+    } finally {
+      setMarkingAllAsRead(false);
+    }
   };
 
   const handleEmailDeleted = () => {
@@ -456,21 +552,90 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
 
         {/* Tabs for Inbox and Trash */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
-            <TabsTrigger value="inbox" className="gap-2">
-              <Inbox className="h-4 w-4" />
-              Bandeja de entrada
-              {unreadCounts?.[selectedAccount] ? (
-                <Badge variant="destructive" className="text-xs ml-1">
-                  {unreadCounts[selectedAccount]}
-                </Badge>
-              ) : null}
-            </TabsTrigger>
-            <TabsTrigger value="trash" className="gap-2">
-              <Trash2 className="h-4 w-4" />
-              Papelera
-            </TabsTrigger>
-          </TabsList>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <TabsList>
+              <TabsTrigger value="inbox" className="gap-2">
+                <Inbox className="h-4 w-4" />
+                Bandeja de entrada
+                {unreadCounts?.[selectedAccount] ? (
+                  <Badge variant="destructive" className="text-xs ml-1">
+                    {unreadCounts[selectedAccount]}
+                  </Badge>
+                ) : null}
+              </TabsTrigger>
+              <TabsTrigger value="trash" className="gap-2">
+                <Trash2 className="h-4 w-4" />
+                Papelera
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Selection controls */}
+            {activeTab === "inbox" && (
+              <div className="flex items-center gap-2">
+                {!selectionMode ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectionMode(true)}
+                  >
+                    <Square className="h-4 w-4 mr-2" />
+                    Seleccionar
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSelectAll}
+                    >
+                      <CheckSquare className="h-4 w-4 mr-2" />
+                      Seleccionar todos
+                    </Button>
+                    {selectedEmailIds.size > 0 && (
+                      <>
+                        <Badge variant="secondary">
+                          {selectedEmailIds.size} seleccionado(s)
+                        </Badge>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleMarkSelectedAsRead}
+                          disabled={markingAllAsRead}
+                        >
+                          {markingAllAsRead ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <CheckCheck className="h-4 w-4 mr-2" />
+                          )}
+                          Marcar leídos
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={handleDeleteSelected}
+                          disabled={deletingSelected}
+                        >
+                          {deletingSelected ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4 mr-2" />
+                          )}
+                          Eliminar
+                        </Button>
+                      </>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleClearSelection}
+                    >
+                      Cancelar
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
 
           <TabsContent value="inbox" className="mt-4">
             <EmailListView
@@ -479,6 +644,9 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
               onSelectEmail={(id, index) => handleSelectEmail(id, false, index)}
               onRefresh={() => refetch()}
               isRefreshing={isRefetching}
+              selectedIds={selectedEmailIds}
+              onToggleSelect={handleToggleSelect}
+              selectionMode={selectionMode}
             />
           </TabsContent>
 

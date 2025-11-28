@@ -214,7 +214,7 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
       const { data, error } = await supabase.functions.invoke('gmail-api', {
         body: {
           action: 'send',
-          email: 'pedidos@almasa.com.mx',
+          email: 'compras@almasa.com.mx',
           to: orden.proveedores.email,
           subject: `Orden de Compra ${orden.folio} - Abarrotes La Manita`,
           body: htmlBody,
@@ -356,7 +356,7 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
                 <p><strong>Productos:</strong> {orden?.ordenes_compra_detalles?.length || 0} items</p>
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                Se enviará desde: <strong>pedidos@almasa.com.mx</strong>
+                Se enviará desde: <strong>compras@almasa.com.mx</strong>
               </p>
             </div>
             <div className="flex gap-2">

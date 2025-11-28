@@ -28,10 +28,20 @@ interface LicenciaAlerta {
   vencida: boolean;
 }
 
+interface AutorizacionOC {
+  id: string;
+  titulo: string;
+  descripcion: string;
+  created_at: string;
+  orden_compra_id: string;
+  folio?: string;
+}
+
 export interface NotificacionesData {
   alertasCaducidad: ProductoCaducidad[];
   notificacionesStock: NotificacionStockBajo[];
   alertasLicencias: LicenciaAlerta[];
+  autorizacionesOC: AutorizacionOC[];
   totalCount: number;
 }
 
@@ -40,23 +50,41 @@ export const useNotificaciones = () => {
     alertasCaducidad: [],
     notificacionesStock: [],
     alertasLicencias: [],
+    autorizacionesOC: [],
     totalCount: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const checkAdmin = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: roles } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id);
+        setIsAdmin(roles?.some(r => r.role === 'admin') || false);
+      }
+    };
+    checkAdmin();
+  }, []);
 
   const cargarNotificaciones = async () => {
     try {
-      const [caducidad, stock, licencias] = await Promise.all([
+      const [caducidad, stock, licencias, autorizaciones] = await Promise.all([
         cargarAlertasCaducidad(),
         cargarNotificacionesStock(),
         cargarAlertasLicencias(),
+        isAdmin ? cargarAutorizacionesOC() : Promise.resolve([]),
       ]);
 
-      const total = caducidad.length + stock.length + licencias.length;
+      const total = caducidad.length + stock.length + licencias.length + autorizaciones.length;
       setNotificaciones({
         alertasCaducidad: caducidad,
         notificacionesStock: stock,
         alertasLicencias: licencias,
+        autorizacionesOC: autorizaciones,
         totalCount: total,
       });
     } catch (error) {
@@ -143,6 +171,52 @@ export const useNotificaciones = () => {
     }
   };
 
+  const cargarAutorizacionesOC = async (): Promise<AutorizacionOC[]> => {
+    try {
+      const { data, error } = await supabase
+        .from("notificaciones")
+        .select(`
+          id,
+          titulo,
+          descripcion,
+          created_at,
+          orden_compra_id
+        `)
+        .eq("tipo", "autorizacion_oc")
+        .eq("leida", false)
+        .not("orden_compra_id", "is", null)
+        .order("created_at", { ascending: false });
+
+      if (error) return [];
+      
+      // Fetch folio for each OC
+      const autorizaciones: AutorizacionOC[] = [];
+      for (const notif of data || []) {
+        if (notif.orden_compra_id) {
+          const { data: oc } = await supabase
+            .from("ordenes_compra")
+            .select("folio, status")
+            .eq("id", notif.orden_compra_id)
+            .maybeSingle();
+          
+          // Only show if OC is still pending authorization
+          if (oc && oc.status === "pendiente_autorizacion") {
+            autorizaciones.push({
+              ...notif,
+              orden_compra_id: notif.orden_compra_id,
+              folio: oc.folio,
+            });
+          }
+        }
+      }
+      
+      return autorizaciones;
+    } catch (error) {
+      console.error("Error cargando autorizaciones de OC:", error);
+      return [];
+    }
+  };
+
   const cargarAlertasLicencias = async (): Promise<LicenciaAlerta[]> => {
     try {
       const fechaActual = new Date();
@@ -216,7 +290,7 @@ export const useNotificaciones = () => {
     // Recargar cada 2 minutos
     const interval = setInterval(cargarNotificaciones, 2 * 60 * 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isAdmin]);
 
   const marcarComoLeida = async (notificacionId: string) => {
     try {
@@ -237,6 +311,7 @@ export const useNotificaciones = () => {
   return {
     ...notificaciones,
     loading,
+    isAdmin,
     marcarComoLeida,
     recargar: cargarNotificaciones,
   };

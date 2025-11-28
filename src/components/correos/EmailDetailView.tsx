@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -91,6 +91,24 @@ const EmailDetailView = ({
   const [replyOpen, setReplyOpen] = useState(false);
   const [forwardOpen, setForwardOpen] = useState(false);
   const [downloadingAttachment, setDownloadingAttachment] = useState<string | null>(null);
+
+  // Keyboard navigation with arrow keys
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (replyOpen || forwardOpen) return; // Don't navigate when dialogs are open
+    
+    if (e.key === "ArrowRight" && hasNext && onNavigateNext) {
+      e.preventDefault();
+      onNavigateNext();
+    } else if (e.key === "ArrowLeft" && hasPrev && onNavigatePrev) {
+      e.preventDefault();
+      onNavigatePrev();
+    }
+  }, [hasNext, hasPrev, onNavigateNext, onNavigatePrev, replyOpen, forwardOpen]);
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleKeyDown]);
 
   const extractEmailAddress = (from: string) => {
     const match = from.match(/<([^>]+)>/);

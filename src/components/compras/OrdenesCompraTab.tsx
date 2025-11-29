@@ -29,7 +29,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, Search, MoreVertical, Loader2, Truck, Send, Bell, CalendarCheck, CalendarX } from "lucide-react";
+import { Plus, Trash2, Search, MoreVertical, Loader2, Truck, Send, Bell, CalendarCheck, CalendarX, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -93,6 +93,9 @@ const OrdenesCompraTab = () => {
   const [entregasMultiples, setEntregasMultiples] = useState(false);
   const [bultosPorEntrega, setBultosPorEntrega] = useState("");
   const [entregasProgramadas, setEntregasProgramadas] = useState<EntregaProgramada[]>([]);
+  
+  // Estado para envío de recordatorio
+  const [enviandoRecordatorioId, setEnviandoRecordatorioId] = useState<string | null>(null);
 
   // Function to generate next folio
   const generateNextFolio = async () => {
@@ -698,6 +701,91 @@ const OrdenesCompraTab = () => {
   const totalesOrden = calcularTotalesOrden();
   const cantidadTotalBultos = productosEnOrden.reduce((sum, p) => sum + p.cantidad, 0);
 
+  // Función para enviar recordatorio de confirmación al proveedor
+  const handleEnviarRecordatorio = async (orden: any) => {
+    const proveedorEmail = orden.proveedores?.email;
+    if (!proveedorEmail) {
+      toast({
+        title: "Sin correo",
+        description: "Este proveedor no tiene correo registrado",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Verificar si ya está confirmada
+    if (ordenesConfirmadas.has(orden.id)) {
+      toast({
+        title: "Ya confirmada",
+        description: "Esta orden ya fue confirmada por el proveedor",
+      });
+      return;
+    }
+
+    setEnviandoRecordatorioId(orden.id);
+
+    try {
+      const confirmUrl = `https://vrcyjmfpteoccqdmdmqn.supabase.co/functions/v1/confirmar-oc?id=${orden.id}&action=confirm`;
+      const trackingPixelUrl = `https://vrcyjmfpteoccqdmdmqn.supabase.co/functions/v1/confirmar-oc?id=${orden.id}&action=track`;
+
+      const htmlBody = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #f57c00;">⏰ Recordatorio: Orden de Compra Pendiente de Confirmar</h2>
+          <p>Estimado proveedor <strong>${orden.proveedores?.nombre}</strong>,</p>
+          <p>Le recordamos que la siguiente orden de compra está <strong>pendiente de confirmación</strong>:</p>
+          
+          <div style="background-color: #fff3e0; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f57c00;">
+            <p style="margin: 5px 0;"><strong>Folio:</strong> ${orden.folio}</p>
+            <p style="margin: 5px 0;"><strong>Total:</strong> $${orden.total?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+            <p style="margin: 5px 0;"><strong>Fecha de la orden:</strong> ${new Date(orden.fecha_orden).toLocaleDateString('es-MX')}</p>
+          </div>
+
+          <p>Por favor confirme la recepción de esta orden haciendo clic en el siguiente botón:</p>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${confirmUrl}" 
+               style="display: inline-block; background-color: #2e7d32; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+              ✓ Confirmar Recepción de Orden
+            </a>
+          </div>
+
+          <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;" />
+          <p style="color: #666; font-size: 12px;">
+            Este es un recordatorio automático del sistema de Abarrotes La Manita.<br/>
+            Si ya confirmó esta orden, por favor ignore este mensaje.
+          </p>
+          <img src="${trackingPixelUrl}" width="1" height="1" style="display:none;" alt="" />
+        </div>
+      `;
+
+      const { error } = await supabase.functions.invoke('gmail-api', {
+        body: {
+          action: 'send',
+          email: 'compras@almasa.com.mx',
+          to: proveedorEmail,
+          subject: `[RECORDATORIO] Orden de Compra ${orden.folio} - Pendiente de Confirmar`,
+          body: htmlBody,
+        },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Recordatorio enviado",
+        description: `Se envió recordatorio a ${proveedorEmail}`,
+      });
+    } catch (error: any) {
+      console.error('Error sending reminder:', error);
+      toast({
+        title: "Error al enviar",
+        description: error.message || "No se pudo enviar el recordatorio",
+        variant: "destructive",
+      });
+    } finally {
+      setEnviandoRecordatorioId(null);
+    }
+  };
+
   const filteredOrdenes = ordenes.filter(
     (orden) =>
       orden.folio.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -873,13 +961,15 @@ const OrdenesCompraTab = () => {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          title="Notificar"
-                          onClick={() => {
-                            setOrdenSeleccionada(orden);
-                            setAccionesDialogOpen(true);
-                          }}
+                          title="Enviar recordatorio de confirmación"
+                          disabled={enviandoRecordatorioId === orden.id || tieneConfirmacion || !orden.proveedores?.email}
+                          onClick={() => handleEnviarRecordatorio(orden)}
                         >
-                          <Bell className="h-4 w-4" />
+                          {enviandoRecordatorioId === orden.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Bell className="h-4 w-4" />
+                          )}
                         </Button>
                         <Button
                           variant="ghost"

@@ -324,6 +324,11 @@ const RegistrarRecepcionDialog = ({ open, onOpenChange, orden }: RegistrarRecepc
           ).join(", ");
 
           try {
+            // Parse date without timezone conversion
+            const [year, month, day] = fechaNuevaEntrega.split('-').map(Number);
+            const fechaLocal = new Date(year, month - 1, day);
+            const fechaFormateada = fechaLocal.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+            
             await supabase.functions.invoke("gmail-api", {
               body: {
                 action: "send",
@@ -334,7 +339,7 @@ const RegistrarRecepcionDialog = ({ open, onOpenChange, orden }: RegistrarRecepc
                   <h2>Entrega Parcial Registrada</h2>
                   <p>Le informamos que hemos recibido una entrega parcial de la orden <strong>${orden.folio}</strong>.</p>
                   <p><strong>Productos pendientes:</strong> ${productosInfo}</p>
-                  <p><strong>Nueva fecha programada:</strong> ${new Date(fechaNuevaEntrega).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                  <p><strong>Nueva fecha programada:</strong> ${fechaFormateada}</p>
                   ${notasRecepcion ? `<p><strong>Notas:</strong> ${notasRecepcion}</p>` : ''}
                   <p>Saludos cordiales,<br>Abarrotes La Manita</p>
                 `
@@ -350,11 +355,19 @@ const RegistrarRecepcionDialog = ({ open, onOpenChange, orden }: RegistrarRecepc
       queryClient.invalidateQueries({ queryKey: ["ordenes_calendario"] });
       queryClient.invalidateQueries({ queryKey: ["entregas-oc", orden?.id] });
 
+      // Parse date for toast message without timezone conversion
+      let fechaToast = fechaNuevaEntrega;
+      if (fechaNuevaEntrega) {
+        const [year, month, day] = fechaNuevaEntrega.split('-').map(Number);
+        const fechaLocal = new Date(year, month - 1, day);
+        fechaToast = fechaLocal.toLocaleDateString('es-MX');
+      }
+
       toast({
         title: todoRecibido ? "Orden completada" : "Recepción parcial registrada",
         description: todoRecibido 
           ? "Toda la mercancía ha sido recibida" 
-          : `Queda mercancía pendiente para el ${new Date(fechaNuevaEntrega).toLocaleDateString('es-MX')}`,
+          : `Queda mercancía pendiente para el ${fechaToast}`,
       });
 
       onOpenChange(false);

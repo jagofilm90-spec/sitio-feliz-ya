@@ -162,7 +162,10 @@ const ConvertirEntregasMultiplesDialog = ({ open, onOpenChange, orden }: Convert
       if (orden?.proveedores?.email) {
         try {
           const entregasHtml = entregas.map((e, i) => {
-            const fecha = new Date(e.fecha_programada).toLocaleDateString("es-MX", {
+            // Parse date without timezone conversion to avoid shifting dates
+            const [year, month, day] = e.fecha_programada.split('-').map(Number);
+            const fechaLocal = new Date(year, month - 1, day);
+            const fecha = fechaLocal.toLocaleDateString("es-MX", {
               weekday: "long",
               day: "numeric",
               month: "long",

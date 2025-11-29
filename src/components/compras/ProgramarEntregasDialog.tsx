@@ -86,10 +86,13 @@ const ProgramarEntregasDialog = ({ open, onOpenChange, orden }: ProgramarEntrega
       if (orden?.proveedores?.email) {
         const entregasNuevas = fechasParaActualizar.map(([entregaId, fecha]) => {
           const entrega = entregas.find((e: any) => e.id === entregaId);
+          // Parse date without timezone conversion
+          const [year, month, day] = fecha.split('-').map(Number);
+          const fechaLocal = new Date(year, month - 1, day);
           return {
             numero: entrega?.numero_entrega,
             bultos: entrega?.cantidad_bultos,
-            fecha: new Date(fecha).toLocaleDateString("es-MX", {
+            fecha: fechaLocal.toLocaleDateString("es-MX", {
               weekday: "long",
               day: "numeric",
               month: "long",

@@ -178,7 +178,8 @@ const CalendarioEntregasTab = () => {
     return eachDayOfInterval({ start: inicio, end: fin });
   }, [mesActual]);
 
-  const diasSemana = ["D", "L", "M", "M", "J", "V", "S"];
+  // Spanish locale starts week on Monday, so headers must match: Lunes, Martes, Miércoles, Jueves, Viernes, Sábado, Domingo
+  const diasSemana = ["L", "M", "M", "J", "V", "S", "D"];
 
   const getEntregasDelDia = (dia: Date) => {
     const key = format(dia, "yyyy-MM-dd");

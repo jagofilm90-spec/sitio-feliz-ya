@@ -121,7 +121,7 @@ const EntregasPopover = ({ orden, entregas, entregasStatus }: EntregasPopoverPro
             <div style="text-align: center; margin: 30px 0;">
               <a href="${confirmUrl}" 
                  style="background: #22c55e; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
-                ✓ Confirmar ${isDateChange ? "Cambio de Fecha" : "Entregas Programadas"}
+                ✓ Confirmar ${isDateChange ? "Cambio de Fecha de Entrega" : "Fecha de Entrega"}
               </a>
             </div>
 

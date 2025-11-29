@@ -170,12 +170,14 @@ const EntregasPopover = ({ orden, entregas, entregasStatus }: EntregasPopoverPro
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Badge 
-          variant={badgeVariant} 
-          className={`gap-1 ${badgeClassName}`}
-        >
-          {badgeContent}
-        </Badge>
+        <button type="button" className="inline-flex">
+          <Badge 
+            variant={badgeVariant} 
+            className={`gap-1 ${badgeClassName}`}
+          >
+            {badgeContent}
+          </Badge>
+        </button>
       </PopoverTrigger>
       <PopoverContent className="w-80 p-3" align="start">
         <div className="space-y-3">

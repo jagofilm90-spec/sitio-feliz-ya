@@ -178,14 +178,29 @@ const OrdenesCompraTab = () => {
           ordenes_compra_detalles (
             *,
             productos (nombre, codigo)
-          ),
-          ordenes_compra_confirmaciones (id, confirmado_en)
+          )
         `)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
     },
   });
+
+  // Fetch confirmaciones separately to avoid RLS issues with embedded selects
+  const { data: confirmaciones = [] } = useQuery({
+    queryKey: ["ordenes_compra_confirmaciones"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ordenes_compra_confirmaciones")
+        .select("orden_compra_id, confirmado_en")
+        .not("confirmado_en", "is", null);
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Create a Set of order IDs that have confirmations for quick lookup
+  const ordenesConfirmadas = new Set(confirmaciones.map(c => c.orden_compra_id));
 
   // Handle ?aprobar= URL parameter to auto-open order for authorization
   useEffect(() => {
@@ -738,8 +753,7 @@ const OrdenesCompraTab = () => {
               </TableRow>
             ) : (
               filteredOrdenes.map((orden) => {
-                const tieneConfirmacion = orden.ordenes_compra_confirmaciones && 
-                  orden.ordenes_compra_confirmaciones.length > 0;
+                const tieneConfirmacion = ordenesConfirmadas.has(orden.id);
                 return (
                   <TableRow key={orden.id}>
                     <TableCell className="font-medium">{orden.folio}</TableCell>

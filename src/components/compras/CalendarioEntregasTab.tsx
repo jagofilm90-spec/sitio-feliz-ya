@@ -132,12 +132,19 @@ const CalendarioEntregasTab = () => {
     })),
   ], [entregasProgramadas, ordenesSimples]);
 
+  // Helper to parse date string without timezone issues
+  const parseDateLocal = (dateStr: string): Date => {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+
   // Map of dates with deliveries
   const entregasPorFecha = useMemo(() => {
     const mapa: Record<string, typeof todasLasEntregas> = {};
     todasLasEntregas.forEach((entrega) => {
       if (entrega.fecha) {
-        const fechaKey = format(new Date(entrega.fecha), "yyyy-MM-dd");
+        // Use the date string directly as key to avoid timezone issues
+        const fechaKey = entrega.fecha.split('T')[0]; // Handle both "2025-12-01" and "2025-12-01T00:00:00"
         if (!mapa[fechaKey]) {
           mapa[fechaKey] = [];
         }
@@ -151,7 +158,11 @@ const CalendarioEntregasTab = () => {
     const grupos: Record<string, typeof todasLasEntregas> = {};
     todasLasEntregas.forEach((entrega) => {
       if (entrega.fecha) {
-        const fecha = new Date(entrega.fecha).toLocaleDateString(
+        // Parse date without timezone conversion
+        const dateStr = entrega.fecha.split('T')[0];
+        const [year, month, day] = dateStr.split('-').map(Number);
+        const fechaLocal = new Date(year, month - 1, day);
+        const fecha = fechaLocal.toLocaleDateString(
           "es-MX",
           {
             weekday: "long",

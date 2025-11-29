@@ -135,6 +135,10 @@ const EntregasPopover = ({ orden, entregas, entregasStatus }: EntregasPopoverPro
   const handleSave = async (entregaId: string) => {
     if (!editingFecha) return;
     
+    // Check if this is a NEW date (was previously null) - only then we notify
+    const entregaActual = entregasOrden.find(e => e.id === entregaId);
+    const esNuevaProgramacion = !entregaActual?.fecha_programada;
+    
     setSaving(true);
     try {
       const { error } = await supabase
@@ -153,17 +157,19 @@ const EntregasPopover = ({ orden, entregas, entregasStatus }: EntregasPopoverPro
       await queryClient.invalidateQueries({ queryKey: ["ordenes_compra_entregas_all"] });
       await queryClient.invalidateQueries({ queryKey: ["entregas_calendario"] });
 
-      // Get updated entregas to find all scheduled ones
-      const { data: updatedEntregas } = await supabase
-        .from("ordenes_compra_entregas")
-        .select("*")
-        .eq("orden_compra_id", orden.id)
-        .not("fecha_programada", "is", null)
-        .eq("status", "pendiente");
+      // Only send notification if this was a NEW scheduling (not a date change)
+      if (esNuevaProgramacion) {
+        // Get all newly scheduled entregas (pendiente status with dates)
+        const { data: updatedEntregas } = await supabase
+          .from("ordenes_compra_entregas")
+          .select("*")
+          .eq("orden_compra_id", orden.id)
+          .not("fecha_programada", "is", null)
+          .eq("status", "pendiente");
 
-      // Send notification email for newly scheduled deliveries
-      if (updatedEntregas && updatedEntregas.length > 0) {
-        await sendDeliveryNotificationEmail(updatedEntregas);
+        if (updatedEntregas && updatedEntregas.length > 0) {
+          await sendDeliveryNotificationEmail(updatedEntregas);
+        }
       }
 
       setEditingId(null);

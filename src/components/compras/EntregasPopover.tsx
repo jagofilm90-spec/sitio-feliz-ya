@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { CalendarCheck, CalendarX, Check, Loader2, Pencil, X } from "lucide-react";
+import { CalendarCheck, CalendarX, Check, Loader2, Pencil, X, Mail } from "lucide-react";
 
 interface Entrega {
   id: string;
@@ -39,6 +39,99 @@ const EntregasPopover = ({ orden, entregas, entregasStatus }: EntregasPopoverPro
   // For single delivery orders
   const isSingleDelivery = !orden.entregas_multiples;
 
+  // Send notification email to supplier for scheduled deliveries
+  const sendDeliveryNotificationEmail = async (scheduledEntregas: Entrega[]) => {
+    if (!orden.proveedores?.email) {
+      console.log("No supplier email available");
+      return;
+    }
+
+    try {
+      // Get gmail account for sending
+      const { data: gmailCuentas } = await supabase
+        .from("gmail_cuentas")
+        .select("id, email")
+        .eq("proposito", "compras")
+        .eq("activo", true)
+        .limit(1);
+
+      const gmailCuenta = gmailCuentas?.[0];
+      if (!gmailCuenta) {
+        console.log("No gmail account configured for compras");
+        return;
+      }
+
+      const totalEntregas = entregasOrden.length;
+      const programadasCount = scheduledEntregas.length;
+      const entregasText = scheduledEntregas
+        .map(e => `Entrega #${e.numero_entrega}: ${format(new Date(e.fecha_programada!), "dd/MM/yyyy", { locale: es })} (${e.cantidad_bultos} bultos)`)
+        .join("<br>");
+
+      const isPartial = programadasCount < totalEntregas;
+      const subject = isPartial 
+        ? `[ALMASA] Programación de ${programadasCount} de ${totalEntregas} entregas - ${orden.folio}`
+        : `[ALMASA] Programación de entregas - ${orden.folio}`;
+
+      const confirmUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/confirmar-oc?id=${orden.id}&action=confirm-entregas&entregas=${scheduledEntregas.map(e => e.id).join(",")}`;
+
+      const htmlBody = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: #B22234; color: white; padding: 20px; text-align: center;">
+            <h1 style="margin: 0;">Abarrotes La Manita</h1>
+          </div>
+          <div style="padding: 30px; background: #f9f9f9;">
+            <p>Estimado proveedor,</p>
+            <p>Le informamos que <strong>ALMASA</strong> ha programado ${isPartial ? `${programadasCount} de ${totalEntregas}` : "todas las"} entregas de la siguiente orden de compra:</p>
+            
+            <div style="background: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin: 20px 0;">
+              <h2 style="color: #B22234; margin-top: 0;">Orden de Compra: ${orden.folio}</h2>
+              <p><strong>Entregas programadas:</strong></p>
+              <div style="background: #f5f5f5; padding: 15px; border-radius: 4px;">
+                ${entregasText}
+              </div>
+            </div>
+
+            <p>Por favor confirme la recepción de esta programación haciendo clic en el siguiente botón:</p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${confirmUrl}" 
+                 style="background: #22c55e; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                ✓ Confirmar Entregas Programadas
+              </a>
+            </div>
+
+            <p style="color: #666; font-size: 14px;">
+              Al hacer clic en el botón, usted confirma que ha recibido y acepta las fechas de entrega programadas.
+            </p>
+          </div>
+          <div style="background: #333; color: white; padding: 15px; text-align: center; font-size: 12px;">
+            <p style="margin: 0;">Abarrotes La Manita SA de CV</p>
+          </div>
+        </div>
+      `;
+
+      const { error } = await supabase.functions.invoke("gmail-api", {
+        body: {
+          action: "send",
+          gmailCuentaId: gmailCuenta.id,
+          to: orden.proveedores.email,
+          subject,
+          htmlBody,
+        },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Notificación enviada",
+        description: `Se notificó al proveedor sobre ${programadasCount} entrega(s) programada(s)`,
+      });
+    } catch (error: any) {
+      console.error("Error sending delivery notification:", error);
+      // Don't show error toast - the date was saved successfully
+    }
+  };
+
   const handleSave = async (entregaId: string) => {
     if (!editingFecha) return;
     
@@ -54,6 +147,51 @@ const EntregasPopover = ({ orden, entregas, entregasStatus }: EntregasPopoverPro
       toast({
         title: "Fecha actualizada",
         description: "La fecha de entrega se actualizó correctamente",
+      });
+
+      // Refresh data
+      await queryClient.invalidateQueries({ queryKey: ["ordenes_compra_entregas_all"] });
+      await queryClient.invalidateQueries({ queryKey: ["entregas_calendario"] });
+
+      // Get updated entregas to find all scheduled ones
+      const { data: updatedEntregas } = await supabase
+        .from("ordenes_compra_entregas")
+        .select("*")
+        .eq("orden_compra_id", orden.id)
+        .not("fecha_programada", "is", null)
+        .eq("status", "pendiente");
+
+      // Send notification email for newly scheduled deliveries
+      if (updatedEntregas && updatedEntregas.length > 0) {
+        await sendDeliveryNotificationEmail(updatedEntregas);
+      }
+
+      setEditingId(null);
+      setEditingFecha("");
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleClearDate = async (entregaId: string) => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("ordenes_compra_entregas")
+        .update({ fecha_programada: null })
+        .eq("id", entregaId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Fecha eliminada",
+        description: "La fecha de entrega se eliminó correctamente",
       });
 
       queryClient.invalidateQueries({ queryKey: ["ordenes_compra_entregas_all"] });
@@ -72,20 +210,20 @@ const EntregasPopover = ({ orden, entregas, entregasStatus }: EntregasPopoverPro
   };
 
   const handleSaveSingleDelivery = async () => {
-    if (!editingFecha) return;
-    
     setSaving(true);
     try {
       const { error } = await supabase
         .from("ordenes_compra")
-        .update({ fecha_entrega_programada: editingFecha })
+        .update({ fecha_entrega_programada: editingFecha || null })
         .eq("id", orden.id);
 
       if (error) throw error;
 
       toast({
-        title: "Fecha actualizada",
-        description: "La fecha de entrega se actualizó correctamente",
+        title: editingFecha ? "Fecha actualizada" : "Fecha eliminada",
+        description: editingFecha 
+          ? "La fecha de entrega se actualizó correctamente"
+          : "La fecha de entrega se eliminó correctamente",
       });
 
       queryClient.invalidateQueries({ queryKey: ["ordenes_compra"] });
@@ -190,41 +328,41 @@ const EntregasPopover = ({ orden, entregas, entregasStatus }: EntregasPopoverPro
             <div className="flex items-center justify-between p-2 rounded-md bg-muted/50">
               <div className="flex-1">
                 <div className="text-sm font-medium">Entrega única</div>
-                      {editingId === "single" ? (
-                        <div className="flex items-center gap-2 mt-1">
-                          <Input
-                            type="date"
-                            value={editingFecha}
-                            onChange={(e) => setEditingFecha(e.target.value)}
-                            className="h-8 text-sm"
-                          />
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8"
-                            onClick={handleSaveSingleDelivery}
-                            disabled={saving}
-                          >
-                            {saving ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Check className="h-4 w-4 text-green-600" />
-                            )}
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8"
-                            onClick={() => {
-                              setEditingFecha("");
-                              handleSaveSingleDelivery();
-                            }}
-                            disabled={saving}
-                          >
-                            <X className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
+                {editingId === "single" ? (
+                  <div className="flex items-center gap-2 mt-1">
+                    <Input
+                      type="date"
+                      value={editingFecha}
+                      onChange={(e) => setEditingFecha(e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8"
+                      onClick={handleSaveSingleDelivery}
+                      disabled={saving}
+                    >
+                      {saving ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
+                        <Check className="h-4 w-4 text-green-600" />
+                      )}
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8"
+                      onClick={() => {
+                        setEditingFecha("");
+                        handleSaveSingleDelivery();
+                      }}
+                      disabled={saving}
+                    >
+                      <X className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                ) : (
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-sm text-muted-foreground">
                       {orden.fecha_entrega_programada 
@@ -257,69 +395,50 @@ const EntregasPopover = ({ orden, entregas, entregasStatus }: EntregasPopoverPro
                     className="flex items-center justify-between p-2 rounded-md bg-muted/50"
                   >
                     <div className="flex-1">
-                      <div className="text-sm font-medium">
+                      <div className="text-sm font-medium flex items-center gap-2">
                         Entrega #{entrega.numero_entrega}
-                        <span className="font-normal text-muted-foreground ml-2">
+                        <span className="font-normal text-muted-foreground">
                           ({entrega.cantidad_bultos} bultos)
                         </span>
+                        {entrega.status === "confirmado" && (
+                          <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                            <Check className="h-3 w-3 mr-1" />
+                            Confirmada
+                          </Badge>
+                        )}
                       </div>
-                        {editingId === entrega.id ? (
-                          <div className="flex items-center gap-2 mt-1">
-                            <Input
-                              type="date"
-                              value={editingFecha}
-                              onChange={(e) => setEditingFecha(e.target.value)}
-                              className="h-8 text-sm"
-                            />
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8"
-                              onClick={() => handleSave(entrega.id)}
-                              disabled={saving}
-                            >
-                              {saving ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Check className="h-4 w-4 text-green-600" />
-                              )}
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8"
-                              onClick={async () => {
-                                setSaving(true);
-                                try {
-                                  const { error } = await supabase
-                                    .from("ordenes_compra_entregas")
-                                    .update({ fecha_programada: null })
-                                    .eq("id", entrega.id);
-                                  if (error) throw error;
-                                  toast({
-                                    title: "Fecha eliminada",
-                                    description: "La fecha de entrega se eliminó correctamente",
-                                  });
-                                  queryClient.invalidateQueries({ queryKey: ["ordenes_compra_entregas_all"] });
-                                  queryClient.invalidateQueries({ queryKey: ["entregas_calendario"] });
-                                  setEditingId(null);
-                                  setEditingFecha("");
-                                } catch (error: any) {
-                                  toast({
-                                    title: "Error",
-                                    description: error.message,
-                                    variant: "destructive",
-                                  });
-                                } finally {
-                                  setSaving(false);
-                                }
-                              }}
-                              disabled={saving}
-                            >
-                              <X className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
-                        ) : (
+                      {editingId === entrega.id ? (
+                        <div className="flex items-center gap-2 mt-1">
+                          <Input
+                            type="date"
+                            value={editingFecha}
+                            onChange={(e) => setEditingFecha(e.target.value)}
+                            className="h-8 text-sm"
+                          />
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={() => handleSave(entrega.id)}
+                            disabled={saving}
+                          >
+                            {saving ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Check className="h-4 w-4 text-green-600" />
+                            )}
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={() => handleClearDate(entrega.id)}
+                            disabled={saving}
+                          >
+                            <X className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      ) : (
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-sm text-muted-foreground">
                             {entrega.fecha_programada 
@@ -351,6 +470,13 @@ const EntregasPopover = ({ orden, entregas, entregasStatus }: EntregasPopoverPro
           ) : (
             <div className="text-sm text-muted-foreground py-2">
               No hay entregas registradas
+            </div>
+          )}
+
+          {!isSingleDelivery && orden.proveedores?.email && (
+            <div className="text-xs text-muted-foreground pt-2 border-t flex items-center gap-1">
+              <Mail className="h-3 w-3" />
+              Al guardar fechas se notificará automáticamente al proveedor
             </div>
           )}
         </div>

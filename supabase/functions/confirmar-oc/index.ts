@@ -15,7 +15,8 @@ serve(async (req: Request) => {
   try {
     const url = new URL(req.url);
     const ordenId = url.searchParams.get("id");
-    const action = url.searchParams.get("action"); // "confirm" or "track" (for pixel tracking)
+    const action = url.searchParams.get("action"); // "confirm", "track", or "confirm-entregas"
+    const entregaIds = url.searchParams.get("entregas"); // comma-separated entrega IDs
     
     if (!ordenId) {
       return new Response("ID de orden no proporcionado", { status: 400 });
@@ -55,7 +56,96 @@ serve(async (req: Request) => {
       });
     }
 
-    // Confirmation button clicked
+    // Get order details
+    const { data: orden, error: ordenError } = await supabase
+      .from("ordenes_compra")
+      .select("folio, proveedores(nombre)")
+      .eq("id", ordenId)
+      .single();
+
+    if (ordenError || !orden) {
+      console.error("Order not found:", ordenError);
+      return new Response(generateHtmlPage(
+        "Error",
+        "No se encontró la orden de compra.",
+        "Por favor contacte al proveedor.",
+        "#ef4444"
+      ), {
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      });
+    }
+
+    // Handle delivery-specific confirmation
+    if (action === "confirm-entregas" && entregaIds) {
+      console.log(`Confirming deliveries for OC: ${ordenId}, entregas: ${entregaIds}`);
+      
+      const ids = entregaIds.split(",");
+      
+      // Get the deliveries to confirm
+      const { data: entregas } = await supabase
+        .from("ordenes_compra_entregas")
+        .select("id, numero_entrega, fecha_programada, status")
+        .in("id", ids);
+
+      if (!entregas || entregas.length === 0) {
+        return new Response(generateHtmlPage(
+          "Error",
+          "No se encontraron las entregas especificadas.",
+          "Por favor contacte al proveedor.",
+          "#ef4444"
+        ), {
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      }
+
+      // Check if already confirmed
+      const alreadyConfirmed = entregas.filter(e => e.status === "confirmado");
+      if (alreadyConfirmed.length === entregas.length) {
+        return new Response(generateHtmlPage(
+          "Ya Confirmadas",
+          `Las entregas de la orden ${orden.folio} ya fueron confirmadas anteriormente.`,
+          `Total entregas confirmadas: ${alreadyConfirmed.length}`,
+          "#f59e0b"
+        ), {
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      }
+
+      // Update delivery status to confirmed
+      const { error: updateError } = await supabase
+        .from("ordenes_compra_entregas")
+        .update({ status: "confirmado" })
+        .in("id", ids);
+
+      if (updateError) {
+        console.error("Error updating deliveries:", updateError);
+        throw updateError;
+      }
+
+      // Create notification for the user
+      const entregasText = entregas.map(e => `#${e.numero_entrega}`).join(", ");
+      await supabase
+        .from("notificaciones")
+        .insert({
+          tipo: "entrega_confirmada",
+          titulo: `Entregas confirmadas: ${orden.folio}`,
+          descripcion: `El proveedor confirmó las entregas ${entregasText} de la orden ${orden.folio}`,
+          orden_compra_id: ordenId,
+          leida: false,
+        });
+
+      // Return success page
+      return new Response(generateHtmlPage(
+        "¡Entregas Confirmadas!",
+        `Gracias por confirmar las entregas ${entregasText} de la Orden de Compra ${orden.folio}`,
+        `Abarrotes La Manita ha sido notificado de su confirmación.`,
+        "#22c55e"
+      ), {
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      });
+    }
+
+    // Standard order confirmation (legacy)
     console.log(`Confirmation received for OC: ${ordenId}`);
 
     // Check if already confirmed
@@ -73,25 +163,6 @@ serve(async (req: Request) => {
         "Esta orden de compra ya fue confirmada anteriormente.",
         `Confirmada el: ${new Date(existing.confirmado_en).toLocaleString("es-MX")}`,
         "#f59e0b"
-      ), {
-        headers: { "Content-Type": "text/html; charset=utf-8" },
-      });
-    }
-
-    // Get order details
-    const { data: orden, error: ordenError } = await supabase
-      .from("ordenes_compra")
-      .select("folio, proveedores(nombre)")
-      .eq("id", ordenId)
-      .single();
-
-    if (ordenError || !orden) {
-      console.error("Order not found:", ordenError);
-      return new Response(generateHtmlPage(
-        "Error",
-        "No se encontró la orden de compra.",
-        "Por favor contacte al proveedor.",
-        "#ef4444"
       ), {
         headers: { "Content-Type": "text/html; charset=utf-8" },
       });

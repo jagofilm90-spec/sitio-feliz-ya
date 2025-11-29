@@ -339,6 +339,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "cotizaciones_gmail_cuenta_id_fkey"
+            columns: ["gmail_cuenta_id"]
+            isOneToOne: false
+            referencedRelation: "gmail_cuentas_segura"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "cotizaciones_pedido_id_fkey"
             columns: ["pedido_id"]
             isOneToOne: false
@@ -537,6 +544,13 @@ export type Database = {
             referencedRelation: "empleados"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "empleados_documentos_empleado_id_fkey"
+            columns: ["empleado_id"]
+            isOneToOne: false
+            referencedRelation: "empleados_vista_segura"
+            referencedColumns: ["id"]
+          },
         ]
       }
       empleados_documentos_pendientes: {
@@ -567,6 +581,13 @@ export type Database = {
             columns: ["empleado_id"]
             isOneToOne: false
             referencedRelation: "empleados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "empleados_documentos_pendientes_empleado_id_fkey"
+            columns: ["empleado_id"]
+            isOneToOne: false
+            referencedRelation: "empleados_vista_segura"
             referencedColumns: ["id"]
           },
         ]
@@ -734,6 +755,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "gmail_auditoria_gmail_cuenta_id_fkey"
+            columns: ["gmail_cuenta_id"]
+            isOneToOne: false
+            referencedRelation: "gmail_cuentas_segura"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "gmail_auditoria_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
@@ -777,6 +805,13 @@ export type Database = {
             columns: ["gmail_cuenta_id"]
             isOneToOne: false
             referencedRelation: "gmail_cuentas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gmail_cuenta_permisos_gmail_cuenta_id_fkey"
+            columns: ["gmail_cuenta_id"]
+            isOneToOne: false
+            referencedRelation: "gmail_cuentas_segura"
             referencedColumns: ["id"]
           },
           {
@@ -858,6 +893,13 @@ export type Database = {
             columns: ["gmail_cuenta_id"]
             isOneToOne: true
             referencedRelation: "gmail_cuentas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gmail_firmas_gmail_cuenta_id_fkey"
+            columns: ["gmail_cuenta_id"]
+            isOneToOne: true
+            referencedRelation: "gmail_cuentas_segura"
             referencedColumns: ["id"]
           },
         ]
@@ -1113,6 +1155,13 @@ export type Database = {
             columns: ["empleado_id"]
             isOneToOne: false
             referencedRelation: "empleados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notificaciones_empleado_id_fkey"
+            columns: ["empleado_id"]
+            isOneToOne: false
+            referencedRelation: "empleados_vista_segura"
             referencedColumns: ["id"]
           },
           {
@@ -1913,7 +1962,147 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      empleados_vista_segura: {
+        Row: {
+          activo: boolean | null
+          clabe_interbancaria: string | null
+          contacto_emergencia_nombre: string | null
+          contacto_emergencia_telefono: string | null
+          created_at: string | null
+          cuenta_bancaria: string | null
+          curp: string | null
+          direccion: string | null
+          email: string | null
+          estado_civil: string | null
+          fecha_baja: string | null
+          fecha_ingreso: string | null
+          fecha_nacimiento: string | null
+          id: string | null
+          motivo_baja: string | null
+          nivel_estudios: string | null
+          nombre: string | null
+          nombre_completo: string | null
+          notas: string | null
+          numero_dependientes: number | null
+          numero_seguro_social: string | null
+          periodo_pago: string | null
+          primer_apellido: string | null
+          puesto: string | null
+          rfc: string | null
+          segundo_apellido: string | null
+          sueldo_bruto: number | null
+          telefono: string | null
+          tipo_sangre: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          activo?: boolean | null
+          clabe_interbancaria?: never
+          contacto_emergencia_nombre?: never
+          contacto_emergencia_telefono?: never
+          created_at?: string | null
+          cuenta_bancaria?: never
+          curp?: never
+          direccion?: never
+          email?: string | null
+          estado_civil?: never
+          fecha_baja?: never
+          fecha_ingreso?: string | null
+          fecha_nacimiento?: never
+          id?: string | null
+          motivo_baja?: never
+          nivel_estudios?: never
+          nombre?: string | null
+          nombre_completo?: string | null
+          notas?: never
+          numero_dependientes?: never
+          numero_seguro_social?: never
+          periodo_pago?: never
+          primer_apellido?: string | null
+          puesto?: string | null
+          rfc?: never
+          segundo_apellido?: string | null
+          sueldo_bruto?: never
+          telefono?: string | null
+          tipo_sangre?: never
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          activo?: boolean | null
+          clabe_interbancaria?: never
+          contacto_emergencia_nombre?: never
+          contacto_emergencia_telefono?: never
+          created_at?: string | null
+          cuenta_bancaria?: never
+          curp?: never
+          direccion?: never
+          email?: string | null
+          estado_civil?: never
+          fecha_baja?: never
+          fecha_ingreso?: string | null
+          fecha_nacimiento?: never
+          id?: string | null
+          motivo_baja?: never
+          nivel_estudios?: never
+          nombre?: string | null
+          nombre_completo?: string | null
+          notas?: never
+          numero_dependientes?: never
+          numero_seguro_social?: never
+          periodo_pago?: never
+          primer_apellido?: string | null
+          puesto?: string | null
+          rfc?: never
+          segundo_apellido?: string | null
+          sueldo_bruto?: never
+          telefono?: string | null
+          tipo_sangre?: never
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      gmail_cuentas_segura: {
+        Row: {
+          access_token: string | null
+          activo: boolean | null
+          created_at: string | null
+          email: string | null
+          id: string | null
+          nombre: string | null
+          proposito: string | null
+          refresh_token: string | null
+          token_expires_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          access_token?: never
+          activo?: boolean | null
+          created_at?: string | null
+          email?: string | null
+          id?: string | null
+          nombre?: string | null
+          proposito?: string | null
+          refresh_token?: never
+          token_expires_at?: never
+          updated_at?: string | null
+        }
+        Update: {
+          access_token?: never
+          activo?: boolean | null
+          created_at?: string | null
+          email?: string | null
+          id?: string | null
+          nombre?: string | null
+          proposito?: string | null
+          refresh_token?: never
+          token_expires_at?: never
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       es_participante_conversacion: {
@@ -1924,6 +2113,14 @@ export type Database = {
       generar_folio_orden_compra: { Args: never; Returns: string }
       generar_notificaciones_fumigacion: { Args: never; Returns: undefined }
       get_cliente_id_for_user: { Args: { user_uuid: string }; Returns: string }
+      get_user_roles: {
+        Args: never
+        Returns: Database["public"]["Enums"]["app_role"][]
+      }
+      has_any_role: {
+        Args: { _roles: Database["public"]["Enums"]["app_role"][] }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

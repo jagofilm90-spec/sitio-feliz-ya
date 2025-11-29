@@ -40,7 +40,7 @@ const EntregasPopover = ({ orden, entregas, entregasStatus }: EntregasPopoverPro
   const isSingleDelivery = !orden.entregas_multiples;
 
   // Send notification email to supplier for scheduled deliveries
-  const sendDeliveryNotificationEmail = async (scheduledEntregas: Entrega[]) => {
+  const sendDeliveryNotificationEmail = async (scheduledEntregas: Entrega[], isDateChange: boolean = false, oldDate?: string) => {
     if (!orden.proveedores?.email) {
       console.log("No supplier email available");
       return;
@@ -63,14 +63,42 @@ const EntregasPopover = ({ orden, entregas, entregasStatus }: EntregasPopoverPro
 
       const totalEntregas = entregasOrden.length;
       const programadasCount = scheduledEntregas.length;
-      const entregasText = scheduledEntregas
-        .map(e => `Entrega #${e.numero_entrega}: ${format(new Date(e.fecha_programada!), "dd/MM/yyyy", { locale: es })} (${e.cantidad_bultos} bultos)`)
-        .join("<br>");
+      
+      let subject: string;
+      let introText: string;
+      let entregasText: string;
 
-      const isPartial = programadasCount < totalEntregas;
-      const subject = isPartial 
-        ? `[ALMASA] Programación de ${programadasCount} de ${totalEntregas} entregas - ${orden.folio}`
-        : `[ALMASA] Programación de entregas - ${orden.folio}`;
+      if (isDateChange && scheduledEntregas.length === 1 && oldDate) {
+        // Single delivery date change
+        const entrega = scheduledEntregas[0];
+        const oldDateFormatted = format(new Date(oldDate), "dd/MM/yyyy", { locale: es });
+        const newDateFormatted = format(new Date(entrega.fecha_programada!), "dd/MM/yyyy", { locale: es });
+        
+        subject = `[ALMASA] Cambio de fecha de entrega - ${orden.folio}`;
+        introText = `Le informamos que <strong>ALMASA</strong> ha modificado la fecha de entrega #${entrega.numero_entrega} de la orden de compra:`;
+        entregasText = `
+          <p><strong>Fecha anterior:</strong> <span style="text-decoration: line-through; color: #999;">${oldDateFormatted}</span></p>
+          <p><strong>Nueva fecha:</strong> <span style="color: #22c55e; font-weight: bold;">${newDateFormatted}</span></p>
+          <p><strong>Cantidad:</strong> ${entrega.cantidad_bultos} bultos</p>
+        `;
+      } else {
+        // New scheduling (single or multiple)
+        entregasText = scheduledEntregas
+          .map(e => `Entrega #${e.numero_entrega}: ${format(new Date(e.fecha_programada!), "dd/MM/yyyy", { locale: es })} (${e.cantidad_bultos} bultos)`)
+          .join("<br>");
+
+        const isPartial = programadasCount < totalEntregas;
+        subject = isPartial 
+          ? `[ALMASA] Programación de ${programadasCount} de ${totalEntregas} entregas - ${orden.folio}`
+          : `[ALMASA] Programación de entregas - ${orden.folio}`;
+        introText = `Le informamos que <strong>ALMASA</strong> ha programado ${isPartial ? `${programadasCount} de ${totalEntregas}` : "todas las"} entregas de la siguiente orden de compra:`;
+        entregasText = `
+          <p><strong>Entregas programadas:</strong></p>
+          <div style="background: #f5f5f5; padding: 15px; border-radius: 4px;">
+            ${scheduledEntregas.map(e => `Entrega #${e.numero_entrega}: ${format(new Date(e.fecha_programada!), "dd/MM/yyyy", { locale: es })} (${e.cantidad_bultos} bultos)`).join("<br>")}
+          </div>
+        `;
+      }
 
       const confirmUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/confirmar-oc?id=${orden.id}&action=confirm-entregas&entregas=${scheduledEntregas.map(e => e.id).join(",")}`;
 
@@ -81,27 +109,24 @@ const EntregasPopover = ({ orden, entregas, entregasStatus }: EntregasPopoverPro
           </div>
           <div style="padding: 30px; background: #f9f9f9;">
             <p>Estimado proveedor,</p>
-            <p>Le informamos que <strong>ALMASA</strong> ha programado ${isPartial ? `${programadasCount} de ${totalEntregas}` : "todas las"} entregas de la siguiente orden de compra:</p>
+            <p>${introText}</p>
             
             <div style="background: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin: 20px 0;">
               <h2 style="color: #B22234; margin-top: 0;">Orden de Compra: ${orden.folio}</h2>
-              <p><strong>Entregas programadas:</strong></p>
-              <div style="background: #f5f5f5; padding: 15px; border-radius: 4px;">
-                ${entregasText}
-              </div>
+              ${entregasText}
             </div>
 
-            <p>Por favor confirme la recepción de esta programación haciendo clic en el siguiente botón:</p>
+            <p>Por favor confirme la recepción de esta ${isDateChange ? "modificación" : "programación"} haciendo clic en el siguiente botón:</p>
             
             <div style="text-align: center; margin: 30px 0;">
               <a href="${confirmUrl}" 
                  style="background: #22c55e; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
-                ✓ Confirmar Entregas Programadas
+                ✓ Confirmar ${isDateChange ? "Cambio de Fecha" : "Entregas Programadas"}
               </a>
             </div>
 
             <p style="color: #666; font-size: 14px;">
-              Al hacer clic en el botón, usted confirma que ha recibido y acepta las fechas de entrega programadas.
+              Al hacer clic en el botón, usted confirma que ha recibido y acepta ${isDateChange ? "el cambio de fecha" : "las fechas de entrega programadas"}.
             </p>
           </div>
           <div style="background: #333; color: white; padding: 15px; text-align: center; font-size: 12px;">
@@ -123,8 +148,10 @@ const EntregasPopover = ({ orden, entregas, entregasStatus }: EntregasPopoverPro
       if (error) throw error;
 
       toast({
-        title: "Notificación enviada",
-        description: `Se notificó al proveedor sobre ${programadasCount} entrega(s) programada(s)`,
+        title: isDateChange ? "Notificación de cambio enviada" : "Notificación enviada",
+        description: isDateChange 
+          ? "Se notificó al proveedor sobre el cambio de fecha"
+          : `Se notificó al proveedor sobre ${programadasCount} entrega(s) programada(s)`,
       });
     } catch (error: any) {
       console.error("Error sending delivery notification:", error);
@@ -135,15 +162,17 @@ const EntregasPopover = ({ orden, entregas, entregasStatus }: EntregasPopoverPro
   const handleSave = async (entregaId: string) => {
     if (!editingFecha) return;
     
-    // Check if this is a NEW date (was previously null) - only then we notify
+    // Check if this is a NEW date or a DATE CHANGE
     const entregaActual = entregasOrden.find(e => e.id === entregaId);
-    const esNuevaProgramacion = !entregaActual?.fecha_programada;
+    const fechaAnterior = entregaActual?.fecha_programada;
+    const esNuevaProgramacion = !fechaAnterior;
+    const esCambioDeFecha = fechaAnterior && fechaAnterior !== editingFecha;
     
     setSaving(true);
     try {
       const { error } = await supabase
         .from("ordenes_compra_entregas")
-        .update({ fecha_programada: editingFecha })
+        .update({ fecha_programada: editingFecha, status: "pendiente" })
         .eq("id", entregaId);
 
       if (error) throw error;
@@ -157,9 +186,9 @@ const EntregasPopover = ({ orden, entregas, entregasStatus }: EntregasPopoverPro
       await queryClient.invalidateQueries({ queryKey: ["ordenes_compra_entregas_all"] });
       await queryClient.invalidateQueries({ queryKey: ["entregas_calendario"] });
 
-      // Only send notification if this was a NEW scheduling (not a date change)
+      // Send notification based on scenario
       if (esNuevaProgramacion) {
-        // Get all newly scheduled entregas (pendiente status with dates)
+        // New scheduling - get all pending scheduled entregas
         const { data: updatedEntregas } = await supabase
           .from("ordenes_compra_entregas")
           .select("*")
@@ -168,8 +197,12 @@ const EntregasPopover = ({ orden, entregas, entregasStatus }: EntregasPopoverPro
           .eq("status", "pendiente");
 
         if (updatedEntregas && updatedEntregas.length > 0) {
-          await sendDeliveryNotificationEmail(updatedEntregas);
+          await sendDeliveryNotificationEmail(updatedEntregas, false);
         }
+      } else if (esCambioDeFecha) {
+        // Date change - notify supplier of the change
+        const entregaModificada = { ...entregaActual!, fecha_programada: editingFecha };
+        await sendDeliveryNotificationEmail([entregaModificada], true, fechaAnterior);
       }
 
       setEditingId(null);

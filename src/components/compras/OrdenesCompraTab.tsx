@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,7 +29,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, Search, MoreVertical, Loader2, Truck } from "lucide-react";
+import { Plus, Trash2, Search, MoreVertical, Loader2, Truck, Send, Bell, CalendarCheck, CalendarX } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -201,6 +201,33 @@ const OrdenesCompraTab = () => {
 
   // Create a Set of order IDs that have confirmations for quick lookup
   const ordenesConfirmadas = new Set(confirmaciones.map(c => c.orden_compra_id));
+
+  // Fetch entregas to know scheduling status per order
+  const { data: todasEntregas = [] } = useQuery({
+    queryKey: ["ordenes_compra_entregas_all"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ordenes_compra_entregas")
+        .select("orden_compra_id, fecha_programada");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Create a map of order ID to scheduling status { total, programadas }
+  const entregasStatusPorOrden = useMemo(() => {
+    const mapa: Record<string, { total: number; programadas: number }> = {};
+    todasEntregas.forEach((e) => {
+      if (!mapa[e.orden_compra_id]) {
+        mapa[e.orden_compra_id] = { total: 0, programadas: 0 };
+      }
+      mapa[e.orden_compra_id].total++;
+      if (e.fecha_programada) {
+        mapa[e.orden_compra_id].programadas++;
+      }
+    });
+    return mapa;
+  }, [todasEntregas]);
 
   // Handle ?aprobar= URL parameter to auto-open order for authorization
   useEffect(() => {
@@ -730,7 +757,7 @@ const OrdenesCompraTab = () => {
         </div>
       </div>
 
-      <div className="border rounded-lg">
+      <div className="border rounded-lg overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -740,8 +767,8 @@ const OrdenesCompraTab = () => {
               <TableHead>Total</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead>Confirmación</TableHead>
-              <TableHead>Entregas</TableHead>
-              <TableHead></TableHead>
+              <TableHead>Programación</TableHead>
+              <TableHead>Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -754,6 +781,59 @@ const OrdenesCompraTab = () => {
             ) : (
               filteredOrdenes.map((orden) => {
                 const tieneConfirmacion = ordenesConfirmadas.has(orden.id);
+                const entregasStatus = entregasStatusPorOrden[orden.id];
+                
+                // Determine programación display
+                let programacionBadge;
+                if (orden.entregas_multiples && entregasStatus) {
+                  const { total, programadas } = entregasStatus;
+                  if (programadas === total) {
+                    programacionBadge = (
+                      <Badge variant="default" className="bg-green-600 hover:bg-green-700 gap-1">
+                        <CalendarCheck className="h-3 w-3" />
+                        {total}/{total}
+                      </Badge>
+                    );
+                  } else if (programadas === 0) {
+                    programacionBadge = (
+                      <Badge variant="destructive" className="gap-1">
+                        <CalendarX className="h-3 w-3" />
+                        0/{total}
+                      </Badge>
+                    );
+                  } else {
+                    programacionBadge = (
+                      <Badge variant="secondary" className="gap-1">
+                        <CalendarCheck className="h-3 w-3" />
+                        {programadas}/{total}
+                      </Badge>
+                    );
+                  }
+                } else if (!orden.entregas_multiples) {
+                  if (orden.fecha_entrega_programada) {
+                    programacionBadge = (
+                      <Badge variant="default" className="bg-green-600 hover:bg-green-700 gap-1">
+                        <CalendarCheck className="h-3 w-3" />
+                        Programada
+                      </Badge>
+                    );
+                  } else {
+                    programacionBadge = (
+                      <Badge variant="outline" className="text-muted-foreground gap-1">
+                        <CalendarX className="h-3 w-3" />
+                        Sin programar
+                      </Badge>
+                    );
+                  }
+                } else {
+                  programacionBadge = (
+                    <Badge variant="outline" className="text-muted-foreground gap-1">
+                      <CalendarX className="h-3 w-3" />
+                      Sin programar
+                    </Badge>
+                  );
+                }
+
                 return (
                   <TableRow key={orden.id}>
                     <TableCell className="font-medium">{orden.folio}</TableCell>
@@ -774,29 +854,45 @@ const OrdenesCompraTab = () => {
                         </Badge>
                       )}
                     </TableCell>
+                    <TableCell>{programacionBadge}</TableCell>
                     <TableCell>
-                      {orden.entregas_multiples ? (
-                        <Badge variant="outline" className="gap-1">
-                          <Truck className="h-3 w-3" />
-                          Múltiples
-                        </Badge>
-                      ) : orden.fecha_entrega_programada ? (
-                        new Date(orden.fecha_entrega_programada).toLocaleDateString()
-                      ) : (
-                        "-"
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setOrdenSeleccionada(orden);
-                          setAccionesDialogOpen(true);
-                        }}
-                      >
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          title="Reenviar OC"
+                          onClick={() => {
+                            setOrdenSeleccionada(orden);
+                            setAccionesDialogOpen(true);
+                          }}
+                        >
+                          <Send className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          title="Notificar"
+                          onClick={() => {
+                            setOrdenSeleccionada(orden);
+                            setAccionesDialogOpen(true);
+                          }}
+                        >
+                          <Bell className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => {
+                            setOrdenSeleccionada(orden);
+                            setAccionesDialogOpen(true);
+                          }}
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );

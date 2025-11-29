@@ -735,22 +735,59 @@ const OrdenAccionesDialog = ({ open, onOpenChange, orden, onEdit }: OrdenAccione
     try {
       const pdfContent = await generarPDFContent(!!orden.autorizado_por);
 
-      // Open in new window for printing
-      const printWindow = window.open('', '_blank');
+      // Create a blob URL and open it - less likely to be blocked
+      const blob = new Blob([pdfContent], { type: 'text/html' });
+      const blobUrl = URL.createObjectURL(blob);
+      
+      // Try window.open first
+      const printWindow = window.open(blobUrl, '_blank');
+      
       if (printWindow) {
-        printWindow.document.write(pdfContent);
-        printWindow.document.close();
-        
         // Wait for content to load then trigger print
         printWindow.onload = () => {
-          printWindow.print();
+          setTimeout(() => {
+            printWindow.print();
+          }, 500);
         };
         
         toast({
           title: "PDF generado",
           description: "Puedes imprimir o guardar como PDF desde el diálogo de impresión",
         });
+      } else {
+        // Fallback: use iframe if popup was blocked
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = 'none';
+        document.body.appendChild(iframe);
+        
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+        if (iframeDoc) {
+          iframeDoc.open();
+          iframeDoc.write(pdfContent);
+          iframeDoc.close();
+          
+          setTimeout(() => {
+            iframe.contentWindow?.print();
+            // Remove iframe after printing
+            setTimeout(() => {
+              document.body.removeChild(iframe);
+            }, 1000);
+          }, 500);
+          
+          toast({
+            title: "PDF generado",
+            description: "Puedes imprimir o guardar como PDF desde el diálogo de impresión",
+          });
+        }
       }
+      
+      // Clean up blob URL after a delay
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
     } catch (error: any) {
       console.error('Error generating PDF:', error);
       toast({

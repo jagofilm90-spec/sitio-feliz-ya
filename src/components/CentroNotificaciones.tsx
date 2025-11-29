@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { Bell, PackageX, AlertCircle, X, IdCard, FileCheck } from "lucide-react";
+import { Bell, PackageX, AlertCircle, X, IdCard, FileCheck, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -21,10 +21,11 @@ const STORAGE_KEY = "dismissed-notifications";
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 export const CentroNotificaciones = () => {
-  const { alertasCaducidad, notificacionesStock, alertasLicencias, autorizacionesOC, totalCount, loading, marcarComoLeida, isAdmin } = useNotificaciones();
+  const { alertasCaducidad, notificacionesStock, alertasLicencias, autorizacionesOC, confirmacionesProveedor, totalCount, loading, marcarComoLeida, isAdmin } = useNotificaciones();
   const navigate = useNavigate();
   const [dismissedLicencias, setDismissedLicencias] = useState<string[]>([]);
   const [dismissedCaducidad, setDismissedCaducidad] = useState<string[]>([]);
+  const [dismissedConfirmaciones, setDismissedConfirmaciones] = useState<string[]>([]);
 
   // Cargar notificaciones descartadas del localStorage al montar
   useEffect(() => {
@@ -40,12 +41,14 @@ export const CentroNotificaciones = () => {
         // Actualizar localStorage con las válidas
         localStorage.setItem(STORAGE_KEY, JSON.stringify(stillValid));
         
-        // Separar por tipo (L = licencias, C = caducidad)
+        // Separar por tipo (L = licencias, C = caducidad, P = confirmaciones proveedor)
         const licencias = stillValid.filter(d => d.id.startsWith("L-")).map(d => d.id);
         const caducidad = stillValid.filter(d => d.id.startsWith("C-")).map(d => d.id);
+        const confirmaciones = stillValid.filter(d => d.id.startsWith("P-")).map(d => d.id);
         
         setDismissedLicencias(licencias);
         setDismissedCaducidad(caducidad);
+        setDismissedConfirmaciones(confirmaciones);
       }
     } catch (error) {
       console.error("Error loading dismissed notifications:", error);
@@ -58,13 +61,14 @@ export const CentroNotificaciones = () => {
       const now = Date.now();
       const allDismissed: DismissedNotification[] = [
         ...dismissedLicencias.map(id => ({ id, dismissedAt: now })),
-        ...dismissedCaducidad.map(id => ({ id, dismissedAt: now }))
+        ...dismissedCaducidad.map(id => ({ id, dismissedAt: now })),
+        ...dismissedConfirmaciones.map(id => ({ id, dismissedAt: now }))
       ];
       localStorage.setItem(STORAGE_KEY, JSON.stringify(allDismissed));
     } catch (error) {
       console.error("Error saving dismissed notifications:", error);
     }
-  }, [dismissedLicencias, dismissedCaducidad]);
+  }, [dismissedLicencias, dismissedCaducidad, dismissedConfirmaciones]);
 
   const visibleAlertasLicencias = useMemo(
     () => alertasLicencias.filter((a) => !dismissedLicencias.includes(`L-${a.id}`)),
@@ -76,7 +80,12 @@ export const CentroNotificaciones = () => {
     [alertasCaducidad, dismissedCaducidad]
   );
 
-  const computedCount = notificacionesStock.length + visibleAlertasLicencias.length + visibleAlertasCaducidad.length + autorizacionesOC.length;
+  const visibleConfirmaciones = useMemo(
+    () => confirmacionesProveedor.filter((c) => !dismissedConfirmaciones.includes(`P-${c.id}`)),
+    [confirmacionesProveedor, dismissedConfirmaciones]
+  );
+
+  const computedCount = notificacionesStock.length + visibleAlertasLicencias.length + visibleAlertasCaducidad.length + autorizacionesOC.length + visibleConfirmaciones.length;
 
   const handleLicenciaClick = (puesto: string) => {
     const tabMap: Record<string, string> = {
@@ -161,6 +170,57 @@ export const CentroNotificaciones = () => {
                       <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300">
                         Revisar
                       </Badge>
+                    </div>
+                  ))}
+                  {(visibleConfirmaciones.length > 0 || notificacionesStock.length > 0 || visibleAlertasLicencias.length > 0 || visibleAlertasCaducidad.length > 0) && (
+                    <Separator className="my-2" />
+                  )}
+                </div>
+              )}
+
+              {/* Confirmaciones de Proveedores */}
+              {visibleConfirmaciones.length > 0 && (
+                <div className="mb-2">
+                  <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">
+                    Órdenes Confirmadas por Proveedor
+                  </div>
+                  {visibleConfirmaciones.map((conf) => (
+                    <div
+                      key={conf.id}
+                      className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 mb-2 group"
+                      onClick={() => navigate(`/compras?orden=${conf.orden_compra_id}`)}
+                    >
+                      <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{conf.folio}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {conf.proveedor_nombre} confirmó esta orden
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {new Date(conf.confirmado_en).toLocaleDateString("es-MX", {
+                            day: "numeric",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300">
+                          Confirmada
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDismissedConfirmaciones((prev) => [...prev, `P-${conf.id}`]);
+                          }}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                   {(notificacionesStock.length > 0 || visibleAlertasLicencias.length > 0 || visibleAlertasCaducidad.length > 0) && (

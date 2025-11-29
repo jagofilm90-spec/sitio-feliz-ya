@@ -37,11 +37,20 @@ interface AutorizacionOC {
   folio?: string;
 }
 
+interface ConfirmacionProveedor {
+  id: string;
+  orden_compra_id: string;
+  folio: string;
+  proveedor_nombre: string;
+  confirmado_en: string;
+}
+
 export interface NotificacionesData {
   alertasCaducidad: ProductoCaducidad[];
   notificacionesStock: NotificacionStockBajo[];
   alertasLicencias: LicenciaAlerta[];
   autorizacionesOC: AutorizacionOC[];
+  confirmacionesProveedor: ConfirmacionProveedor[];
   totalCount: number;
 }
 
@@ -51,6 +60,7 @@ export const useNotificaciones = () => {
     notificacionesStock: [],
     alertasLicencias: [],
     autorizacionesOC: [],
+    confirmacionesProveedor: [],
     totalCount: 0,
   });
   const [loading, setLoading] = useState(true);
@@ -72,25 +82,75 @@ export const useNotificaciones = () => {
 
   const cargarNotificaciones = async () => {
     try {
-      const [caducidad, stock, licencias, autorizaciones] = await Promise.all([
+      const [caducidad, stock, licencias, autorizaciones, confirmaciones] = await Promise.all([
         cargarAlertasCaducidad(),
         cargarNotificacionesStock(),
         cargarAlertasLicencias(),
         isAdmin ? cargarAutorizacionesOC() : Promise.resolve([]),
+        cargarConfirmacionesProveedor(),
       ]);
 
-      const total = caducidad.length + stock.length + licencias.length + autorizaciones.length;
+      const total = caducidad.length + stock.length + licencias.length + autorizaciones.length + confirmaciones.length;
       setNotificaciones({
         alertasCaducidad: caducidad,
         notificacionesStock: stock,
         alertasLicencias: licencias,
         autorizacionesOC: autorizaciones,
+        confirmacionesProveedor: confirmaciones,
         totalCount: total,
       });
     } catch (error) {
       console.error("Error cargando notificaciones:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const cargarConfirmacionesProveedor = async (): Promise<ConfirmacionProveedor[]> => {
+    try {
+      // Obtener confirmaciones de las últimas 24 horas
+      const hace24Horas = new Date();
+      hace24Horas.setHours(hace24Horas.getHours() - 24);
+
+      const { data: confirmaciones, error } = await supabase
+        .from("ordenes_compra_confirmaciones")
+        .select(`
+          id,
+          orden_compra_id,
+          confirmado_en
+        `)
+        .gte("confirmado_en", hace24Horas.toISOString())
+        .order("confirmado_en", { ascending: false });
+
+      if (error || !confirmaciones) return [];
+
+      // Obtener detalles de las órdenes
+      const result: ConfirmacionProveedor[] = [];
+      for (const conf of confirmaciones) {
+        const { data: orden } = await supabase
+          .from("ordenes_compra")
+          .select(`
+            folio,
+            proveedores:proveedor_id (nombre)
+          `)
+          .eq("id", conf.orden_compra_id)
+          .maybeSingle();
+
+        if (orden) {
+          result.push({
+            id: conf.id,
+            orden_compra_id: conf.orden_compra_id,
+            folio: orden.folio,
+            proveedor_nombre: (orden.proveedores as any)?.nombre || "Proveedor",
+            confirmado_en: conf.confirmado_en || "",
+          });
+        }
+      }
+
+      return result;
+    } catch (error) {
+      console.error("Error cargando confirmaciones de proveedor:", error);
+      return [];
     }
   };
 

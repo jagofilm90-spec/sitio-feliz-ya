@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { CalendarCheck, CalendarX, Check, Loader2, Pencil } from "lucide-react";
+import { CalendarCheck, CalendarX, Check, Loader2, Pencil, X } from "lucide-react";
 
 interface Entrega {
   id: string;
@@ -57,6 +57,7 @@ const EntregasPopover = ({ orden, entregas, entregasStatus }: EntregasPopoverPro
       });
 
       queryClient.invalidateQueries({ queryKey: ["ordenes_compra_entregas_all"] });
+      queryClient.invalidateQueries({ queryKey: ["entregas_calendario"] });
       setEditingId(null);
       setEditingFecha("");
     } catch (error: any) {
@@ -88,6 +89,7 @@ const EntregasPopover = ({ orden, entregas, entregasStatus }: EntregasPopoverPro
       });
 
       queryClient.invalidateQueries({ queryKey: ["ordenes_compra"] });
+      queryClient.invalidateQueries({ queryKey: ["entregas_calendario"] });
       setEditingId(null);
       setEditingFecha("");
     } catch (error: any) {
@@ -188,29 +190,41 @@ const EntregasPopover = ({ orden, entregas, entregasStatus }: EntregasPopoverPro
             <div className="flex items-center justify-between p-2 rounded-md bg-muted/50">
               <div className="flex-1">
                 <div className="text-sm font-medium">Entrega única</div>
-                {editingId === "single" ? (
-                  <div className="flex items-center gap-2 mt-1">
-                    <Input
-                      type="date"
-                      value={editingFecha}
-                      onChange={(e) => setEditingFecha(e.target.value)}
-                      className="h-8 text-sm"
-                    />
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8"
-                      onClick={handleSaveSingleDelivery}
-                      disabled={saving}
-                    >
-                      {saving ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                      {editingId === "single" ? (
+                        <div className="flex items-center gap-2 mt-1">
+                          <Input
+                            type="date"
+                            value={editingFecha}
+                            onChange={(e) => setEditingFecha(e.target.value)}
+                            className="h-8 text-sm"
+                          />
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={handleSaveSingleDelivery}
+                            disabled={saving}
+                          >
+                            {saving ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Check className="h-4 w-4 text-green-600" />
+                            )}
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={() => {
+                              setEditingFecha("");
+                              handleSaveSingleDelivery();
+                            }}
+                            disabled={saving}
+                          >
+                            <X className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
                       ) : (
-                        <Check className="h-4 w-4 text-green-600" />
-                      )}
-                    </Button>
-                  </div>
-                ) : (
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-sm text-muted-foreground">
                       {orden.fecha_entrega_programada 
@@ -249,29 +263,63 @@ const EntregasPopover = ({ orden, entregas, entregasStatus }: EntregasPopoverPro
                           ({entrega.cantidad_bultos} bultos)
                         </span>
                       </div>
-                      {editingId === entrega.id ? (
-                        <div className="flex items-center gap-2 mt-1">
-                          <Input
-                            type="date"
-                            value={editingFecha}
-                            onChange={(e) => setEditingFecha(e.target.value)}
-                            className="h-8 text-sm"
-                          />
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8"
-                            onClick={() => handleSave(entrega.id)}
-                            disabled={saving}
-                          >
-                            {saving ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Check className="h-4 w-4 text-green-600" />
-                            )}
-                          </Button>
-                        </div>
-                      ) : (
+                        {editingId === entrega.id ? (
+                          <div className="flex items-center gap-2 mt-1">
+                            <Input
+                              type="date"
+                              value={editingFecha}
+                              onChange={(e) => setEditingFecha(e.target.value)}
+                              className="h-8 text-sm"
+                            />
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8"
+                              onClick={() => handleSave(entrega.id)}
+                              disabled={saving}
+                            >
+                              {saving ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Check className="h-4 w-4 text-green-600" />
+                              )}
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8"
+                              onClick={async () => {
+                                setSaving(true);
+                                try {
+                                  const { error } = await supabase
+                                    .from("ordenes_compra_entregas")
+                                    .update({ fecha_programada: null })
+                                    .eq("id", entrega.id);
+                                  if (error) throw error;
+                                  toast({
+                                    title: "Fecha eliminada",
+                                    description: "La fecha de entrega se eliminó correctamente",
+                                  });
+                                  queryClient.invalidateQueries({ queryKey: ["ordenes_compra_entregas_all"] });
+                                  queryClient.invalidateQueries({ queryKey: ["entregas_calendario"] });
+                                  setEditingId(null);
+                                  setEditingFecha("");
+                                } catch (error: any) {
+                                  toast({
+                                    title: "Error",
+                                    description: error.message,
+                                    variant: "destructive",
+                                  });
+                                } finally {
+                                  setSaving(false);
+                                }
+                              }}
+                              disabled={saving}
+                            >
+                              <X className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        ) : (
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-sm text-muted-foreground">
                             {entrega.fecha_programada 

@@ -36,6 +36,7 @@ import { Switch } from "@/components/ui/switch";
 import OrdenAccionesDialog from "./OrdenAccionesDialog";
 import AutorizacionOCDialog from "./AutorizacionOCDialog";
 import OCAutorizadaAlert from "./OCAutorizadaAlert";
+import EntregasPopover from "./EntregasPopover";
 import { formatCurrency } from "@/lib/utils";
 
 interface ProductoEnOrden {
@@ -211,7 +212,7 @@ const OrdenesCompraTab = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("ordenes_compra_entregas")
-        .select("orden_compra_id, fecha_programada");
+        .select("id, orden_compra_id, numero_entrega, cantidad_bultos, fecha_programada, status");
       if (error) throw error;
       return data;
     },
@@ -870,57 +871,6 @@ const OrdenesCompraTab = () => {
               filteredOrdenes.map((orden) => {
                 const tieneConfirmacion = ordenesConfirmadas.has(orden.id);
                 const entregasStatus = entregasStatusPorOrden[orden.id];
-                
-                // Determine programación display
-                let programacionBadge;
-                if (orden.entregas_multiples && entregasStatus) {
-                  const { total, programadas } = entregasStatus;
-                  if (programadas === total) {
-                    programacionBadge = (
-                      <Badge variant="default" className="bg-green-600 hover:bg-green-700 gap-1">
-                        <CalendarCheck className="h-3 w-3" />
-                        {total}/{total}
-                      </Badge>
-                    );
-                  } else if (programadas === 0) {
-                    programacionBadge = (
-                      <Badge variant="destructive" className="gap-1">
-                        <CalendarX className="h-3 w-3" />
-                        0/{total}
-                      </Badge>
-                    );
-                  } else {
-                    programacionBadge = (
-                      <Badge variant="secondary" className="gap-1">
-                        <CalendarCheck className="h-3 w-3" />
-                        {programadas}/{total}
-                      </Badge>
-                    );
-                  }
-                } else if (!orden.entregas_multiples) {
-                  if (orden.fecha_entrega_programada) {
-                    programacionBadge = (
-                      <Badge variant="default" className="bg-green-600 hover:bg-green-700 gap-1">
-                        <CalendarCheck className="h-3 w-3" />
-                        Programada
-                      </Badge>
-                    );
-                  } else {
-                    programacionBadge = (
-                      <Badge variant="outline" className="text-muted-foreground gap-1">
-                        <CalendarX className="h-3 w-3" />
-                        Sin programar
-                      </Badge>
-                    );
-                  }
-                } else {
-                  programacionBadge = (
-                    <Badge variant="outline" className="text-muted-foreground gap-1">
-                      <CalendarX className="h-3 w-3" />
-                      Sin programar
-                    </Badge>
-                  );
-                }
 
                 return (
                   <TableRow key={orden.id}>
@@ -942,7 +892,13 @@ const OrdenesCompraTab = () => {
                         </Badge>
                       )}
                     </TableCell>
-                    <TableCell>{programacionBadge}</TableCell>
+                    <TableCell>
+                      <EntregasPopover 
+                        orden={orden} 
+                        entregas={todasEntregas} 
+                        entregasStatus={entregasStatus}
+                      />
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
                         <Button

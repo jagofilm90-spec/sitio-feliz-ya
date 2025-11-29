@@ -178,7 +178,8 @@ const OrdenesCompraTab = () => {
           ordenes_compra_detalles (
             *,
             productos (nombre, codigo)
-          )
+          ),
+          ordenes_compra_confirmaciones (id, confirmado_en)
         `)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -723,6 +724,7 @@ const OrdenesCompraTab = () => {
               <TableHead>Fecha</TableHead>
               <TableHead>Total</TableHead>
               <TableHead>Estado</TableHead>
+              <TableHead>Confirmación</TableHead>
               <TableHead>Entregas</TableHead>
               <TableHead></TableHead>
             </TableRow>
@@ -730,46 +732,61 @@ const OrdenesCompraTab = () => {
           <TableBody>
             {filteredOrdenes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                <TableCell colSpan={8} className="text-center text-muted-foreground">
                   No hay órdenes de compra registradas
                 </TableCell>
               </TableRow>
             ) : (
-              filteredOrdenes.map((orden) => (
-                <TableRow key={orden.id}>
-                  <TableCell className="font-medium">{orden.folio}</TableCell>
-                  <TableCell>{orden.proveedores?.nombre}</TableCell>
-                  <TableCell>
-                    {new Date(orden.fecha_orden).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell>{formatCurrency(orden.total)}</TableCell>
-                  <TableCell>{getStatusBadge(orden.status)}</TableCell>
-                  <TableCell>
-                    {orden.entregas_multiples ? (
-                      <Badge variant="outline" className="gap-1">
-                        <Truck className="h-3 w-3" />
-                        Múltiples
-                      </Badge>
-                    ) : orden.fecha_entrega_programada ? (
-                      new Date(orden.fecha_entrega_programada).toLocaleDateString()
-                    ) : (
-                      "-"
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setOrdenSeleccionada(orden);
-                        setAccionesDialogOpen(true);
-                      }}
-                    >
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
+              filteredOrdenes.map((orden) => {
+                const tieneConfirmacion = orden.ordenes_compra_confirmaciones && 
+                  orden.ordenes_compra_confirmaciones.length > 0;
+                return (
+                  <TableRow key={orden.id}>
+                    <TableCell className="font-medium">{orden.folio}</TableCell>
+                    <TableCell>{orden.proveedores?.nombre}</TableCell>
+                    <TableCell>
+                      {new Date(orden.fecha_orden).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>{formatCurrency(orden.total)}</TableCell>
+                    <TableCell>{getStatusBadge(orden.status)}</TableCell>
+                    <TableCell>
+                      {tieneConfirmacion ? (
+                        <Badge variant="default" className="bg-green-600 hover:bg-green-700">
+                          Confirmada
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-muted-foreground">
+                          No confirmada
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {orden.entregas_multiples ? (
+                        <Badge variant="outline" className="gap-1">
+                          <Truck className="h-3 w-3" />
+                          Múltiples
+                        </Badge>
+                      ) : orden.fecha_entrega_programada ? (
+                        new Date(orden.fecha_entrega_programada).toLocaleDateString()
+                      ) : (
+                        "-"
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setOrdenSeleccionada(orden);
+                          setAccionesDialogOpen(true);
+                        }}
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>

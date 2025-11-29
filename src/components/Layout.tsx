@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useState, useMemo } from "react";
 import { useNavigate, Link, useLocation, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { useUnreadEmails } from "@/hooks/useUnreadEmails";
+import { useUserRoles, MODULE_PERMISSIONS } from "@/hooks/useUserRoles";
 import { CentroNotificaciones } from "@/components/CentroNotificaciones";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import logoAlmasa from "@/assets/logo-almasa.png";
@@ -50,6 +51,7 @@ const Layout = ({ children }: LayoutProps) => {
   const { toast } = useToast();
   const unreadCount = useUnreadMessages();
   const { counts: emailCounts, cuentas: emailCuentas, totalUnread: totalUnreadEmails } = useUnreadEmails();
+  const { roles, isLoading: rolesLoading } = useUserRoles();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -80,7 +82,7 @@ const Layout = ({ children }: LayoutProps) => {
     });
   };
 
-  const menuItems = [
+  const allMenuItems = [
     { icon: Home, label: "Dashboard", path: "/dashboard" },
     { icon: Package, label: "Productos", path: "/productos" },
     { icon: Bug, label: "Fumigaciones", path: "/fumigaciones" },
@@ -94,8 +96,23 @@ const Layout = ({ children }: LayoutProps) => {
     { icon: UserCog, label: "Empleados", path: "/empleados" },
     { icon: Shield, label: "Usuarios", path: "/usuarios" },
     { icon: MessageCircle, label: "Chat", path: "/chat" },
-    // Correos is handled separately with collapsible
   ];
+
+  // Filtrar menú según los roles del usuario
+  const menuItems = useMemo(() => {
+    if (rolesLoading || roles.length === 0) return allMenuItems;
+    
+    return allMenuItems.filter(item => {
+      const allowedRoles = MODULE_PERMISSIONS[item.path] || [];
+      return roles.some(role => allowedRoles.includes(role));
+    });
+  }, [roles, rolesLoading]);
+
+  // Verificar si el usuario puede ver correos
+  const canViewEmails = useMemo(() => {
+    const allowedRoles = MODULE_PERMISSIONS['/correos'] || [];
+    return roles.some(role => allowedRoles.includes(role));
+  }, [roles]);
 
   const handleEmailAccountClick = (email: string, isMobile: boolean) => {
     navigate(`/correos?cuenta=${encodeURIComponent(email)}`);
@@ -244,7 +261,7 @@ const Layout = ({ children }: LayoutProps) => {
                 </Link>
               );
             })}
-            {renderEmailMenuItem(false)}
+            {canViewEmails && renderEmailMenuItem(false)}
           </nav>
         </aside>
 
@@ -281,7 +298,7 @@ const Layout = ({ children }: LayoutProps) => {
                     </Link>
                   );
                 })}
-                {renderEmailMenuItem(true)}
+                {canViewEmails && renderEmailMenuItem(true)}
               </nav>
             </aside>
           </div>

@@ -101,9 +101,14 @@ const CrearCotizacionDialog = ({
   const [selectedCliente, setSelectedCliente] = useState<string>("");
   const [selectedSucursal, setSelectedSucursal] = useState<string>("");
   const [vigenciaDias, setVigenciaDias] = useState(7);
+  const [mesCotizacion, setMesCotizacion] = useState<string>(() => {
+    const hoy = new Date();
+    return format(hoy, "MMMM yyyy", { locale: es });
+  });
   const [notas, setNotas] = useState("");
   const [detalles, setDetalles] = useState<DetalleProducto[]>([]);
   const [folio, setFolio] = useState<string>("");
+  const fechaCreacion = new Date();
 
   const isEditMode = !!cotizacionId;
 
@@ -382,13 +387,14 @@ const CrearCotizacionDialog = ({
 
       if (isEditMode && cotizacionId) {
         // UPDATE mode
+        const notasConMes = `[Cotización para: ${mesCotizacion}]${notas ? ` ${notas}` : ''}`;
         const { error: cotizacionError } = await supabase
           .from("cotizaciones")
           .update({
             cliente_id: selectedCliente,
-            sucursal_id: selectedSucursal || null,
+            sucursal_id: selectedSucursal === "none" ? null : (selectedSucursal || null),
             fecha_vigencia: format(fechaVigencia, "yyyy-MM-dd"),
-            notas,
+            notas: notasConMes,
             subtotal: totales.subtotal,
             impuestos: totales.impuestos,
             total: totales.total,
@@ -434,16 +440,19 @@ const CrearCotizacionDialog = ({
 
         if (folioError) throw folioError;
 
+        // Incluir el mes de cotización en las notas para que el AI lo detecte
+        const notasConMes = `[Cotización para: ${mesCotizacion}]${notas ? ` ${notas}` : ''}`;
+
         const { data: cotizacion, error: cotizacionError } = await supabase
           .from("cotizaciones")
           .insert({
             folio: folioData,
             cliente_id: selectedCliente,
-            sucursal_id: selectedSucursal || null,
+            sucursal_id: selectedSucursal === "none" ? null : (selectedSucursal || null),
             fecha_vigencia: format(fechaVigencia, "yyyy-MM-dd"),
             email_origen_id: emailOrigen?.id || null,
             gmail_cuenta_id: gmailCuentaId || null,
-            notas,
+            notas: notasConMes,
             subtotal: totales.subtotal,
             impuestos: totales.impuestos,
             total: totales.total,
@@ -494,6 +503,7 @@ const CrearCotizacionDialog = ({
     setSelectedCliente("");
     setSelectedSucursal("");
     setVigenciaDias(7);
+    setMesCotizacion(format(new Date(), "MMMM yyyy", { locale: es }));
     setNotas("");
     setDetalles([]);
     setSearchTerm("");
@@ -544,21 +554,52 @@ const CrearCotizacionDialog = ({
             </div>
 
             <div className="space-y-2">
-              <Label>Sucursal de entrega</Label>
+              <Label>Sucursal de entrega <span className="text-muted-foreground text-xs">(opcional)</span></Label>
               <Select
                 value={selectedSucursal}
                 onValueChange={setSelectedSucursal}
                 disabled={!selectedCliente || sucursales.length === 0}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder={sucursales.length === 0 ? "Sin sucursales" : "Seleccionar"} />
+                  <SelectValue placeholder={sucursales.length === 0 ? "Oficinas principales" : "Oficinas principales"} />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="none">Oficinas principales</SelectItem>
                   {sucursales.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
                       {s.nombre}
                     </SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Fecha de creación</Label>
+              <Input
+                value={format(fechaCreacion, "dd/MM/yyyy")}
+                disabled
+                className="bg-muted"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Cotización para el mes de *</Label>
+              <Select value={mesCotizacion} onValueChange={setMesCotizacion}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar mes" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 12 }, (_, i) => {
+                    const fecha = new Date();
+                    fecha.setMonth(fecha.getMonth() + i - 1);
+                    const mesNombre = format(fecha, "MMMM yyyy", { locale: es });
+                    return (
+                      <SelectItem key={mesNombre} value={mesNombre}>
+                        {mesNombre.charAt(0).toUpperCase() + mesNombre.slice(1)}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>

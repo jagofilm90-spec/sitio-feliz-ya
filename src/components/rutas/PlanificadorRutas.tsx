@@ -372,12 +372,12 @@ const PlanificadorRutas = () => {
                     <Users className="h-4 w-4" />
                     Ayudante
                   </Label>
-                  <Select value={selectedAyudante} onValueChange={setSelectedAyudante}>
+                  <Select value={selectedAyudante} onValueChange={(v) => setSelectedAyudante(v === "none" ? "" : v)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Sin ayudante" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Sin ayudante</SelectItem>
+                      <SelectItem value="none">Sin ayudante</SelectItem>
                       {ayudantesDisponibles.map((c) => (
                         <SelectItem key={c.id} value={c.id}>
                           {c.full_name}

@@ -61,6 +61,7 @@ import { useUserRoles } from "@/hooks/useUserRoles";
 interface Cotizacion {
   id: string;
   folio: string;
+  nombre: string | null;
   cliente_id: string;
   cliente: { nombre: string; codigo: string };
   sucursal: { nombre: string } | null;
@@ -96,6 +97,7 @@ const CotizacionesTab = () => {
         .select(`
           id,
           folio,
+          nombre,
           cliente_id,
           cliente:clientes(nombre, codigo),
           sucursal:cliente_sucursales(nombre),
@@ -147,7 +149,8 @@ const CotizacionesTab = () => {
   const filteredCotizaciones = cotizaciones?.filter(
     (c) =>
       c.folio.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.cliente.nombre.toLowerCase().includes(searchTerm.toLowerCase())
+      c.cliente.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (c.nombre && c.nombre.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const handleConvertirPedido = async (cotizacionId: string) => {
@@ -318,6 +321,7 @@ const CotizacionesTab = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Folio</TableHead>
+                    <TableHead>Nombre</TableHead>
                     <TableHead>Cliente</TableHead>
                     <TableHead>Sucursal</TableHead>
                     <TableHead>Fecha</TableHead>
@@ -332,6 +336,9 @@ const CotizacionesTab = () => {
                     <TableRow key={c.id}>
                       <TableCell className="font-mono font-medium">
                         {c.folio}
+                      </TableCell>
+                      <TableCell className="font-medium text-primary">
+                        {c.nombre || <span className="text-muted-foreground">-</span>}
                       </TableCell>
                       <TableCell>{c.cliente.nombre}</TableCell>
                       <TableCell className="text-muted-foreground">
@@ -463,7 +470,7 @@ const CotizacionesTab = () => {
                   ))}
                   {filteredCotizaciones?.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-12">
+                      <TableCell colSpan={9} className="text-center py-12">
                         <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                         <p className="text-muted-foreground">
                           No hay cotizaciones registradas

@@ -120,7 +120,7 @@ const CotizacionDetalleDialog = ({
         .from("cotizaciones")
         .select(`
           *,
-          cliente:clientes(nombre, codigo, email),
+          cliente:clientes(id, nombre, codigo, email),
           sucursal:cliente_sucursales(nombre, direccion),
           detalles:cotizaciones_detalles(
             id,
@@ -138,6 +138,23 @@ const CotizacionDetalleDialog = ({
       return data;
     },
     enabled: open,
+  });
+
+  // Fetch client emails
+  const { data: clienteCorreos = [] } = useQuery({
+    queryKey: ["cliente_correos", cotizacion?.cliente?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("cliente_correos")
+        .select("*")
+        .eq("cliente_id", cotizacion?.cliente?.id)
+        .eq("activo", true)
+        .order("es_principal", { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!cotizacion?.cliente?.id,
   });
 
   // Detectar si es cotización "solo precios" (sin cantidades)
@@ -185,8 +202,21 @@ const CotizacionDetalleDialog = ({
 
   const handleOpenEmailDialog = () => {
     if (!cotizacion) return;
-    setEmailTo(cotizacion.cliente?.email || "");
-    setAdditionalEmails([]);
+    
+    // Use client emails if available, otherwise use the single email from cliente
+    if (clienteCorreos.length > 0) {
+      const principalEmail = clienteCorreos.find((c: any) => c.es_principal)?.email || clienteCorreos[0]?.email || "";
+      setEmailTo(principalEmail);
+      // Add other emails as additional
+      const otherEmails = clienteCorreos
+        .filter((c: any) => c.email !== principalEmail)
+        .map((c: any) => c.email);
+      setAdditionalEmails(otherEmails);
+    } else {
+      setEmailTo(cotizacion.cliente?.email || "");
+      setAdditionalEmails([]);
+    }
+    
     setEmailSubject(`Cotización ${cotizacion.folio} - Abarrotes La Manita`);
     setEmailBody(`Estimado cliente,\n\nAdjunto encontrará la cotización ${cotizacion.folio} solicitada.\n\nEsta cotización tiene vigencia hasta el ${format(new Date(cotizacion.fecha_vigencia), "dd 'de' MMMM 'de' yyyy", { locale: es })}.\n\nQuedamos a sus órdenes para cualquier duda o aclaración.\n\nSaludos cordiales,\nAbarrotes La Manita`);
     setShowEmailDialog(true);
@@ -1039,6 +1069,47 @@ const CotizacionDetalleDialog = ({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Client saved emails */}
+            {clienteCorreos.length > 0 && (
+              <div className="space-y-2">
+                <Label>Correos del cliente</Label>
+                <div className="space-y-2 p-3 bg-muted/30 rounded-lg">
+                  {clienteCorreos.map((correo: any) => (
+                    <label key={correo.id} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={emailTo === correo.email || additionalEmails.includes(correo.email)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            if (!emailTo) {
+                              setEmailTo(correo.email);
+                            } else if (!additionalEmails.includes(correo.email)) {
+                              setAdditionalEmails([...additionalEmails, correo.email]);
+                            }
+                          } else {
+                            if (emailTo === correo.email) {
+                              setEmailTo(additionalEmails[0] || "");
+                              setAdditionalEmails(additionalEmails.slice(1));
+                            } else {
+                              setAdditionalEmails(additionalEmails.filter(e => e !== correo.email));
+                            }
+                          }
+                        }}
+                        className="rounded"
+                      />
+                      <span className="text-sm">{correo.email}</span>
+                      {correo.nombre_contacto && (
+                        <span className="text-xs text-muted-foreground">({correo.nombre_contacto})</span>
+                      )}
+                      {correo.es_principal && (
+                        <Badge variant="secondary" className="text-xs">Principal</Badge>
+                      )}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="emailTo">Email principal *</Label>
               <Input

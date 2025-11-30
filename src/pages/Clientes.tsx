@@ -104,7 +104,6 @@ const Clientes = () => {
   const [originalCorreoIds, setOriginalCorreoIds] = useState<string[]>([]); // Track loaded IDs to know what to deactivate
   const [newCorreoEmail, setNewCorreoEmail] = useState("");
   const [newCorreoNombre, setNewCorreoNombre] = useState("");
-  const [newCorreoProposito, setNewCorreoProposito] = useState("general");
 
   useEffect(() => {
     loadClientes();
@@ -193,14 +192,13 @@ const Clientes = () => {
       id: crypto.randomUUID(),
       email: newCorreoEmail.trim(),
       nombre_contacto: newCorreoNombre.trim(),
-      proposito: newCorreoProposito,
+      proposito: "general",
       es_principal: correos.length === 0, // First email is principal
       isNew: true,
     };
     setCorreos([...correos, newCorreo]);
     setNewCorreoEmail("");
     setNewCorreoNombre("");
-    setNewCorreoProposito("general");
   };
 
   const handleRemoveCorreo = (correoId: string) => {
@@ -248,16 +246,6 @@ const Clientes = () => {
     );
   };
 
-  const getPropositoLabel = (proposito: string) => {
-    const labels: Record<string, string> = {
-      general: "General",
-      pedidos: "Pedidos",
-      facturacion: "Facturación",
-      cotizaciones: "Cotizaciones",
-      pagos: "Pagos",
-    };
-    return labels[proposito] || proposito;
-  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -506,7 +494,6 @@ const Clientes = () => {
     setOriginalCorreoIds([]);
     setNewCorreoEmail("");
     setNewCorreoNombre("");
-    setNewCorreoProposito("general");
   };
 
   const filteredClientes = clientes.filter(
@@ -692,28 +679,14 @@ const Clientes = () => {
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs">Nombre contacto</Label>
-                        <Input
-                          placeholder="Juan Pérez"
-                          value={newCorreoNombre}
-                          onChange={(e) => setNewCorreoNombre(e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Propósito</Label>
+                        <Label className="text-xs">Nombre contacto (opcional)</Label>
                         <div className="flex gap-2">
-                          <Select value={newCorreoProposito} onValueChange={setNewCorreoProposito}>
-                            <SelectTrigger className="flex-1">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="general">General</SelectItem>
-                              <SelectItem value="pedidos">Pedidos</SelectItem>
-                              <SelectItem value="facturacion">Facturación</SelectItem>
-                              <SelectItem value="cotizaciones">Cotizaciones</SelectItem>
-                              <SelectItem value="pagos">Pagos</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <Input
+                            placeholder="Juan Pérez"
+                            value={newCorreoNombre}
+                            onChange={(e) => setNewCorreoNombre(e.target.value)}
+                            className="flex-1"
+                          />
                           <Button type="button" variant="outline" size="icon" onClick={handleAddCorreo}>
                             <Plus className="h-4 w-4" />
                           </Button>
@@ -735,7 +708,6 @@ const Clientes = () => {
                                 {correo.es_principal && (
                                   <Badge variant="default" className="text-xs shrink-0">Principal</Badge>
                                 )}
-                                <Badge variant="outline" className="text-xs shrink-0">{getPropositoLabel(correo.proposito)}</Badge>
                               </div>
                               {correo.nombre_contacto && (
                                 <span className="text-xs text-muted-foreground">{correo.nombre_contacto}</span>

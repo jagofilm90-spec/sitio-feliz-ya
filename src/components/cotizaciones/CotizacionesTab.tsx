@@ -378,8 +378,8 @@ const CotizacionesTab = () => {
                               Ver / Imprimir
                             </DropdownMenuItem>
                             
-                            {/* Edit option for borrador or pendiente_autorizacion */}
-                            {(c.status === "borrador" || c.status === "pendiente_autorizacion") && (
+                            {/* Edit option for borrador, pendiente_autorizacion, or autorizada */}
+                            {(c.status === "borrador" || c.status === "pendiente_autorizacion" || c.status === "autorizada") && (
                               <DropdownMenuItem
                                 onClick={() => setEditCotizacionId(c.id)}
                               >

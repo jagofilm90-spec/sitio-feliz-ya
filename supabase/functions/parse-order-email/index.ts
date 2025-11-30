@@ -5,11 +5,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface ProductoCotizado {
+  producto_id: string;
+  nombre: string;
+  codigo: string;
+  unidad: string;
+  precio_cotizado: number;
+}
+
 interface ParseOrderRequest {
   emailBody: string;
   emailSubject: string;
   emailFrom: string;
   clienteId?: string;
+  productosCotizados?: ProductoCotizado[];
 }
 
 serve(async (req) => {
@@ -18,7 +27,7 @@ serve(async (req) => {
   }
 
   try {
-    const { emailBody, emailSubject, emailFrom, clienteId }: ParseOrderRequest = await req.json();
+    const { emailBody, emailSubject, emailFrom, clienteId, productosCotizados }: ParseOrderRequest = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
     if (!LOVABLE_API_KEY) {
@@ -27,6 +36,23 @@ serve(async (req) => {
 
     console.log("Parsing order email from:", emailFrom);
     console.log("Subject:", emailSubject);
+    console.log("Productos cotizados disponibles:", productosCotizados?.length || 0);
+
+    // Construir contexto de productos cotizados para mejor matching
+    let productosContext = "";
+    if (productosCotizados && productosCotizados.length > 0) {
+      productosContext = `
+
+IMPORTANTE - PRODUCTOS COTIZADOS RECIENTEMENTE A ESTE CLIENTE:
+El cliente tiene cotizaciones recientes con los siguientes productos. USA ESTOS NOMBRES EXACTOS como referencia para hacer match:
+
+${productosCotizados.map(p => `- "${p.nombre}" (código: ${p.codigo}, ID: ${p.producto_id}, unidad: ${p.unidad})`).join('\n')}
+
+Cuando el cliente use nombres similares o abreviados, debes hacer match con estos productos.
+Por ejemplo: si el cliente pide "Uva Pasa" y en la lista está "Uva Pasa Preciosa", usa "Uva Pasa Preciosa".
+Si pide "Piña en lata" y hay "Piña en Almíbar (30 rodajas)", usa el nombre completo de la cotización.
+PRIORIZA SIEMPRE los productos de esta lista de cotización para el matching.`;
+    }
 
     const systemPrompt = `Eres un asistente especializado en procesar correos de pedidos de clientes para una comercializadora de abarrotes.
 
@@ -38,8 +64,10 @@ Reglas importantes:
 3. Las unidades pueden ser: kg, bultos, costales, cajas, piezas, cubetas
 4. Si hay varios destinos/sucursales, agrúpalos por sucursal
 5. Si no se especifica sucursal, usa "Principal" como nombre
-6. Normaliza los nombres de productos (ej: "azucar" -> "Azúcar", "arroz" -> "Arroz")
-7. Si hay precios mencionados, inclúyelos, si no, déjalos en null`;
+6. IMPORTANTE: Si hay productos cotizados disponibles, usa esos nombres EXACTOS para normalizar
+7. Si hay precios mencionados, inclúyelos, si no, déjalos en null
+8. Cuando el cliente escriba nombres abreviados o diferentes, haz match con el producto más similar de la lista cotizada
+${productosContext}`;
 
     const userPrompt = `Analiza el siguiente correo de pedido y extrae la información estructurada:
 
@@ -49,7 +77,9 @@ DE: ${emailFrom}
 CONTENIDO:
 ${emailBody}
 
-Responde con la información estructurada de los productos y cantidades por sucursal.`;
+Responde con la información estructurada de los productos y cantidades por sucursal.
+${productosCotizados && productosCotizados.length > 0 ? 
+  'RECUERDA: Usa los nombres de productos de la cotización para normalizar los nombres que el cliente escribió.' : ''}`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -93,7 +123,7 @@ Responde con la información estructurada de los productos y cantidades por sucu
                             properties: {
                               nombre_producto: { 
                                 type: "string",
-                                description: "Nombre del producto normalizado"
+                                description: "Nombre del producto normalizado (usar nombres de cotización si están disponibles)"
                               },
                               cantidad: { 
                                 type: "number",
@@ -111,6 +141,10 @@ Responde con la información estructurada de los productos y cantidades por sucu
                               notas: {
                                 type: "string",
                                 description: "Notas adicionales sobre el producto si las hay"
+                              },
+                              producto_cotizado_id: {
+                                type: "string",
+                                description: "ID del producto de la cotización si hubo match, null si no"
                               }
                             },
                             required: ["nombre_producto", "cantidad", "unidad"]

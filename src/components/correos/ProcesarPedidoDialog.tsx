@@ -41,6 +41,7 @@ interface ParsedProduct {
   notas?: string;
   producto_id?: string;
   precio_unitario?: number;
+  producto_cotizado_id?: string; // ID del producto si la AI hizo match con cotización
 }
 
 interface ParsedSucursal {
@@ -127,6 +128,42 @@ export default function ProcesarPedidoDialog({
     },
   });
 
+  // Fetch cotizaciones recientes del cliente (últimos 60 días)
+  const { data: cotizacionesRecientes } = useQuery({
+    queryKey: ["cotizaciones-cliente", selectedClienteId],
+    queryFn: async () => {
+      if (!selectedClienteId) return [];
+      const fechaLimite = new Date();
+      fechaLimite.setDate(fechaLimite.getDate() - 60);
+      
+      const { data, error } = await supabase
+        .from("cotizaciones")
+        .select(`
+          id,
+          folio,
+          fecha_creacion,
+          cotizaciones_detalles (
+            producto_id,
+            cantidad,
+            precio_unitario,
+            productos (
+              id,
+              nombre,
+              codigo,
+              unidad
+            )
+          )
+        `)
+        .eq("cliente_id", selectedClienteId)
+        .gte("fecha_creacion", fechaLimite.toISOString().split('T')[0])
+        .order("fecha_creacion", { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!selectedClienteId,
+  });
+
   // Auto-detect cliente from email
   useEffect(() => {
     if (open && clientes && emailFrom) {
@@ -148,12 +185,32 @@ export default function ProcesarPedidoDialog({
     setParsedOrder(null);
 
     try {
+      // Preparar productos de cotizaciones recientes como contexto para la AI
+      const productosCotizados = cotizacionesRecientes?.flatMap(cot => 
+        cot.cotizaciones_detalles?.map((det: any) => ({
+          producto_id: det.producto_id,
+          nombre: det.productos?.nombre,
+          codigo: det.productos?.codigo,
+          unidad: det.productos?.unidad,
+          precio_cotizado: det.precio_unitario,
+        }))
+      ).filter(Boolean) || [];
+
+      // Eliminar duplicados por producto_id
+      const productosUnicos = productosCotizados.reduce((acc: any[], prod: any) => {
+        if (!acc.find(p => p.producto_id === prod.producto_id)) {
+          acc.push(prod);
+        }
+        return acc;
+      }, []);
+
       const { data, error } = await supabase.functions.invoke("parse-order-email", {
         body: {
           emailBody,
           emailSubject,
           emailFrom,
           clienteId: selectedClienteId,
+          productosCotizados: productosUnicos,
         },
       });
 
@@ -162,12 +219,29 @@ export default function ProcesarPedidoDialog({
 
       setParsedOrder(data.order);
 
-      // Try to match products with existing products
+      // Try to match products - priorizar producto_cotizado_id de la AI
       if (data.order && productos) {
         const matchedOrder = { ...data.order };
         matchedOrder.sucursales = matchedOrder.sucursales.map((suc: ParsedSucursal) => ({
           ...suc,
           productos: suc.productos.map((prod: ParsedProduct) => {
+            // Primero usar el ID de producto de la cotización si la AI lo identificó
+            if (prod.producto_cotizado_id) {
+              const matchedByCotizacion = productos.find(p => p.id === prod.producto_cotizado_id);
+              if (matchedByCotizacion) {
+                // Buscar precio de cotización si existe
+                const precioCotizacion = productosUnicos.find(
+                  (pc: any) => pc.producto_id === prod.producto_cotizado_id
+                )?.precio_cotizado;
+                return {
+                  ...prod,
+                  producto_id: matchedByCotizacion.id,
+                  precio_unitario: precioCotizacion || matchedByCotizacion.precio_venta,
+                };
+              }
+            }
+            
+            // Fallback: buscar por nombre similar
             const matched = productos.find(p => 
               p.nombre.toLowerCase().includes(prod.nombre_producto.toLowerCase()) ||
               prod.nombre_producto.toLowerCase().includes(p.nombre.toLowerCase())

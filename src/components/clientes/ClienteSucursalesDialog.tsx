@@ -443,14 +443,34 @@ const ClienteSucursalesDialog = ({
                   </div>
                 </div>
                 <div className="space-y-2 mt-4">
-                  <Label htmlFor="suc_restricciones">Restricciones de Vehículo</Label>
-                  <Input
-                    id="suc_restricciones"
-                    value={formData.restricciones_vehiculo}
-                    onChange={(e) => setFormData({ ...formData, restricciones_vehiculo: e.target.value })}
-                    placeholder="Ej: No tortón (no entra), solo camioneta"
-                    autoComplete="off"
-                  />
+                  <Label>Vehículos Permitidos</Label>
+                  <div className="flex flex-wrap gap-3">
+                    {['Camioneta', 'Urvan', 'Rabón', 'Tortón'].map((vehiculo) => {
+                      const vehiculosPermitidos = formData.restricciones_vehiculo?.split(',').filter(v => v.trim()) || [];
+                      const isChecked = vehiculosPermitidos.includes(vehiculo);
+                      return (
+                        <div key={vehiculo} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`vehiculo_${vehiculo}`}
+                            checked={isChecked}
+                            onCheckedChange={(checked) => {
+                              let nuevosVehiculos: string[];
+                              if (checked) {
+                                nuevosVehiculos = [...vehiculosPermitidos, vehiculo];
+                              } else {
+                                nuevosVehiculos = vehiculosPermitidos.filter(v => v !== vehiculo);
+                              }
+                              setFormData({ ...formData, restricciones_vehiculo: nuevosVehiculos.join(',') });
+                            }}
+                          />
+                          <Label htmlFor={`vehiculo_${vehiculo}`} className="text-sm font-normal cursor-pointer">
+                            {vehiculo}
+                          </Label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Selecciona los vehículos que PUEDEN entregar en esta sucursal (si no seleccionas ninguno, se permiten todos)</p>
                 </div>
                 <div className="flex items-center space-x-2 mt-4">
                   <Checkbox

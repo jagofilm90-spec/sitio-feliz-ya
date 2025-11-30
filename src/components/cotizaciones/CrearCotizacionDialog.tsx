@@ -110,6 +110,7 @@ const CrearCotizacionDialog = ({
   const [detalles, setDetalles] = useState<DetalleProducto[]>([]);
   const [folio, setFolio] = useState<string>("");
   const [sinCantidades, setSinCantidades] = useState(false);
+  const [nombreCotizacion, setNombreCotizacion] = useState("");
   const fechaCreacion = new Date();
 
   const isEditMode = !!cotizacionId;
@@ -199,6 +200,7 @@ const CrearCotizacionDialog = ({
       setSelectedCliente(cotizacion.cliente_id);
       setSelectedSucursal(cotizacion.sucursal_id || "");
       setNotas(cotizacion.notas || "");
+      setNombreCotizacion((cotizacion as any).nombre || "");
       
       // Calculate vigencia days from fecha_vigencia
       const vigencia = new Date(cotizacion.fecha_vigencia);
@@ -398,6 +400,7 @@ const CrearCotizacionDialog = ({
             sucursal_id: selectedSucursal === "none" ? null : (selectedSucursal || null),
             fecha_vigencia: format(fechaVigencia, "yyyy-MM-dd"),
             notas: notasConMes,
+            nombre: nombreCotizacion || null,
             subtotal: totales.subtotal,
             impuestos: totales.impuestos,
             total: totales.total,
@@ -456,6 +459,7 @@ const CrearCotizacionDialog = ({
             email_origen_id: emailOrigen?.id || null,
             gmail_cuenta_id: gmailCuentaId || null,
             notas: notasConMes,
+            nombre: nombreCotizacion || null,
             subtotal: totales.subtotal,
             impuestos: totales.impuestos,
             total: totales.total,
@@ -512,6 +516,7 @@ const CrearCotizacionDialog = ({
     setSearchTerm("");
     setFolio("");
     setSinCantidades(false);
+    setNombreCotizacion("");
   };
 
   const totales = calcularTotales();
@@ -576,6 +581,15 @@ const CrearCotizacionDialog = ({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2 col-span-2">
+              <Label>Nombre de cotización <span className="text-muted-foreground text-xs">(opcional, ej: "Avio", "Azúcares")</span></Label>
+              <Input
+                placeholder="Ej: Avio Diciembre, Azúcares..."
+                value={nombreCotizacion}
+                onChange={(e) => setNombreCotizacion(e.target.value)}
+              />
             </div>
 
             <div className="space-y-2">

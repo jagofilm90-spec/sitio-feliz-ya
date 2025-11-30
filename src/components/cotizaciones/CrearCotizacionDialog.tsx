@@ -441,9 +441,9 @@ const CrearCotizacionDialog = ({
             fecha_vigencia: format(fechaVigencia, "yyyy-MM-dd"),
             notas: notasConMes,
             nombre: nombreCotizacion || null,
-            subtotal: totales.subtotal,
-            impuestos: totales.impuestos,
-            total: totales.total,
+            subtotal: sinCantidades ? 0 : totales.subtotal,
+            impuestos: sinCantidades ? 0 : totales.impuestos,
+            total: sinCantidades ? 0 : totales.total,
           })
           .eq("id", cotizacionId);
 
@@ -502,9 +502,9 @@ const CrearCotizacionDialog = ({
             gmail_cuenta_id: gmailCuentaId || null,
             notas: notasConMes,
             nombre: nombreCotizacion || null,
-            subtotal: totales.subtotal,
-            impuestos: totales.impuestos,
-            total: totales.total,
+            subtotal: sinCantidades ? 0 : totales.subtotal,
+            impuestos: sinCantidades ? 0 : totales.impuestos,
+            total: sinCantidades ? 0 : totales.total,
             creado_por: session.session.user.id,
           })
           .select()

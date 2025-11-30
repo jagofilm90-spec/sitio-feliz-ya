@@ -505,10 +505,52 @@ const CrearCotizacionDialog = ({
 
         if (detallesError) throw detallesError;
 
-        toast({
-          title: "Cotización creada",
-          description: `Folio: ${folioData}`,
-        });
+        // Check if user is admin - if not, create authorization notification
+        const { data: userRoles } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", session.session.user.id);
+
+        const isAdmin = userRoles?.some(r => r.role === "admin");
+
+        if (!isAdmin) {
+          // Create notification for admin to authorize
+          await supabase
+            .from("notificaciones")
+            .insert({
+              tipo: "autorizacion_cotizacion",
+              titulo: `Cotización ${folioData} pendiente de autorización`,
+              descripcion: `Nueva cotización para ${clientes.find(c => c.id === selectedCliente)?.nombre || 'cliente'} requiere autorización antes de enviar.`,
+              cotizacion_id: cotizacion.id,
+              leida: false,
+            });
+          
+          // Update status to pending authorization
+          await supabase
+            .from("cotizaciones")
+            .update({ status: "pendiente_autorizacion" })
+            .eq("id", cotizacion.id);
+
+          toast({
+            title: "Cotización enviada para autorización",
+            description: `Folio: ${folioData}. Pendiente de aprobación del administrador.`,
+          });
+        } else {
+          // Admin created it - mark as authorized
+          await supabase
+            .from("cotizaciones")
+            .update({ 
+              status: "autorizada",
+              autorizado_por: session.session.user.id,
+              fecha_autorizacion: new Date().toISOString()
+            })
+            .eq("id", cotizacion.id);
+
+          toast({
+            title: "Cotización creada",
+            description: `Folio: ${folioData}`,
+          });
+        }
 
         onSuccess?.(cotizacion.id);
       }

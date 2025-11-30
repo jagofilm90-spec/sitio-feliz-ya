@@ -317,19 +317,24 @@ export type Database = {
       }
       cotizaciones: {
         Row: {
+          autorizado_por: string | null
           cliente_id: string
           creado_por: string
           created_at: string
           email_origen_id: string | null
+          fecha_autorizacion: string | null
           fecha_creacion: string
+          fecha_rechazo: string | null
           fecha_vigencia: string
           folio: string
           gmail_cuenta_id: string | null
           id: string
           impuestos: number
+          motivo_rechazo: string | null
           nombre: string | null
           notas: string | null
           pedido_id: string | null
+          rechazado_por: string | null
           status: string
           subtotal: number
           sucursal_id: string | null
@@ -337,19 +342,24 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          autorizado_por?: string | null
           cliente_id: string
           creado_por: string
           created_at?: string
           email_origen_id?: string | null
+          fecha_autorizacion?: string | null
           fecha_creacion?: string
+          fecha_rechazo?: string | null
           fecha_vigencia: string
           folio: string
           gmail_cuenta_id?: string | null
           id?: string
           impuestos?: number
+          motivo_rechazo?: string | null
           nombre?: string | null
           notas?: string | null
           pedido_id?: string | null
+          rechazado_por?: string | null
           status?: string
           subtotal?: number
           sucursal_id?: string | null
@@ -357,19 +367,24 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          autorizado_por?: string | null
           cliente_id?: string
           creado_por?: string
           created_at?: string
           email_origen_id?: string | null
+          fecha_autorizacion?: string | null
           fecha_creacion?: string
+          fecha_rechazo?: string | null
           fecha_vigencia?: string
           folio?: string
           gmail_cuenta_id?: string | null
           id?: string
           impuestos?: number
+          motivo_rechazo?: string | null
           nombre?: string | null
           notas?: string | null
           pedido_id?: string | null
+          rechazado_por?: string | null
           status?: string
           subtotal?: number
           sucursal_id?: string | null
@@ -377,6 +392,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "cotizaciones_autorizado_por_fkey"
+            columns: ["autorizado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "cotizaciones_cliente_id_fkey"
             columns: ["cliente_id"]
@@ -403,6 +425,13 @@ export type Database = {
             columns: ["pedido_id"]
             isOneToOne: false
             referencedRelation: "pedidos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotizaciones_rechazado_por_fkey"
+            columns: ["rechazado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -1160,6 +1189,7 @@ export type Database = {
       }
       notificaciones: {
         Row: {
+          cotizacion_id: string | null
           created_at: string
           descripcion: string
           documento_id: string | null
@@ -1172,6 +1202,7 @@ export type Database = {
           titulo: string
         }
         Insert: {
+          cotizacion_id?: string | null
           created_at?: string
           descripcion: string
           documento_id?: string | null
@@ -1184,6 +1215,7 @@ export type Database = {
           titulo: string
         }
         Update: {
+          cotizacion_id?: string | null
           created_at?: string
           descripcion?: string
           documento_id?: string | null
@@ -1196,6 +1228,13 @@ export type Database = {
           titulo?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "notificaciones_cotizacion_id_fkey"
+            columns: ["cotizacion_id"]
+            isOneToOne: false
+            referencedRelation: "cotizaciones"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "notificaciones_documento_id_fkey"
             columns: ["documento_id"]

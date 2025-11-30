@@ -17,9 +17,19 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Eye, ShoppingCart, FileText, Link2, Printer } from "lucide-react";
+import { Plus, Search, Eye, ShoppingCart, FileText, Link2, Printer, Receipt, Send, CheckCircle2, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 import CotizacionesTab from "@/components/cotizaciones/CotizacionesTab";
@@ -33,9 +43,13 @@ interface PedidoConCotizacion {
   fecha_pedido: string;
   total: number;
   status: string;
-  clientes: { nombre: string } | null;
+  requiere_factura: boolean;
+  facturado: boolean;
+  factura_enviada_al_cliente: boolean;
+  clientes: { id: string; nombre: string; email: string | null } | null;
   profiles: { full_name: string } | null;
   cotizacion_origen?: { id: string; folio: string } | null;
+  sucursal?: { email_facturacion: string | null } | null;
 }
 
 const Pedidos = () => {
@@ -46,6 +60,8 @@ const Pedidos = () => {
   const [selectedCotizacionId, setSelectedCotizacionId] = useState<string | null>(null);
   const [remisionDialogOpen, setRemisionDialogOpen] = useState(false);
   const [selectedPedidoData, setSelectedPedidoData] = useState<any>(null);
+  const [emailAlertOpen, setEmailAlertOpen] = useState(false);
+  const [processingPedidoId, setProcessingPedidoId] = useState<string | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -64,8 +80,13 @@ const Pedidos = () => {
           fecha_pedido,
           total,
           status,
-          clientes (nombre),
-          profiles:vendedor_id (full_name)
+          requiere_factura,
+          facturado,
+          factura_enviada_al_cliente,
+          sucursal_id,
+          clientes (id, nombre, email),
+          profiles:vendedor_id (full_name),
+          cliente_sucursales:sucursal_id (email_facturacion)
         `)
         .order("fecha_pedido", { ascending: false });
 
@@ -88,9 +109,10 @@ const Pedidos = () => {
       });
 
       // Merge data
-      const pedidosConCotizacion: PedidoConCotizacion[] = (pedidosData || []).map((p) => ({
+      const pedidosConCotizacion: PedidoConCotizacion[] = (pedidosData || []).map((p: any) => ({
         ...p,
         cotizacion_origen: cotizacionMap.get(p.id) || null,
+        sucursal: p.cliente_sucursales,
       }));
 
       setPedidos(pedidosConCotizacion);
@@ -134,6 +156,36 @@ const Pedidos = () => {
     );
   };
 
+  const getFacturaBadge = (pedido: PedidoConCotizacion) => {
+    if (pedido.factura_enviada_al_cliente) {
+      return (
+        <Badge variant="default" className="gap-1 bg-green-600">
+          <CheckCircle2 className="h-3 w-3" />
+          Enviada
+        </Badge>
+      );
+    }
+    if (pedido.facturado) {
+      return (
+        <Badge variant="secondary" className="gap-1">
+          <Clock className="h-3 w-3" />
+          Por enviar
+        </Badge>
+      );
+    }
+    if (pedido.requiere_factura) {
+      return (
+        <Badge variant="outline" className="gap-1">
+          <FileText className="h-3 w-3" />
+          Pendiente
+        </Badge>
+      );
+    }
+    return (
+      <span className="text-muted-foreground text-xs">Remisión</span>
+    );
+  };
+
   const getCreditLabel = (term: string) => {
     const labels: Record<string, string> = {
       contado: "Contado",
@@ -142,6 +194,72 @@ const Pedidos = () => {
       "30_dias": "30 días",
     };
     return labels[term] || term;
+  };
+
+  const handleFacturarPedido = async (pedidoId: string) => {
+    try {
+      const { error } = await supabase
+        .from("pedidos")
+        .update({ facturado: true })
+        .eq("id", pedidoId);
+
+      if (error) throw error;
+
+      toast({ title: "Pedido marcado como facturado" });
+      loadPedidos();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "No se pudo facturar el pedido",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const getEmailForPedido = (pedido: PedidoConCotizacion): string | null => {
+    // First check sucursal email_facturacion
+    if (pedido.sucursal?.email_facturacion) {
+      return pedido.sucursal.email_facturacion;
+    }
+    // Fall back to client email
+    if (pedido.clientes?.email) {
+      return pedido.clientes.email;
+    }
+    return null;
+  };
+
+  const handleEnviarFactura = async (pedido: PedidoConCotizacion) => {
+    const email = getEmailForPedido(pedido);
+    
+    if (!email) {
+      setProcessingPedidoId(pedido.id);
+      setEmailAlertOpen(true);
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("pedidos")
+        .update({ 
+          factura_enviada_al_cliente: true,
+          fecha_factura_enviada: new Date().toISOString()
+        })
+        .eq("id", pedido.id);
+
+      if (error) throw error;
+
+      toast({ 
+        title: "Factura enviada",
+        description: `Se envió la factura a ${email}`,
+      });
+      loadPedidos();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "No se pudo enviar la factura",
+        variant: "destructive",
+      });
+    }
   };
 
   const handlePrintRemision = async (pedidoId: string) => {
@@ -283,6 +401,7 @@ const Pedidos = () => {
                     <TableHead>Fecha</TableHead>
                     <TableHead>Total</TableHead>
                     <TableHead>Estado</TableHead>
+                    <TableHead>Factura</TableHead>
                     <TableHead>Origen</TableHead>
                     <TableHead>Acciones</TableHead>
                   </TableRow>
@@ -290,13 +409,13 @@ const Pedidos = () => {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center">
+                      <TableCell colSpan={9} className="text-center">
                         Cargando...
                       </TableCell>
                     </TableRow>
                   ) : filteredPedidos.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center">
+                      <TableCell colSpan={9} className="text-center">
                         No hay pedidos registrados
                       </TableCell>
                     </TableRow>
@@ -311,6 +430,7 @@ const Pedidos = () => {
                         </TableCell>
                         <TableCell className="font-mono">${formatCurrency(pedido.total)}</TableCell>
                         <TableCell>{getStatusBadge(pedido.status)}</TableCell>
+                        <TableCell>{getFacturaBadge(pedido)}</TableCell>
                         <TableCell>
                           {pedido.cotizacion_origen ? (
                             <TooltipProvider>
@@ -361,6 +481,42 @@ const Pedidos = () => {
                                 <TooltipContent>Imprimir Remisión</TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
+                            
+                            {/* Facturar Pedido - Only show if not facturado */}
+                            {!pedido.facturado && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon"
+                                      onClick={() => handleFacturarPedido(pedido.id)}
+                                    >
+                                      <Receipt className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Facturar Pedido</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                            
+                            {/* Enviar Factura - Only show if facturado but not sent */}
+                            {pedido.facturado && !pedido.factura_enviada_al_cliente && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon"
+                                      onClick={() => handleEnviarFactura(pedido)}
+                                    >
+                                      <Send className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Enviar Factura al Cliente</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -393,6 +549,25 @@ const Pedidos = () => {
         onOpenChange={setRemisionDialogOpen}
         datos={selectedPedidoData}
       />
+
+      {/* Alert Dialog for missing email */}
+      <AlertDialog open={emailAlertOpen} onOpenChange={setEmailAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>No existe correo para enviar factura</AlertDialogTitle>
+            <AlertDialogDescription>
+              El cliente o sucursal no tiene un correo electrónico registrado. 
+              Favor de ingresar el correo en el registro del cliente o sucursal antes de enviar la factura.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cerrar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => navigate("/clientes")}>
+              Ir a Clientes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 };

@@ -71,6 +71,7 @@ const Clientes = () => {
     termino_credito: "contado" | "8_dias" | "15_dias" | "30_dias";
     limite_credito: string;
     zona_id: string;
+    preferencia_facturacion: "siempre_factura" | "siempre_remision" | "variable";
   }>({
     codigo: "",
     nombre: "",
@@ -82,6 +83,7 @@ const Clientes = () => {
     termino_credito: "contado",
     limite_credito: "",
     zona_id: "",
+    preferencia_facturacion: "variable",
   });
 
   // Delivery options state
@@ -172,6 +174,7 @@ const Clientes = () => {
         termino_credito: formData.termino_credito,
         limite_credito: parseFloat(formData.limite_credito || "0"),
         zona_id: formData.zona_id || null,
+        preferencia_facturacion: formData.preferencia_facturacion,
       };
 
       let clienteId: string;
@@ -276,6 +279,7 @@ const Clientes = () => {
       termino_credito: client.termino_credito,
       limite_credito: client.limite_credito.toString(),
       zona_id: client.zona_id || "",
+      preferencia_facturacion: client.preferencia_facturacion || "variable",
     });
     setEntregarMismaDireccion(true);
     setSucursales([]);
@@ -332,6 +336,7 @@ const Clientes = () => {
       termino_credito: "contado",
       limite_credito: "",
       zona_id: "",
+      preferencia_facturacion: "variable",
     });
     setEntregarMismaDireccion(true);
     setSucursales([]);
@@ -478,6 +483,25 @@ const Clientes = () => {
                         onChange={(e) => setFormData({ ...formData, limite_credito: e.target.value })}
                       />
                     </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="preferencia_facturacion">Preferencia de Facturación</Label>
+                    <Select
+                      value={formData.preferencia_facturacion}
+                      onValueChange={(value: "siempre_factura" | "siempre_remision" | "variable") => setFormData({ ...formData, preferencia_facturacion: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="siempre_factura">Siempre factura</SelectItem>
+                        <SelectItem value="siempre_remision">Siempre remisión</SelectItem>
+                        <SelectItem value="variable">Variable (según pedido)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Define si este cliente normalmente requiere factura o remisión
+                    </p>
                   </div>
                 </div>
 

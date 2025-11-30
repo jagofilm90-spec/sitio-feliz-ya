@@ -129,6 +129,8 @@ const CotizacionDetalleDialog = ({
             cantidad,
             precio_unitario,
             subtotal,
+            cantidad_maxima,
+            nota_linea,
             producto:productos(nombre, codigo, unidad)
           )
         `)
@@ -987,6 +989,15 @@ const CotizacionDetalleDialog = ({
                         <p className="text-xs text-muted-foreground">
                           {d.producto?.codigo} • {d.producto?.unidad}
                         </p>
+                        {(d.cantidad_maxima || d.nota_linea) && (
+                          <p className="text-xs text-amber-600 mt-1 font-medium">
+                            {d.cantidad_maxima && (
+                              <span>Máx: {d.cantidad_maxima.toLocaleString()} {d.producto?.unidad}</span>
+                            )}
+                            {d.cantidad_maxima && d.nota_linea && <span> • </span>}
+                            {d.nota_linea && <span>{d.nota_linea}</span>}
+                          </p>
+                        )}
                       </div>
                     </TableCell>
                     {!esSoloPrecios && <TableCell className="text-center">{d.cantidad}</TableCell>}

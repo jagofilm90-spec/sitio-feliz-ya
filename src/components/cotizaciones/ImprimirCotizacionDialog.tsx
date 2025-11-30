@@ -43,6 +43,8 @@ const ImprimirCotizacionDialog = ({
             cantidad,
             precio_unitario,
             subtotal,
+            cantidad_maxima,
+            nota_linea,
             producto:productos(nombre, codigo, unidad)
           )
         `)
@@ -171,6 +173,8 @@ const ImprimirCotizacionDialog = ({
       cantidad: d.cantidad || 0,
       precio_unitario: d.precio_unitario || 0,
       subtotal: d.subtotal || 0,
+      cantidad_maxima: d.cantidad_maxima || null,
+      nota_linea: d.nota_linea || null,
     })) || [],
     subtotal: cotizacion.subtotal || 0,
     impuestos: cotizacion.impuestos || 0,

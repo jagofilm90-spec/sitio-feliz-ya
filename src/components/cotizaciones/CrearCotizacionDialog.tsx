@@ -48,6 +48,8 @@ interface DetalleProducto {
   fecha_ultima_compra: string | null;
   aplica_iva: boolean;
   aplica_ieps: boolean;
+  cantidad_maxima: number | null;
+  nota_linea: string | null;
 }
 
 interface Cliente {
@@ -188,6 +190,8 @@ const CrearCotizacionDialog = ({
             cantidad,
             precio_unitario,
             subtotal,
+            cantidad_maxima,
+            nota_linea,
             producto:productos(
               id, nombre, codigo, unidad, marca, precio_venta, aplica_iva, aplica_ieps
             )
@@ -243,6 +247,8 @@ const CrearCotizacionDialog = ({
         fecha_ultima_compra: null,
         aplica_iva: d.producto.aplica_iva,
         aplica_ieps: d.producto.aplica_ieps,
+        cantidad_maxima: d.cantidad_maxima || null,
+        nota_linea: d.nota_linea || null,
       }));
 
       setDetalles(detallesFormateados);
@@ -324,6 +330,8 @@ const CrearCotizacionDialog = ({
         fecha_ultima_compra: historial.fecha,
         aplica_iva: producto.aplica_iva,
         aplica_ieps: producto.aplica_ieps,
+        cantidad_maxima: null,
+        nota_linea: null,
       },
     ]);
     // Limpiar búsqueda pero mantener el dropdown abierto para seguir agregando
@@ -347,6 +355,18 @@ const CrearCotizacionDialog = ({
 
   const eliminarProducto = (index: number) => {
     setDetalles(detalles.filter((_, i) => i !== index));
+  };
+
+  const actualizarCantidadMaxima = (index: number, cantidad: number | null) => {
+    const nuevosDetalles = [...detalles];
+    nuevosDetalles[index].cantidad_maxima = cantidad;
+    setDetalles(nuevosDetalles);
+  };
+
+  const actualizarNotaLinea = (index: number, nota: string) => {
+    const nuevosDetalles = [...detalles];
+    nuevosDetalles[index].nota_linea = nota || null;
+    setDetalles(nuevosDetalles);
   };
 
   // Calcular totales desglosando IVA e IEPS de precios que YA incluyen impuestos
@@ -444,6 +464,8 @@ const CrearCotizacionDialog = ({
           cantidad: sinCantidades ? 0 : d.cantidad,
           precio_unitario: d.precio_unitario,
           subtotal: sinCantidades ? 0 : d.subtotal,
+          cantidad_maxima: d.cantidad_maxima || null,
+          nota_linea: d.nota_linea || null,
         }));
 
         const { error: detallesError } = await supabase
@@ -497,6 +519,8 @@ const CrearCotizacionDialog = ({
           cantidad: sinCantidades ? 0 : d.cantidad,
           precio_unitario: d.precio_unitario,
           subtotal: sinCantidades ? 0 : d.subtotal,
+          cantidad_maxima: d.cantidad_maxima || null,
+          nota_linea: d.nota_linea || null,
         }));
 
         const { error: detallesError } = await supabase
@@ -777,14 +801,16 @@ const CrearCotizacionDialog = ({
 
           {/* Products table */}
           {detalles.length > 0 && (
-            <div className="border rounded-lg">
+            <div className="border rounded-lg overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Producto</TableHead>
                     {!sinCantidades && <TableHead className="w-24">Cantidad</TableHead>}
-                    <TableHead className={sinCantidades ? "w-44" : "w-44"}>Precio Unit.</TableHead>
-                    {!sinCantidades && <TableHead className="w-32 text-right">Subtotal</TableHead>}
+                    <TableHead className="w-40">Precio Unit.</TableHead>
+                    <TableHead className="w-28">Máx. Disponible</TableHead>
+                    <TableHead className="w-40">Nota línea</TableHead>
+                    {!sinCantidades && <TableHead className="w-28 text-right">Subtotal</TableHead>}
                     <TableHead className="w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -866,6 +892,27 @@ const CrearCotizacionDialog = ({
                             )}
                           </div>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          min={0}
+                          placeholder="Sin límite"
+                          value={d.cantidad_maxima || ""}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            actualizarCantidadMaxima(index, val ? parseInt(val) : null);
+                          }}
+                          className="w-24"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          placeholder="Ej: Solo 3000 bultos"
+                          value={d.nota_linea || ""}
+                          onChange={(e) => actualizarNotaLinea(index, e.target.value)}
+                          className="w-36 text-xs"
+                        />
                       </TableCell>
                       {!sinCantidades && (
                         <TableCell className="text-right font-medium">

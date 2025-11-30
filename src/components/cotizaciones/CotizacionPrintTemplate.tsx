@@ -8,6 +8,8 @@ interface ProductoCotizacion {
   cantidad: number;
   precio_unitario: number;
   subtotal: number;
+  cantidad_maxima?: number | null;
+  nota_linea?: string | null;
 }
 
 interface DatosCotizacion {
@@ -134,7 +136,20 @@ export const CotizacionPrintTemplate = ({ datos }: CotizacionPrintTemplateProps)
           {datos.productos.map((producto, index) => (
             <tr key={index} className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}>
               <td className="p-2 border-b font-mono">{producto.codigo}</td>
-              <td className="p-2 border-b">{producto.nombre}</td>
+              <td className="p-2 border-b">
+                <div>
+                  {producto.nombre}
+                  {(producto.cantidad_maxima || producto.nota_linea) && (
+                    <div className="text-[10px] text-amber-700 mt-0.5 font-medium">
+                      {producto.cantidad_maxima && (
+                        <span>Máx: {producto.cantidad_maxima.toLocaleString()} {producto.unidad}</span>
+                      )}
+                      {producto.cantidad_maxima && producto.nota_linea && <span> • </span>}
+                      {producto.nota_linea && <span>{producto.nota_linea}</span>}
+                    </div>
+                  )}
+                </div>
+              </td>
               {!datos.soloPrecios && (
                 <>
                   <td className="p-2 border-b text-center">{producto.cantidad}</td>

@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { Bell, PackageX, AlertCircle, X, IdCard, FileCheck, CheckCircle2 } from "lucide-react";
+import { Bell, PackageX, AlertCircle, X, IdCard, FileCheck, CheckCircle2, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -21,7 +21,7 @@ const STORAGE_KEY = "dismissed-notifications";
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 export const CentroNotificaciones = () => {
-  const { alertasCaducidad, notificacionesStock, alertasLicencias, autorizacionesOC, confirmacionesProveedor, totalCount, loading, marcarComoLeida, isAdmin } = useNotificaciones();
+  const { alertasCaducidad, notificacionesStock, alertasLicencias, autorizacionesOC, autorizacionesCotizacion, confirmacionesProveedor, totalCount, loading, marcarComoLeida, isAdmin } = useNotificaciones();
   const navigate = useNavigate();
   const [dismissedLicencias, setDismissedLicencias] = useState<string[]>([]);
   const [dismissedCaducidad, setDismissedCaducidad] = useState<string[]>([]);
@@ -85,7 +85,7 @@ export const CentroNotificaciones = () => {
     [confirmacionesProveedor, dismissedConfirmaciones]
   );
 
-  const computedCount = notificacionesStock.length + visibleAlertasLicencias.length + visibleAlertasCaducidad.length + autorizacionesOC.length + visibleConfirmaciones.length;
+  const computedCount = notificacionesStock.length + visibleAlertasLicencias.length + visibleAlertasCaducidad.length + autorizacionesOC.length + autorizacionesCotizacion.length + visibleConfirmaciones.length;
 
   const handleLicenciaClick = (puesto: string) => {
     const tabMap: Record<string, string> = {
@@ -103,6 +103,11 @@ export const CentroNotificaciones = () => {
   const handleAutorizacionClick = (ordenCompraId: string, notificacionId: string) => {
     marcarComoLeida(notificacionId);
     navigate(`/compras?aprobar=${ordenCompraId}`);
+  };
+
+  const handleAutorizacionCotizacionClick = (cotizacionId: string, notificacionId: string) => {
+    marcarComoLeida(notificacionId);
+    navigate(`/pedidos?aprobar_cotizacion=${cotizacionId}`);
   };
 
   return (
@@ -168,6 +173,44 @@ export const CentroNotificaciones = () => {
                         </p>
                       </div>
                       <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300">
+                        Revisar
+                      </Badge>
+                    </div>
+                  ))}
+                  {(autorizacionesCotizacion.length > 0 || visibleConfirmaciones.length > 0 || notificacionesStock.length > 0 || visibleAlertasLicencias.length > 0 || visibleAlertasCaducidad.length > 0) && (
+                    <Separator className="my-2" />
+                  )}
+                </div>
+              )}
+
+              {/* Autorizaciones de Cotizaciones - Prioritarias */}
+              {autorizacionesCotizacion.length > 0 && (
+                <div className="mb-2">
+                  <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">
+                    Cotizaciones Pendientes de Autorización
+                  </div>
+                  {autorizacionesCotizacion.map((notif) => (
+                    <div
+                      key={notif.id}
+                      className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 mb-2"
+                      onClick={() => handleAutorizacionCotizacionClick(notif.cotizacion_id, notif.id)}
+                    >
+                      <FileText className="h-5 w-5 text-purple-600 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{notif.folio}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-2">
+                          Cotización para {notif.cliente_nombre}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {new Date(notif.created_at).toLocaleDateString("es-MX", {
+                            day: "numeric",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="bg-purple-100 text-purple-700 border-purple-300">
                         Revisar
                       </Badge>
                     </div>

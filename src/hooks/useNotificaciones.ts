@@ -37,6 +37,16 @@ interface AutorizacionOC {
   folio?: string;
 }
 
+interface AutorizacionCotizacion {
+  id: string;
+  titulo: string;
+  descripcion: string;
+  created_at: string;
+  cotizacion_id: string;
+  folio?: string;
+  cliente_nombre?: string;
+}
+
 interface ConfirmacionProveedor {
   id: string;
   orden_compra_id: string;
@@ -50,6 +60,7 @@ export interface NotificacionesData {
   notificacionesStock: NotificacionStockBajo[];
   alertasLicencias: LicenciaAlerta[];
   autorizacionesOC: AutorizacionOC[];
+  autorizacionesCotizacion: AutorizacionCotizacion[];
   confirmacionesProveedor: ConfirmacionProveedor[];
   totalCount: number;
 }
@@ -60,6 +71,7 @@ export const useNotificaciones = () => {
     notificacionesStock: [],
     alertasLicencias: [],
     autorizacionesOC: [],
+    autorizacionesCotizacion: [],
     confirmacionesProveedor: [],
     totalCount: 0,
   });
@@ -82,20 +94,22 @@ export const useNotificaciones = () => {
 
   const cargarNotificaciones = async () => {
     try {
-      const [caducidad, stock, licencias, autorizaciones, confirmaciones] = await Promise.all([
+      const [caducidad, stock, licencias, autorizaciones, autorizacionesCot, confirmaciones] = await Promise.all([
         cargarAlertasCaducidad(),
         cargarNotificacionesStock(),
         cargarAlertasLicencias(),
         isAdmin ? cargarAutorizacionesOC() : Promise.resolve([]),
+        isAdmin ? cargarAutorizacionesCotizacion() : Promise.resolve([]),
         cargarConfirmacionesProveedor(),
       ]);
 
-      const total = caducidad.length + stock.length + licencias.length + autorizaciones.length + confirmaciones.length;
+      const total = caducidad.length + stock.length + licencias.length + autorizaciones.length + autorizacionesCot.length + confirmaciones.length;
       setNotificaciones({
         alertasCaducidad: caducidad,
         notificacionesStock: stock,
         alertasLicencias: licencias,
         autorizacionesOC: autorizaciones,
+        autorizacionesCotizacion: autorizacionesCot,
         confirmacionesProveedor: confirmaciones,
         totalCount: total,
       });
@@ -276,6 +290,59 @@ export const useNotificaciones = () => {
       return autorizaciones;
     } catch (error) {
       console.error("Error cargando autorizaciones de OC:", error);
+      return [];
+    }
+  };
+
+  const cargarAutorizacionesCotizacion = async (): Promise<AutorizacionCotizacion[]> => {
+    try {
+      const { data, error } = await supabase
+        .from("notificaciones")
+        .select(`
+          id,
+          titulo,
+          descripcion,
+          created_at,
+          cotizacion_id
+        `)
+        .eq("tipo", "autorizacion_cotizacion")
+        .eq("leida", false)
+        .not("cotizacion_id", "is", null)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching autorizaciones cotizacion:", error);
+        return [];
+      }
+      
+      const autorizaciones: AutorizacionCotizacion[] = [];
+      for (const notif of data || []) {
+        if (notif.cotizacion_id) {
+          const { data: cot } = await supabase
+            .from("cotizaciones")
+            .select(`
+              folio,
+              status,
+              cliente:clientes(nombre)
+            `)
+            .eq("id", notif.cotizacion_id)
+            .maybeSingle();
+          
+          // Show notification if cotizacion exists and is pending authorization
+          if (cot && cot.status === "pendiente_autorizacion") {
+            autorizaciones.push({
+              ...notif,
+              cotizacion_id: notif.cotizacion_id,
+              folio: cot.folio,
+              cliente_nombre: (cot.cliente as any)?.nombre || "Cliente",
+            });
+          }
+        }
+      }
+      
+      return autorizaciones;
+    } catch (error) {
+      console.error("Error cargando autorizaciones de cotizacion:", error);
       return [];
     }
   };

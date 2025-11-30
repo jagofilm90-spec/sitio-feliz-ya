@@ -44,6 +44,8 @@ import {
   Trash2,
   Pencil,
   Printer,
+  CheckCircle,
+  Clock,
 } from "lucide-react";
 import { format, isBefore } from "date-fns";
 import { es } from "date-fns/locale";
@@ -51,7 +53,9 @@ import CrearCotizacionDialog from "./CrearCotizacionDialog";
 import CotizacionDetalleDialog from "./CotizacionDetalleDialog";
 import EnviarCotizacionDialog from "./EnviarCotizacionDialog";
 import ImprimirCotizacionDialog from "./ImprimirCotizacionDialog";
+import AutorizacionCotizacionDialog from "./AutorizacionCotizacionDialog";
 import { formatCurrency } from "@/lib/utils";
+import { useUserRoles } from "@/hooks/useUserRoles";
 
 interface Cotizacion {
   id: string;
@@ -63,11 +67,14 @@ interface Cotizacion {
   fecha_vigencia: string;
   status: string;
   total: number;
+  creado_por?: string;
+  notas?: string;
 }
 
 const CotizacionesTab = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { isAdmin } = useUserRoles();
   const [searchTerm, setSearchTerm] = useState("");
   const [crearOpen, setCrearOpen] = useState(false);
   const [editCotizacionId, setEditCotizacionId] = useState<string | null>(null);
@@ -77,6 +84,7 @@ const CotizacionesTab = () => {
   const [deleting, setDeleting] = useState(false);
   const [enviarCotizacion, setEnviarCotizacion] = useState<Cotizacion | null>(null);
   const [imprimirCotizacionId, setImprimirCotizacionId] = useState<string | null>(null);
+  const [autorizarCotizacion, setAutorizarCotizacion] = useState<any>(null);
 
   const { data: cotizaciones, isLoading, refetch } = useQuery({
     queryKey: ["cotizaciones"],
@@ -92,7 +100,9 @@ const CotizacionesTab = () => {
           fecha_creacion,
           fecha_vigencia,
           status,
-          total
+          total,
+          creado_por,
+          notas
         `)
         .order("fecha_creacion", { ascending: false });
 
@@ -110,6 +120,18 @@ const CotizacionesTab = () => {
     }
     if (status === "rechazada") {
       return <Badge variant="destructive">Rechazada</Badge>;
+    }
+    if (status === "pendiente_autorizacion") {
+      return <Badge className="bg-amber-500/20 text-amber-700 flex items-center gap-1">
+        <Clock className="h-3 w-3" />
+        Pendiente autorización
+      </Badge>;
+    }
+    if (status === "autorizada") {
+      return <Badge className="bg-green-500/20 text-green-700 flex items-center gap-1">
+        <CheckCircle className="h-3 w-3" />
+        Autorizada
+      </Badge>;
     }
     if (status === "enviada" && isBefore(vigencia, hoy)) {
       return <Badge className="bg-red-500/20 text-red-700">Vencida</Badge>;
@@ -276,22 +298,38 @@ const CotizacionesTab = () => {
                               <Printer className="h-4 w-4 mr-2" />
                               Ver / Imprimir
                             </DropdownMenuItem>
-                            {c.status === "borrador" && (
-                              <>
-                                <DropdownMenuItem
-                                  onClick={() => setEditCotizacionId(c.id)}
-                                >
-                                  <Pencil className="h-4 w-4 mr-2" />
-                                  Editar
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => setEnviarCotizacion(c)}
-                                >
-                                  <Send className="h-4 w-4 mr-2" />
-                                  Enviar al cliente
-                                </DropdownMenuItem>
-                              </>
+                            
+                            {/* Admin can authorize pending quotations */}
+                            {isAdmin && c.status === "pendiente_autorizacion" && (
+                              <DropdownMenuItem
+                                onClick={() => setAutorizarCotizacion(c)}
+                                className="text-amber-600"
+                              >
+                                <CheckCircle className="h-4 w-4 mr-2" />
+                                Autorizar
+                              </DropdownMenuItem>
                             )}
+                            
+                            {/* Edit option for borrador or pendiente_autorizacion */}
+                            {(c.status === "borrador" || c.status === "pendiente_autorizacion") && (
+                              <DropdownMenuItem
+                                onClick={() => setEditCotizacionId(c.id)}
+                              >
+                                <Pencil className="h-4 w-4 mr-2" />
+                                Editar
+                              </DropdownMenuItem>
+                            )}
+                            
+                            {/* Send option only for authorized quotations */}
+                            {c.status === "autorizada" && (
+                              <DropdownMenuItem
+                                onClick={() => setEnviarCotizacion(c)}
+                              >
+                                <Send className="h-4 w-4 mr-2" />
+                                Enviar al cliente
+                              </DropdownMenuItem>
+                            )}
+                            
                             {(c.status === "enviada" || c.status === "aceptada") && (
                               <DropdownMenuItem
                                 onClick={() => handleConvertirPedido(c.id)}
@@ -405,6 +443,17 @@ const CotizacionesTab = () => {
           cotizacionId={imprimirCotizacionId}
           open={!!imprimirCotizacionId}
           onOpenChange={(open) => !open && setImprimirCotizacionId(null)}
+        />
+      )}
+
+      {/* Autorización Cotización Dialog */}
+      {autorizarCotizacion && (
+        <AutorizacionCotizacionDialog
+          open={!!autorizarCotizacion}
+          onOpenChange={(open) => {
+            if (!open) setAutorizarCotizacion(null);
+          }}
+          cotizacion={autorizarCotizacion}
         />
       )}
     </>

@@ -48,11 +48,13 @@ import { format, isBefore } from "date-fns";
 import { es } from "date-fns/locale";
 import CrearCotizacionDialog from "./CrearCotizacionDialog";
 import CotizacionDetalleDialog from "./CotizacionDetalleDialog";
+import EnviarCotizacionDialog from "./EnviarCotizacionDialog";
 import { formatCurrency } from "@/lib/utils";
 
 interface Cotizacion {
   id: string;
   folio: string;
+  cliente_id: string;
   cliente: { nombre: string; codigo: string };
   sucursal: { nombre: string } | null;
   fecha_creacion: string;
@@ -71,6 +73,7 @@ const CotizacionesTab = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [cotizacionToDelete, setCotizacionToDelete] = useState<Cotizacion | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [enviarCotizacion, setEnviarCotizacion] = useState<Cotizacion | null>(null);
 
   const { data: cotizaciones, isLoading, refetch } = useQuery({
     queryKey: ["cotizaciones"],
@@ -80,6 +83,7 @@ const CotizacionesTab = () => {
         .select(`
           id,
           folio,
+          cliente_id,
           cliente:clientes(nombre, codigo),
           sucursal:cliente_sucursales(nombre),
           fecha_creacion,
@@ -271,7 +275,9 @@ const CotizacionesTab = () => {
                                   <Pencil className="h-4 w-4 mr-2" />
                                   Editar
                                 </DropdownMenuItem>
-                                <DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => setEnviarCotizacion(c)}
+                                >
                                   <Send className="h-4 w-4 mr-2" />
                                   Enviar al cliente
                                 </DropdownMenuItem>
@@ -335,6 +341,21 @@ const CotizacionesTab = () => {
           open={!!selectedCotizacion}
           onOpenChange={(open) => !open && setSelectedCotizacion(null)}
           onUpdate={() => {
+            queryClient.invalidateQueries({ queryKey: ["cotizaciones"] });
+          }}
+        />
+      )}
+
+      {/* Enviar Cotización Dialog */}
+      {enviarCotizacion && (
+        <EnviarCotizacionDialog
+          open={!!enviarCotizacion}
+          onOpenChange={(open) => !open && setEnviarCotizacion(null)}
+          cotizacionId={enviarCotizacion.id}
+          clienteId={enviarCotizacion.cliente_id}
+          clienteNombre={enviarCotizacion.cliente.nombre}
+          folio={enviarCotizacion.folio}
+          onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ["cotizaciones"] });
           }}
         />

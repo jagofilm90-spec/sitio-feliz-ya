@@ -55,7 +55,7 @@ import { es } from "date-fns/locale";
 import CrearCotizacionDialog from "./CrearCotizacionDialog";
 import CotizacionDetalleDialog from "./CotizacionDetalleDialog";
 import EnviarCotizacionDialog from "./EnviarCotizacionDialog";
-import EnviarCotizacionesMultiplesDialog from "./EnviarCotizacionesMultiplesDialog";
+import EnviarCotizacionesAgrupadasDialog from "./EnviarCotizacionesAgrupadasDialog";
 import ImprimirCotizacionDialog from "./ImprimirCotizacionDialog";
 import AutorizacionCotizacionDialog from "./AutorizacionCotizacionDialog";
 import { formatCurrency } from "@/lib/utils";
@@ -576,21 +576,7 @@ const CotizacionesTab = () => {
             </span>
             <Button
               size="sm"
-              onClick={() => {
-                // Verify all selected are from the same client
-                const selectedCots = filteredCotizaciones?.filter(c => selectedIds.includes(c.id)) || [];
-                const clienteIds = [...new Set(selectedCots.map(c => c.cliente_id))];
-                
-                if (clienteIds.length > 1) {
-                  toast({
-                    title: "Error",
-                    description: "Solo puedes enviar cotizaciones del mismo cliente a la vez",
-                    variant: "destructive",
-                  });
-                  return;
-                }
-                setEnviarMultiplesOpen(true);
-              }}
+              onClick={() => setEnviarMultiplesOpen(true)}
             >
               <Send className="h-4 w-4 mr-2" />
               Enviar seleccionadas
@@ -695,8 +681,8 @@ const CotizacionesTab = () => {
         />
       )}
 
-      {/* Enviar Cotizaciones Múltiples Dialog */}
-      <EnviarCotizacionesMultiplesDialog
+      {/* Enviar Cotizaciones Agrupadas Dialog */}
+      <EnviarCotizacionesAgrupadasDialog
         open={enviarMultiplesOpen}
         onOpenChange={(open) => {
           setEnviarMultiplesOpen(open);

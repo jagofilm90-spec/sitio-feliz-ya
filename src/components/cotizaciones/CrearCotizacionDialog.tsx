@@ -199,8 +199,18 @@ const CrearCotizacionDialog = ({
       setFolio(cotizacion.folio);
       setSelectedCliente(cotizacion.cliente_id);
       setSelectedSucursal(cotizacion.sucursal_id || "");
-      setNotas(cotizacion.notas || "");
       setNombreCotizacion((cotizacion as any).nombre || "");
+      
+      // Parse notas to extract mesCotizacion and clean notes
+      const notasRaw = cotizacion.notas || "";
+      const mesMatch = notasRaw.match(/\[Cotización para: ([^\]]+)\]/);
+      if (mesMatch) {
+        setMesCotizacion(mesMatch[1]);
+        // Remove the mes tag from notas for display
+        setNotas(notasRaw.replace(/\[Cotización para: [^\]]+\]\s*/, ""));
+      } else {
+        setNotas(notasRaw);
+      }
       
       // Calculate vigencia days from fecha_vigencia
       const vigencia = new Date(cotizacion.fecha_vigencia);
@@ -227,6 +237,12 @@ const CrearCotizacionDialog = ({
       }));
 
       setDetalles(detallesFormateados);
+      
+      // Detect if it's a "solo precios" quotation (all quantities are 0)
+      const esSoloPrecios = detallesFormateados.length > 0 && 
+        detallesFormateados.every(d => d.cantidad === 0 || d.cantidad === null);
+      setSinCantidades(esSoloPrecios);
+      
     } catch (error: any) {
       console.error("Error loading cotizacion:", error);
       toast({

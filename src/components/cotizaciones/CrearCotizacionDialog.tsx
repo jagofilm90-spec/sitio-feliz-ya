@@ -302,8 +302,9 @@ const CrearCotizacionDialog = ({
         aplica_ieps: producto.aplica_ieps,
       },
     ]);
+    // Limpiar búsqueda pero mantener el dropdown abierto para seguir agregando
     setSearchTerm("");
-    setShowProductSearch(false);
+    // NO cerrar el buscador - permitir agregar múltiples productos
   };
 
   const actualizarCantidad = (index: number, cantidad: number) => {
@@ -626,7 +627,12 @@ const CrearCotizacionDialog = ({
 
           {/* Product search */}
           <div className="space-y-2">
-            <Label>Agregar productos</Label>
+            <div className="flex items-center justify-between">
+              <Label>Agregar productos</Label>
+              {detalles.length > 0 && (
+                <Badge variant="secondary">{detalles.length} producto{detalles.length !== 1 ? 's' : ''}</Badge>
+              )}
+            </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -634,37 +640,55 @@ const CrearCotizacionDialog = ({
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
-                  setShowProductSearch(e.target.value.length > 0);
+                  setShowProductSearch(true);
                 }}
-                onFocus={() => searchTerm.length > 0 && setShowProductSearch(true)}
+                onFocus={() => setShowProductSearch(true)}
+                onBlur={() => setTimeout(() => setShowProductSearch(false), 200)}
                 className="pl-10"
               />
             </div>
 
-            {showProductSearch && productosFiltrados.length > 0 && (
-              <div className="absolute z-50 w-full max-w-[calc(100%-3rem)] bg-background border rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                {productosFiltrados.slice(0, 10).map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => agregarProducto(p)}
-                    className="w-full px-4 py-2 text-left hover:bg-muted flex items-center justify-between"
-                  >
-                    <div>
-                      <span className="font-medium">{p.nombre}</span>
-                      {p.marca && (
-                        <span className="text-primary text-sm ml-1">
-                          {p.marca}
+            {showProductSearch && (
+              <div className="absolute z-50 w-full max-w-[calc(100%-3rem)] bg-background border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                {productosFiltrados.length > 0 ? (
+                  productosFiltrados.slice(0, 15).map((p) => {
+                    const yaAgregado = detalles.some(d => d.producto_id === p.id);
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => !yaAgregado && agregarProducto(p)}
+                        disabled={yaAgregado}
+                        className={`w-full px-4 py-2 text-left flex items-center justify-between ${
+                          yaAgregado 
+                            ? 'bg-muted/50 text-muted-foreground cursor-not-allowed' 
+                            : 'hover:bg-muted'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          {yaAgregado && <Badge variant="outline" className="text-xs">Agregado</Badge>}
+                          <div>
+                            <span className={yaAgregado ? '' : 'font-medium'}>{p.nombre}</span>
+                            {p.marca && (
+                              <span className="text-primary text-sm ml-1">
+                                {p.marca}
+                              </span>
+                            )}
+                            <span className="text-muted-foreground text-sm ml-2">
+                              ({p.codigo})
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-sm">
+                          ${p.precio_venta.toFixed(2)} / {p.unidad}
                         </span>
-                      )}
-                      <span className="text-muted-foreground text-sm ml-2">
-                        ({p.codigo})
-                      </span>
-                    </div>
-                    <span className="text-sm">
-                      ${p.precio_venta.toFixed(2)} / {p.unidad}
-                    </span>
-                  </button>
-                ))}
+                      </button>
+                    );
+                  })
+                ) : (
+                  <div className="px-4 py-3 text-muted-foreground text-sm">
+                    No se encontraron productos
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -446,27 +446,33 @@ export type Database = {
       cotizaciones_detalles: {
         Row: {
           cantidad: number
+          cantidad_maxima: number | null
           cotizacion_id: string
           created_at: string
           id: string
+          nota_linea: string | null
           precio_unitario: number
           producto_id: string
           subtotal: number
         }
         Insert: {
           cantidad: number
+          cantidad_maxima?: number | null
           cotizacion_id: string
           created_at?: string
           id?: string
+          nota_linea?: string | null
           precio_unitario: number
           producto_id: string
           subtotal: number
         }
         Update: {
           cantidad?: number
+          cantidad_maxima?: number | null
           cotizacion_id?: string
           created_at?: string
           id?: string
+          nota_linea?: string | null
           precio_unitario?: number
           producto_id?: string
           subtotal?: number

@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -47,12 +48,14 @@ import {
   CheckCircle,
   Clock,
   SendHorizontal,
+  X,
 } from "lucide-react";
 import { format, isBefore } from "date-fns";
 import { es } from "date-fns/locale";
 import CrearCotizacionDialog from "./CrearCotizacionDialog";
 import CotizacionDetalleDialog from "./CotizacionDetalleDialog";
 import EnviarCotizacionDialog from "./EnviarCotizacionDialog";
+import EnviarCotizacionesMultiplesDialog from "./EnviarCotizacionesMultiplesDialog";
 import ImprimirCotizacionDialog from "./ImprimirCotizacionDialog";
 import AutorizacionCotizacionDialog from "./AutorizacionCotizacionDialog";
 import { formatCurrency } from "@/lib/utils";
@@ -88,6 +91,8 @@ const CotizacionesTab = () => {
   const [imprimirCotizacionId, setImprimirCotizacionId] = useState<string | null>(null);
   const [autorizarCotizacion, setAutorizarCotizacion] = useState<any>(null);
   const [sendingToAuth, setSendingToAuth] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [enviarMultiplesOpen, setEnviarMultiplesOpen] = useState(false);
 
   const { data: cotizaciones, isLoading, refetch } = useQuery({
     queryKey: ["cotizaciones"],
@@ -320,6 +325,22 @@ const CotizacionesTab = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={
+                          filteredCotizaciones?.length > 0 &&
+                          filteredCotizaciones?.filter(c => c.status === "autorizada" || c.status === "enviada").every(c => selectedIds.includes(c.id))
+                        }
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            const sendableIds = filteredCotizaciones?.filter(c => c.status === "autorizada" || c.status === "enviada").map(c => c.id) || [];
+                            setSelectedIds(sendableIds);
+                          } else {
+                            setSelectedIds([]);
+                          }
+                        }}
+                      />
+                    </TableHead>
                     <TableHead>Folio</TableHead>
                     <TableHead>Nombre</TableHead>
                     <TableHead>Cliente</TableHead>
@@ -334,7 +355,20 @@ const CotizacionesTab = () => {
                 </TableHeader>
                 <TableBody>
                   {filteredCotizaciones?.map((c) => (
-                    <TableRow key={c.id}>
+                    <TableRow key={c.id} className={selectedIds.includes(c.id) ? "bg-muted/50" : ""}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedIds.includes(c.id)}
+                          disabled={c.status !== "autorizada" && c.status !== "enviada"}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedIds(prev => [...prev, c.id]);
+                            } else {
+                              setSelectedIds(prev => prev.filter(id => id !== c.id));
+                            }
+                          }}
+                        />
+                      </TableCell>
                       <TableCell className="font-mono font-medium">
                         {c.folio}
                       </TableCell>
@@ -520,7 +554,7 @@ const CotizacionesTab = () => {
                   ))}
                   {filteredCotizaciones?.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center py-12">
+                      <TableCell colSpan={11} className="text-center py-12">
                         <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                         <p className="text-muted-foreground">
                           No hay cotizaciones registradas
@@ -533,6 +567,43 @@ const CotizacionesTab = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Floating action bar for bulk selection */}
+        {selectedIds.length > 0 && (
+          <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-background border rounded-lg shadow-lg p-3 flex items-center gap-4 z-50">
+            <span className="text-sm font-medium">
+              {selectedIds.length} cotización(es) seleccionada(s)
+            </span>
+            <Button
+              size="sm"
+              onClick={() => {
+                // Verify all selected are from the same client
+                const selectedCots = filteredCotizaciones?.filter(c => selectedIds.includes(c.id)) || [];
+                const clienteIds = [...new Set(selectedCots.map(c => c.cliente_id))];
+                
+                if (clienteIds.length > 1) {
+                  toast({
+                    title: "Error",
+                    description: "Solo puedes enviar cotizaciones del mismo cliente a la vez",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                setEnviarMultiplesOpen(true);
+              }}
+            >
+              <Send className="h-4 w-4 mr-2" />
+              Enviar seleccionadas
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setSelectedIds([])}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </div>
 
       <CrearCotizacionDialog
@@ -623,6 +694,20 @@ const CotizacionesTab = () => {
           cotizacion={autorizarCotizacion}
         />
       )}
+
+      {/* Enviar Cotizaciones Múltiples Dialog */}
+      <EnviarCotizacionesMultiplesDialog
+        open={enviarMultiplesOpen}
+        onOpenChange={(open) => {
+          setEnviarMultiplesOpen(open);
+          if (!open) setSelectedIds([]);
+        }}
+        cotizaciones={filteredCotizaciones?.filter(c => selectedIds.includes(c.id)) || []}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["cotizaciones"] });
+          setSelectedIds([]);
+        }}
+      />
     </>
   );
 };

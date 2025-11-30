@@ -355,7 +355,11 @@ const CotizacionesTab = () => {
                         })}
                       </TableCell>
                       <TableCell className="font-medium font-mono">
-                        ${formatCurrency(c.total)}
+                        {c.total === 0 || c.notas?.includes('[Solo precios]') ? (
+                          <span className="text-muted-foreground text-sm">Solo precios</span>
+                        ) : (
+                          `$${formatCurrency(c.total)}`
+                        )}
                       </TableCell>
                       <TableCell>
                         {getStatusBadge(c.status, c.fecha_vigencia)}

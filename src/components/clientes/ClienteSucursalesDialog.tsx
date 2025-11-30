@@ -445,7 +445,7 @@ const ClienteSucursalesDialog = ({
                 <div className="space-y-2 mt-4">
                   <Label>Vehículos Permitidos</Label>
                   <div className="flex flex-wrap gap-3">
-                    {['Camioneta', 'Urvan', 'Rabón', 'Tortón'].map((vehiculo) => {
+                    {['Camioneta', 'Urvan', 'Rabón', 'Tortón', 'Tráiler'].map((vehiculo) => {
                       const vehiculosPermitidos = formData.restricciones_vehiculo?.split(',').filter(v => v.trim()) || [];
                       const isChecked = vehiculosPermitidos.includes(vehiculo);
                       return (

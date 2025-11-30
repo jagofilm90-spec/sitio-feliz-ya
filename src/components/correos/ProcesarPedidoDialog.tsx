@@ -42,6 +42,11 @@ interface ParsedProduct {
   producto_id?: string;
   precio_unitario?: number;
   producto_cotizado_id?: string; // ID del producto si la AI hizo match con cotización
+  // Campos para productos por kg
+  precio_por_kilo?: boolean;
+  kg_por_unidad?: number;
+  aplica_iva?: boolean;
+  aplica_ieps?: boolean;
 }
 
 interface ParsedSucursal {
@@ -120,7 +125,7 @@ export default function ProcesarPedidoDialog({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("productos")
-        .select("id, nombre, codigo, precio_venta, unidad")
+        .select("id, nombre, codigo, precio_venta, unidad, precio_por_kilo, kg_por_unidad, aplica_iva, aplica_ieps")
         .eq("activo", true)
         .order("nombre");
       if (error) throw error;
@@ -237,6 +242,10 @@ export default function ProcesarPedidoDialog({
                   ...prod,
                   producto_id: matchedByCotizacion.id,
                   precio_unitario: precioCotizacion || matchedByCotizacion.precio_venta,
+                  precio_por_kilo: matchedByCotizacion.precio_por_kilo,
+                  kg_por_unidad: matchedByCotizacion.kg_por_unidad,
+                  aplica_iva: matchedByCotizacion.aplica_iva,
+                  aplica_ieps: matchedByCotizacion.aplica_ieps,
                 };
               }
             }
@@ -250,6 +259,10 @@ export default function ProcesarPedidoDialog({
               ...prod,
               producto_id: matched?.id,
               precio_unitario: matched?.precio_venta || prod.precio_sugerido,
+              precio_por_kilo: matched?.precio_por_kilo,
+              kg_por_unidad: matched?.kg_por_unidad,
+              aplica_iva: matched?.aplica_iva,
+              aplica_ieps: matched?.aplica_ieps,
             };
           }),
         }));
@@ -288,11 +301,38 @@ export default function ProcesarPedidoDialog({
         const validProducts = suc.productos.filter(p => p.producto_id && p.cantidad > 0);
         if (validProducts.length === 0) continue;
 
-        // Calculate totals
-        const subtotal = validProducts.reduce((sum, p) => 
-          sum + (p.cantidad * (p.precio_unitario || 0)), 0
-        );
-        const impuestos = subtotal * 0.16;
+        // Calculate totals - handling precio_por_kilo and tax-inclusive prices
+        let totalIva = 0;
+        let totalIeps = 0;
+        let subtotalNeto = 0;
+
+        validProducts.forEach(p => {
+          // Calcular subtotal bruto según tipo de precio
+          let lineSubtotal: number;
+          if (p.precio_por_kilo && p.kg_por_unidad) {
+            // Producto por kg: cantidad (bultos) × kg por unidad × precio por kg
+            lineSubtotal = p.cantidad * p.kg_por_unidad * (p.precio_unitario || 0);
+          } else {
+            // Producto por unidad: cantidad × precio unitario
+            lineSubtotal = p.cantidad * (p.precio_unitario || 0);
+          }
+
+          // Desagregar impuestos (precios ya incluyen impuestos)
+          let divisor = 1;
+          if (p.aplica_iva) divisor += 0.16;
+          if (p.aplica_ieps) divisor += 0.08;
+          
+          const baseNeto = lineSubtotal / divisor;
+          const ivaLinea = p.aplica_iva ? baseNeto * 0.16 : 0;
+          const iepsLinea = p.aplica_ieps ? baseNeto * 0.08 : 0;
+
+          subtotalNeto += baseNeto;
+          totalIva += ivaLinea;
+          totalIeps += iepsLinea;
+        });
+
+        const subtotal = Math.round(subtotalNeto * 100) / 100;
+        const impuestos = Math.round((totalIva + totalIeps) * 100) / 100;
         const total = subtotal + impuestos;
 
         // Generate folio
@@ -336,14 +376,22 @@ export default function ProcesarPedidoDialog({
 
         if (pedidoError) throw pedidoError;
 
-        // Create pedido detalles
-        const detalles = validProducts.map(p => ({
-          pedido_id: pedido.id,
-          producto_id: p.producto_id!,
-          cantidad: p.cantidad,
-          precio_unitario: p.precio_unitario || 0,
-          subtotal: p.cantidad * (p.precio_unitario || 0),
-        }));
+        // Create pedido detalles - calcular subtotal según tipo de producto
+        const detalles = validProducts.map(p => {
+          let lineSubtotal: number;
+          if (p.precio_por_kilo && p.kg_por_unidad) {
+            lineSubtotal = p.cantidad * p.kg_por_unidad * (p.precio_unitario || 0);
+          } else {
+            lineSubtotal = p.cantidad * (p.precio_unitario || 0);
+          }
+          return {
+            pedido_id: pedido.id,
+            producto_id: p.producto_id!,
+            cantidad: p.cantidad,
+            precio_unitario: p.precio_unitario || 0,
+            subtotal: Math.round(lineSubtotal * 100) / 100,
+          };
+        });
 
         const { error: detallesError } = await supabase
           .from("pedidos_detalles")
@@ -381,6 +429,10 @@ export default function ProcesarPedidoDialog({
     const updated = { ...parsedOrder };
     updated.sucursales[sucIndex].productos[prodIndex].producto_id = productoId;
     updated.sucursales[sucIndex].productos[prodIndex].precio_unitario = producto?.precio_venta;
+    updated.sucursales[sucIndex].productos[prodIndex].precio_por_kilo = producto?.precio_por_kilo;
+    updated.sucursales[sucIndex].productos[prodIndex].kg_por_unidad = producto?.kg_por_unidad;
+    updated.sucursales[sucIndex].productos[prodIndex].aplica_iva = producto?.aplica_iva;
+    updated.sucursales[sucIndex].productos[prodIndex].aplica_ieps = producto?.aplica_ieps;
     setParsedOrder(updated);
   };
 
@@ -553,8 +605,8 @@ export default function ProcesarPedidoDialog({
                               onChange={(e) => updateProductQuantity(sucIndex, prodIndex, parseFloat(e.target.value) || 0)}
                               className="w-20"
                             />
-                            <span className="text-sm text-muted-foreground w-12">
-                              {prod.unidad}
+                            <span className="text-sm text-muted-foreground w-16">
+                              {prod.precio_por_kilo ? "/kg" : prod.unidad}
                             </span>
 
                             {/* Price */}

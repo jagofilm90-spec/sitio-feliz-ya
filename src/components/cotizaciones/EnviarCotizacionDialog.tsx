@@ -401,6 +401,19 @@ Tel: (55) 56-00-77-81`);
 
       if (updateError) throw updateError;
 
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Register send in history
+      if (user) {
+        await supabase.from("cotizaciones_envios").insert({
+          cotizacion_id: cotizacionId,
+          enviado_por: user.id,
+          email_destino: emailsToSend.join(", "),
+          gmail_cuenta_id: gmailCuenta.id,
+        });
+      }
+
       // Log email action
       await logEmailAction(gmailCuenta.id, "enviar", {
         emailTo: emailsToSend.join(", "),

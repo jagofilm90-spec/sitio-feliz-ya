@@ -87,6 +87,7 @@ export default function ProcesarPedidoDialog({
   const [creating, setCreating] = useState(false);
   const [parsedOrder, setParsedOrder] = useState<ParsedOrder | null>(null);
   const [selectedClienteId, setSelectedClienteId] = useState<string>("");
+  const [selectedCotizacionId, setSelectedCotizacionId] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
   // Fetch clientes
@@ -133,20 +134,22 @@ export default function ProcesarPedidoDialog({
     },
   });
 
-  // Fetch cotizaciones recientes del cliente (últimos 60 días)
+  // Fetch cotizaciones recientes del cliente (últimos 90 días)
   const { data: cotizacionesRecientes } = useQuery({
     queryKey: ["cotizaciones-cliente", selectedClienteId],
     queryFn: async () => {
       if (!selectedClienteId) return [];
       const fechaLimite = new Date();
-      fechaLimite.setDate(fechaLimite.getDate() - 60);
+      fechaLimite.setDate(fechaLimite.getDate() - 90);
       
       const { data, error } = await supabase
         .from("cotizaciones")
         .select(`
           id,
           folio,
+          nombre,
           fecha_creacion,
+          status,
           cotizaciones_detalles (
             producto_id,
             cantidad,
@@ -155,11 +158,16 @@ export default function ProcesarPedidoDialog({
               id,
               nombre,
               codigo,
-              unidad
+              unidad,
+              precio_por_kilo,
+              kg_por_unidad,
+              aplica_iva,
+              aplica_ieps
             )
           )
         `)
         .eq("cliente_id", selectedClienteId)
+        .in("status", ["autorizada", "enviada"])
         .gte("fecha_creacion", fechaLimite.toISOString().split('T')[0])
         .order("fecha_creacion", { ascending: false });
       
@@ -168,6 +176,11 @@ export default function ProcesarPedidoDialog({
     },
     enabled: !!selectedClienteId,
   });
+
+  // Reset cotizacion selection when cliente changes
+  useEffect(() => {
+    setSelectedCotizacionId("");
+  }, [selectedClienteId]);
 
   // Auto-detect cliente from email
   useEffect(() => {
@@ -190,18 +203,29 @@ export default function ProcesarPedidoDialog({
     setParsedOrder(null);
 
     try {
-      // Preparar productos de cotizaciones recientes como contexto para la AI
-      const productosCotizados = cotizacionesRecientes?.flatMap(cot => 
+      // Si hay una cotización seleccionada, usar solo esos productos
+      // Si no, usar todas las cotizaciones recientes
+      let cotizacionesParaUsar = cotizacionesRecientes || [];
+      if (selectedCotizacionId) {
+        cotizacionesParaUsar = cotizacionesRecientes?.filter(c => c.id === selectedCotizacionId) || [];
+      }
+
+      // Preparar productos de cotizaciones como contexto para la AI
+      const productosCotizados = cotizacionesParaUsar.flatMap(cot => 
         cot.cotizaciones_detalles?.map((det: any) => ({
           producto_id: det.producto_id,
           nombre: det.productos?.nombre,
           codigo: det.productos?.codigo,
           unidad: det.productos?.unidad,
           precio_cotizado: det.precio_unitario,
+          precio_por_kilo: det.productos?.precio_por_kilo,
+          kg_por_unidad: det.productos?.kg_por_unidad,
+          aplica_iva: det.productos?.aplica_iva,
+          aplica_ieps: det.productos?.aplica_ieps,
         }))
       ).filter(Boolean) || [];
 
-      // Eliminar duplicados por producto_id
+      // Eliminar duplicados por producto_id (mantener el primero = cotización más reciente)
       const productosUnicos = productosCotizados.reduce((acc: any[], prod: any) => {
         if (!acc.find(p => p.producto_id === prod.producto_id)) {
           acc.push(prod);
@@ -499,6 +523,31 @@ export default function ProcesarPedidoDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {/* Cotización selector */}
+          {selectedClienteId && cotizacionesRecientes && cotizacionesRecientes.length > 0 && (
+            <div className="space-y-2">
+              <Label>Vincular a cotización (opcional)</Label>
+              <Select value={selectedCotizacionId} onValueChange={setSelectedCotizacionId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Usar todas las cotizaciones recientes" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Usar todas las cotizaciones recientes</SelectItem>
+                  {cotizacionesRecientes.map(cot => (
+                    <SelectItem key={cot.id} value={cot.id}>
+                      {cot.folio} - {cot.nombre || new Date(cot.fecha_creacion).toLocaleDateString('es-MX')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedCotizacionId && (
+                <p className="text-xs text-muted-foreground">
+                  Se usarán los productos y precios de esta cotización específica
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Parse button */}
           {!parsedOrder && (

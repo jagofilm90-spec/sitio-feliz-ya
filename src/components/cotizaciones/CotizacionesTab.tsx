@@ -46,6 +46,7 @@ import {
   Printer,
   CheckCircle,
   Clock,
+  SendHorizontal,
 } from "lucide-react";
 import { format, isBefore } from "date-fns";
 import { es } from "date-fns/locale";
@@ -85,6 +86,7 @@ const CotizacionesTab = () => {
   const [enviarCotizacion, setEnviarCotizacion] = useState<Cotizacion | null>(null);
   const [imprimirCotizacionId, setImprimirCotizacionId] = useState<string | null>(null);
   const [autorizarCotizacion, setAutorizarCotizacion] = useState<any>(null);
+  const [sendingToAuth, setSendingToAuth] = useState<string | null>(null);
 
   const { data: cotizaciones, isLoading, refetch } = useQuery({
     queryKey: ["cotizaciones"],
@@ -153,6 +155,79 @@ const CotizacionesTab = () => {
       title: "Próximamente",
       description: "La conversión a pedido estará disponible pronto",
     });
+  };
+
+  // Send quotation for authorization (non-admin flow)
+  const handleEnviarAAutorizacion = async (cotizacion: Cotizacion) => {
+    setSendingToAuth(cotizacion.id);
+    try {
+      // Update status to pending authorization
+      const { error: updateError } = await supabase
+        .from("cotizaciones")
+        .update({ status: "pendiente_autorizacion" })
+        .eq("id", cotizacion.id);
+
+      if (updateError) throw updateError;
+
+      // Create notification for admin
+      await supabase
+        .from("notificaciones")
+        .insert({
+          tipo: "autorizacion_cotizacion",
+          titulo: `Cotización ${cotizacion.folio} pendiente de autorización`,
+          descripcion: `Nueva cotización para ${cotizacion.cliente.nombre} requiere autorización antes de enviar.`,
+          cotizacion_id: cotizacion.id,
+          leida: false,
+        });
+
+      toast({
+        title: "Enviada a autorización",
+        description: `La cotización ${cotizacion.folio} fue enviada para aprobación del administrador.`,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["cotizaciones"] });
+      queryClient.invalidateQueries({ queryKey: ["notificaciones"] });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setSendingToAuth(null);
+    }
+  };
+
+  // Admin can directly authorize a borrador
+  const handleAutorizarDirecto = async (cotizacion: Cotizacion) => {
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session?.user) throw new Error("No hay sesión activa");
+
+      const { error } = await supabase
+        .from("cotizaciones")
+        .update({
+          status: "autorizada",
+          autorizado_por: session.session.user.id,
+          fecha_autorizacion: new Date().toISOString(),
+        })
+        .eq("id", cotizacion.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Cotización autorizada",
+        description: `${cotizacion.folio} está lista para enviar al cliente.`,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["cotizaciones"] });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
 
   const handleDeleteClick = (cotizacion: Cotizacion) => {
@@ -281,8 +356,12 @@ const CotizacionesTab = () => {
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreVertical className="h-4 w-4" />
+                            <Button variant="ghost" size="icon" disabled={sendingToAuth === c.id}>
+                              {sendingToAuth === c.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <MoreVertical className="h-4 w-4" />
+                              )}
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
@@ -299,17 +378,6 @@ const CotizacionesTab = () => {
                               Ver / Imprimir
                             </DropdownMenuItem>
                             
-                            {/* Admin can authorize pending quotations */}
-                            {isAdmin && c.status === "pendiente_autorizacion" && (
-                              <DropdownMenuItem
-                                onClick={() => setAutorizarCotizacion(c)}
-                                className="text-amber-600"
-                              >
-                                <CheckCircle className="h-4 w-4 mr-2" />
-                                Autorizar
-                              </DropdownMenuItem>
-                            )}
-                            
                             {/* Edit option for borrador or pendiente_autorizacion */}
                             {(c.status === "borrador" || c.status === "pendiente_autorizacion") && (
                               <DropdownMenuItem
@@ -317,6 +385,38 @@ const CotizacionesTab = () => {
                               >
                                 <Pencil className="h-4 w-4 mr-2" />
                                 Editar
+                              </DropdownMenuItem>
+                            )}
+                            
+                            {/* Borrador: Non-admin sends to authorization, Admin can authorize directly */}
+                            {c.status === "borrador" && !isAdmin && (
+                              <DropdownMenuItem
+                                onClick={() => handleEnviarAAutorizacion(c)}
+                                className="text-amber-600"
+                              >
+                                <SendHorizontal className="h-4 w-4 mr-2" />
+                                Enviar a autorización
+                              </DropdownMenuItem>
+                            )}
+                            
+                            {c.status === "borrador" && isAdmin && (
+                              <DropdownMenuItem
+                                onClick={() => handleAutorizarDirecto(c)}
+                                className="text-green-600"
+                              >
+                                <CheckCircle className="h-4 w-4 mr-2" />
+                                Autorizar
+                              </DropdownMenuItem>
+                            )}
+                            
+                            {/* Admin can authorize/reject pending quotations */}
+                            {isAdmin && c.status === "pendiente_autorizacion" && (
+                              <DropdownMenuItem
+                                onClick={() => setAutorizarCotizacion(c)}
+                                className="text-amber-600"
+                              >
+                                <CheckCircle className="h-4 w-4 mr-2" />
+                                Revisar y autorizar
                               </DropdownMenuItem>
                             )}
                             

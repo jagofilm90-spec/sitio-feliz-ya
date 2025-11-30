@@ -31,8 +31,10 @@ import {
   File,
   Forward,
   FileSpreadsheet,
+  ShoppingCart,
 } from "lucide-react";
 import CrearCotizacionDialog from "@/components/cotizaciones/CrearCotizacionDialog";
+import ProcesarPedidoDialog from "./ProcesarPedidoDialog";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
@@ -96,11 +98,12 @@ const EmailDetailView = ({
   const [replyAllOpen, setReplyAllOpen] = useState(false);
   const [forwardOpen, setForwardOpen] = useState(false);
   const [cotizacionOpen, setCotizacionOpen] = useState(false);
+  const [procesarPedidoOpen, setProcesarPedidoOpen] = useState(false);
   const [downloadingAttachment, setDownloadingAttachment] = useState<string | null>(null);
 
   // Keyboard navigation with arrow keys
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (replyOpen || replyAllOpen || forwardOpen) return; // Don't navigate when dialogs are open
+    if (replyOpen || replyAllOpen || forwardOpen || procesarPedidoOpen) return; // Don't navigate when dialogs are open
     
     if (e.key === "ArrowRight" && hasNext && onNavigateNext) {
       e.preventDefault();
@@ -109,7 +112,7 @@ const EmailDetailView = ({
       e.preventDefault();
       onNavigatePrev();
     }
-  }, [hasNext, hasPrev, onNavigateNext, onNavigatePrev, replyOpen, replyAllOpen, forwardOpen]);
+  }, [hasNext, hasPrev, onNavigateNext, onNavigatePrev, replyOpen, replyAllOpen, forwardOpen, procesarPedidoOpen]);
 
   useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
@@ -305,6 +308,10 @@ const EmailDetailView = ({
           <div className="flex items-center gap-2">
             {!isFromTrash && (
               <>
+                <Button variant="default" size="sm" onClick={() => setProcesarPedidoOpen(true)}>
+                  <ShoppingCart className="h-4 w-4 mr-2" />
+                  Procesar Pedido
+                </Button>
                 <Button variant="outline" size="sm" onClick={() => setCotizacionOpen(true)}>
                   <FileSpreadsheet className="h-4 w-4 mr-2" />
                   Crear Cotización
@@ -500,6 +507,17 @@ const EmailDetailView = ({
             description: "Puedes verla en el módulo de Pedidos > Cotizaciones",
           });
         }}
+      />
+
+      {/* Procesar Pedido dialog */}
+      <ProcesarPedidoDialog
+        open={procesarPedidoOpen}
+        onOpenChange={setProcesarPedidoOpen}
+        emailBody={email.body}
+        emailSubject={email.subject}
+        emailFrom={email.from}
+        emailId={email.id}
+        onSuccess={onBack}
       />
     </>
   );

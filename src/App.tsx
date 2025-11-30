@@ -14,7 +14,6 @@ import Pedidos from "./pages/Pedidos";
 import Inventario from "./pages/Inventario";
 import Rutas from "./pages/Rutas";
 import Facturas from "./pages/Facturas";
-import Remisiones from "./pages/Remisiones";
 import PortalCliente from "./pages/PortalCliente";
 import Usuarios from "./pages/Usuarios";
 import Empleados from "./pages/Empleados";
@@ -43,7 +42,6 @@ const App = () => (
           <Route path="/inventario" element={<Inventario />} />
           <Route path="/rutas" element={<Rutas />} />
           <Route path="/facturas" element={<Facturas />} />
-          <Route path="/remisiones" element={<Remisiones />} />
           <Route path="/portal-cliente" element={<PortalCliente />} />
           <Route path="/empleados" element={<Empleados />} />
           <Route path="/usuarios" element={<Usuarios />} />

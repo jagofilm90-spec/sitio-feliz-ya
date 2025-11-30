@@ -488,6 +488,62 @@ export type Database = {
           },
         ]
       }
+      cotizaciones_envios: {
+        Row: {
+          cotizacion_id: string
+          created_at: string
+          email_destino: string
+          enviado_por: string
+          gmail_cuenta_id: string | null
+          id: string
+        }
+        Insert: {
+          cotizacion_id: string
+          created_at?: string
+          email_destino: string
+          enviado_por: string
+          gmail_cuenta_id?: string | null
+          id?: string
+        }
+        Update: {
+          cotizacion_id?: string
+          created_at?: string
+          email_destino?: string
+          enviado_por?: string
+          gmail_cuenta_id?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cotizaciones_envios_cotizacion_id_fkey"
+            columns: ["cotizacion_id"]
+            isOneToOne: false
+            referencedRelation: "cotizaciones"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotizaciones_envios_enviado_por_fkey"
+            columns: ["enviado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotizaciones_envios_gmail_cuenta_id_fkey"
+            columns: ["gmail_cuenta_id"]
+            isOneToOne: false
+            referencedRelation: "gmail_cuentas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotizaciones_envios_gmail_cuenta_id_fkey"
+            columns: ["gmail_cuenta_id"]
+            isOneToOne: false
+            referencedRelation: "gmail_cuentas_segura"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       empleados: {
         Row: {
           activo: boolean | null

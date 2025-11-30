@@ -46,6 +46,7 @@ import {
   Mail,
   Plus,
   X,
+  History,
 } from "lucide-react";
 import { format, isBefore } from "date-fns";
 import { es } from "date-fns/locale";
@@ -155,6 +156,26 @@ const CotizacionDetalleDialog = ({
       return data;
     },
     enabled: !!cotizacion?.cliente?.id,
+  });
+
+  // Fetch send history
+  const { data: historialEnvios = [] } = useQuery({
+    queryKey: ["cotizacion_envios", cotizacionId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("cotizaciones_envios")
+        .select(`
+          *,
+          enviado_por_profile:profiles!cotizaciones_envios_enviado_por_fkey(full_name),
+          gmail_cuenta:gmail_cuentas(email)
+        `)
+        .eq("cotizacion_id", cotizacionId)
+        .order("created_at", { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: open,
   });
 
   // Detectar si es cotización "solo precios" (sin cantidades)
@@ -1009,6 +1030,35 @@ const CotizacionDetalleDialog = ({
             <div className="p-3 bg-muted/50 rounded-lg">
               <p className="text-sm text-muted-foreground mb-1">Notas:</p>
               <p className="text-sm">{cotizacion.notas}</p>
+            </div>
+          )}
+
+          {/* Send History */}
+          {historialEnvios.length > 0 && (
+            <div className="p-4 border rounded-lg space-y-3">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <History className="h-4 w-4 text-muted-foreground" />
+                Historial de envíos ({historialEnvios.length})
+              </div>
+              <div className="space-y-2">
+                {historialEnvios.map((envio: any) => (
+                  <div key={envio.id} className="flex items-start justify-between text-sm p-2 bg-muted/30 rounded">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Mail className="h-3 w-3 text-muted-foreground" />
+                        <span className="font-medium">{envio.email_destino}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Por: {envio.enviado_por_profile?.full_name || "Usuario"} 
+                        {envio.gmail_cuenta?.email && ` desde ${envio.gmail_cuenta.email}`}
+                      </p>
+                    </div>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      {format(new Date(envio.created_at), "dd/MM/yyyy HH:mm", { locale: es })}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

@@ -373,26 +373,62 @@ const ClienteSucursalesDialog = ({
                   <AlertTriangle className="h-4 w-4 text-amber-500" />
                   Restricciones de Entrega
                 </h4>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="suc_horario">Horario de Entrega</Label>
-                    <Input
-                      id="suc_horario"
-                      value={formData.horario_entrega}
-                      onChange={(e) => setFormData({ ...formData, horario_entrega: e.target.value })}
-                      placeholder="Ej: 8am - 2pm"
-                      autoComplete="off"
-                    />
+                    <Label>Horario de Entrega</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="time"
+                        value={formData.horario_entrega?.split(' - ')[0] || ''}
+                        onChange={(e) => {
+                          const horaFin = formData.horario_entrega?.split(' - ')[1] || '';
+                          const nuevoHorario = horaFin ? `${e.target.value} - ${horaFin}` : e.target.value;
+                          setFormData({ ...formData, horario_entrega: nuevoHorario });
+                        }}
+                        className="w-32"
+                      />
+                      <span className="text-muted-foreground">a</span>
+                      <Input
+                        type="time"
+                        value={formData.horario_entrega?.split(' - ')[1] || ''}
+                        onChange={(e) => {
+                          const horaInicio = formData.horario_entrega?.split(' - ')[0] || '';
+                          const nuevoHorario = horaInicio ? `${horaInicio} - ${e.target.value}` : `- ${e.target.value}`;
+                          setFormData({ ...formData, horario_entrega: nuevoHorario });
+                        }}
+                        className="w-32"
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="suc_dias_sin">Días sin Entrega</Label>
-                    <Input
-                      id="suc_dias_sin"
-                      value={formData.dias_sin_entrega}
-                      onChange={(e) => setFormData({ ...formData, dias_sin_entrega: e.target.value })}
-                      placeholder="Ej: Miércoles (hay mercado)"
-                      autoComplete="off"
-                    />
+                    <Label>Días sin Entrega</Label>
+                    <div className="flex flex-wrap gap-3">
+                      {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'].map((dia) => {
+                        const diasSeleccionados = formData.dias_sin_entrega?.split(',').filter(d => d.trim()) || [];
+                        const isChecked = diasSeleccionados.includes(dia);
+                        return (
+                          <div key={dia} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`dia_${dia}`}
+                              checked={isChecked}
+                              onCheckedChange={(checked) => {
+                                let nuevosDias: string[];
+                                if (checked) {
+                                  nuevosDias = [...diasSeleccionados, dia];
+                                } else {
+                                  nuevosDias = diasSeleccionados.filter(d => d !== dia);
+                                }
+                                setFormData({ ...formData, dias_sin_entrega: nuevosDias.join(',') });
+                              }}
+                            />
+                            <Label htmlFor={`dia_${dia}`} className="text-sm font-normal cursor-pointer">
+                              {dia}
+                            </Label>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Selecciona los días que NO se puede entregar</p>
                   </div>
                 </div>
                 <div className="space-y-2 mt-4">

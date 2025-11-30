@@ -583,40 +583,6 @@ const CrearCotizacionDialog = ({
               </Select>
             </div>
 
-            <div className="space-y-2 col-span-2">
-              <Label>Nombre de cotización <span className="text-muted-foreground text-xs">(opcional)</span></Label>
-              {clientes.find(c => c.id === selectedCliente)?.nombre?.toLowerCase().includes('lecaroz') ? (
-                <Select value={nombreCotizacion} onValueChange={setNombreCotizacion}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar tipo de cotización" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={`Avio ${format(fechaCreacion, "MMMM yyyy", { locale: es })}`}>
-                      Avio {format(fechaCreacion, "MMMM yyyy", { locale: es })}
-                    </SelectItem>
-                    <SelectItem value={`Azúcares ${format(fechaCreacion, "MMMM yyyy", { locale: es })}`}>
-                      Azúcares {format(fechaCreacion, "MMMM yyyy", { locale: es })}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Input
-                  placeholder="Ej: Avio Diciembre, Azúcares..."
-                  value={nombreCotizacion}
-                  onChange={(e) => setNombreCotizacion(e.target.value)}
-                />
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label>Fecha de creación</Label>
-              <Input
-                value={format(fechaCreacion, "dd/MM/yyyy")}
-                disabled
-                className="bg-muted"
-              />
-            </div>
-
             <div className="space-y-2">
               <Label>Cotización para el mes de *</Label>
               <Select value={mesCotizacion} onValueChange={setMesCotizacion}>
@@ -636,6 +602,40 @@ const CrearCotizacionDialog = ({
                   })}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Nombre de cotización <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+              {clientes.find(c => c.id === selectedCliente)?.nombre?.toLowerCase().includes('lecaroz') ? (
+                <Select value={nombreCotizacion} onValueChange={setNombreCotizacion}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar tipo de cotización" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={`Avio ${mesCotizacion}`}>
+                      Avio {mesCotizacion}
+                    </SelectItem>
+                    <SelectItem value={`Azúcares ${mesCotizacion}`}>
+                      Azúcares {mesCotizacion}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  placeholder="Ej: Avio Diciembre, Azúcares..."
+                  value={nombreCotizacion}
+                  onChange={(e) => setNombreCotizacion(e.target.value)}
+                />
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Fecha de creación</Label>
+              <Input
+                value={format(fechaCreacion, "dd/MM/yyyy")}
+                disabled
+                className="bg-muted"
+              />
             </div>
 
             <div className="space-y-2">

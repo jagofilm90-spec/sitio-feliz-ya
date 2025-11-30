@@ -17,16 +17,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Search, Eye, ShoppingCart, FileText, Link2, Printer, Receipt, Send, CheckCircle2, Clock } from "lucide-react";
@@ -35,6 +25,7 @@ import { useNavigate } from "react-router-dom";
 import CotizacionesTab from "@/components/cotizaciones/CotizacionesTab";
 import CotizacionDetalleDialog from "@/components/cotizaciones/CotizacionDetalleDialog";
 import { ImprimirRemisionDialog } from "@/components/remisiones/ImprimirRemisionDialog";
+import EditarEmailClienteDialog from "@/components/pedidos/EditarEmailClienteDialog";
 import { formatCurrency } from "@/lib/utils";
 
 interface PedidoConCotizacion {
@@ -60,8 +51,8 @@ const Pedidos = () => {
   const [selectedCotizacionId, setSelectedCotizacionId] = useState<string | null>(null);
   const [remisionDialogOpen, setRemisionDialogOpen] = useState(false);
   const [selectedPedidoData, setSelectedPedidoData] = useState<any>(null);
-  const [emailAlertOpen, setEmailAlertOpen] = useState(false);
-  const [processingPedidoId, setProcessingPedidoId] = useState<string | null>(null);
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [selectedPedidoForEmail, setSelectedPedidoForEmail] = useState<PedidoConCotizacion | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -232,8 +223,8 @@ const Pedidos = () => {
     const email = getEmailForPedido(pedido);
     
     if (!email) {
-      setProcessingPedidoId(pedido.id);
-      setEmailAlertOpen(true);
+      setSelectedPedidoForEmail(pedido);
+      setEmailDialogOpen(true);
       return;
     }
 
@@ -550,24 +541,20 @@ const Pedidos = () => {
         datos={selectedPedidoData}
       />
 
-      {/* Alert Dialog for missing email */}
-      <AlertDialog open={emailAlertOpen} onOpenChange={setEmailAlertOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>No existe correo para enviar factura</AlertDialogTitle>
-            <AlertDialogDescription>
-              El cliente o sucursal no tiene un correo electrónico registrado. 
-              Favor de ingresar el correo en el registro del cliente o sucursal antes de enviar la factura.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cerrar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => navigate("/clientes")}>
-              Ir a Clientes
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Dialog para agregar email de cliente */}
+      {selectedPedidoForEmail && (
+        <EditarEmailClienteDialog
+          open={emailDialogOpen}
+          onOpenChange={setEmailDialogOpen}
+          clienteId={selectedPedidoForEmail.clientes?.id || ""}
+          clienteNombre={selectedPedidoForEmail.clientes?.nombre || "Sin nombre"}
+          sucursalId={selectedPedidoForEmail.sucursal ? undefined : undefined}
+          onEmailUpdated={() => {
+            loadPedidos();
+            setSelectedPedidoForEmail(null);
+          }}
+        />
+      )}
     </Layout>
   );
 };

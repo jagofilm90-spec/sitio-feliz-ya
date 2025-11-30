@@ -29,10 +29,17 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Edit, Trash2, MapPin, Truck, X, Mail } from "lucide-react";
+import { Plus, Search, Edit, Trash2, MapPin, Truck, X, Mail, BarChart3 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import ClienteSucursalesDialog from "@/components/clientes/ClienteSucursalesDialog";
 import GoogleMapsAddressAutocomplete from "@/components/GoogleMapsAddressAutocomplete";
+import ClienteHistorialAnalytics from "@/components/analytics/ClienteHistorialAnalytics";
+import {
+  Dialog as HistorialDialog,
+  DialogContent as HistorialDialogContent,
+  DialogHeader as HistorialDialogHeader,
+  DialogTitle as HistorialDialogTitle,
+} from "@/components/ui/dialog";
 
 interface Zona {
   id: string;
@@ -66,6 +73,8 @@ const Clientes = () => {
   const [editingClient, setEditingClient] = useState<any>(null);
   const [sucursalesDialogOpen, setSucursalesDialogOpen] = useState(false);
   const [selectedClienteForSucursales, setSelectedClienteForSucursales] = useState<{ id: string; nombre: string } | null>(null);
+  const [historialDialogOpen, setHistorialDialogOpen] = useState(false);
+  const [selectedClienteForHistorial, setSelectedClienteForHistorial] = useState<{ id: string; nombre: string } | null>(null);
   const { toast } = useToast();
 
   // Form state
@@ -951,6 +960,17 @@ const Clientes = () => {
                           variant="ghost"
                           size="icon"
                           onClick={() => {
+                            setSelectedClienteForHistorial({ id: cliente.id, nombre: cliente.nombre });
+                            setHistorialDialogOpen(true);
+                          }}
+                          title="Ver historial de precios"
+                        >
+                          <BarChart3 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
                             setSelectedClienteForSucursales({ id: cliente.id, nombre: cliente.nombre });
                             setSucursalesDialogOpen(true);
                           }}
@@ -988,6 +1008,23 @@ const Clientes = () => {
         onOpenChange={setSucursalesDialogOpen}
         cliente={selectedClienteForSucursales}
       />
+
+      {/* Dialog para ver historial de precios y cantidades */}
+      <HistorialDialog open={historialDialogOpen} onOpenChange={setHistorialDialogOpen}>
+        <HistorialDialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+          <HistorialDialogHeader>
+            <HistorialDialogTitle>
+              Historial de {selectedClienteForHistorial?.nombre}
+            </HistorialDialogTitle>
+          </HistorialDialogHeader>
+          {selectedClienteForHistorial && (
+            <ClienteHistorialAnalytics
+              clienteId={selectedClienteForHistorial.id}
+              clienteNombre={selectedClienteForHistorial.nombre}
+            />
+          )}
+        </HistorialDialogContent>
+      </HistorialDialog>
     </Layout>
   );
 };

@@ -203,16 +203,23 @@ const CrearCotizacionDialog = ({
       setSelectedSucursal(cotizacion.sucursal_id || "");
       setNombreCotizacion((cotizacion as any).nombre || "");
       
-      // Parse notas to extract mesCotizacion and clean notes
+      // Parse notas to extract mesCotizacion, sinCantidades, and clean notes
       const notasRaw = cotizacion.notas || "";
       const mesMatch = notasRaw.match(/\[Cotización para: ([^\]]+)\]/);
       if (mesMatch) {
         setMesCotizacion(mesMatch[1]);
-        // Remove the mes tag from notas for display
-        setNotas(notasRaw.replace(/\[Cotización para: [^\]]+\]\s*/, ""));
-      } else {
-        setNotas(notasRaw);
       }
+      
+      // Detect "solo precios" mode from notas tag
+      const esSoloPreciosTag = notasRaw.includes("[Solo precios]");
+      setSinCantidades(esSoloPreciosTag);
+      
+      // Remove all tags from notas for display
+      let notasLimpias = notasRaw
+        .replace(/\[Cotización para: [^\]]+\]/g, "")
+        .replace(/\[Solo precios\]/g, "")
+        .trim();
+      setNotas(notasLimpias);
       
       // Calculate vigencia days from fecha_vigencia
       const vigencia = new Date(cotizacion.fecha_vigencia);
@@ -239,12 +246,7 @@ const CrearCotizacionDialog = ({
       }));
 
       setDetalles(detallesFormateados);
-      
-      // Detect if it's a "solo precios" quotation (all quantities are 0)
-      const esSoloPrecios = detallesFormateados.length > 0 && 
-        detallesFormateados.every(d => d.cantidad === 0 || d.cantidad === null);
-      setSinCantidades(esSoloPrecios);
-      
+      // Note: sinCantidades is already set from the notas tag above
     } catch (error: any) {
       console.error("Error loading cotizacion:", error);
       toast({
@@ -409,8 +411,8 @@ const CrearCotizacionDialog = ({
       const fechaVigencia = addDays(new Date(), vigenciaDias);
 
       if (isEditMode && cotizacionId) {
-        // UPDATE mode
-        const notasConMes = `[Cotización para: ${mesCotizacion}]${notas ? ` ${notas}` : ''}`;
+        // UPDATE mode - incluir indicador de "solo precios"
+        const notasConMes = `[Cotización para: ${mesCotizacion}]${sinCantidades ? '[Solo precios]' : ''}${notas ? ` ${notas}` : ''}`;
         const { error: cotizacionError } = await supabase
           .from("cotizaciones")
           .update({
@@ -435,13 +437,13 @@ const CrearCotizacionDialog = ({
 
         if (deleteError) throw deleteError;
 
-        // Insert new detalles
+        // Insert new detalles - si es "solo precios", guardar cantidad como 0
         const detallesInsert = detalles.map((d) => ({
           cotizacion_id: cotizacionId,
           producto_id: d.producto_id,
-          cantidad: d.cantidad,
+          cantidad: sinCantidades ? 0 : d.cantidad,
           precio_unitario: d.precio_unitario,
-          subtotal: d.subtotal,
+          subtotal: sinCantidades ? 0 : d.subtotal,
         }));
 
         const { error: detallesError } = await supabase
@@ -464,8 +466,8 @@ const CrearCotizacionDialog = ({
 
         if (folioError) throw folioError;
 
-        // Incluir el mes de cotización en las notas para que el AI lo detecte
-        const notasConMes = `[Cotización para: ${mesCotizacion}]${notas ? ` ${notas}` : ''}`;
+        // Incluir el mes de cotización y modo "solo precios" en las notas
+        const notasConMes = `[Cotización para: ${mesCotizacion}]${sinCantidades ? '[Solo precios]' : ''}${notas ? ` ${notas}` : ''}`;
 
         const { data: cotizacion, error: cotizacionError } = await supabase
           .from("cotizaciones")
@@ -488,12 +490,13 @@ const CrearCotizacionDialog = ({
 
         if (cotizacionError) throw cotizacionError;
 
+        // Si es "solo precios", guardar cantidad como 0
         const detallesInsert = detalles.map((d) => ({
           cotizacion_id: cotizacion.id,
           producto_id: d.producto_id,
-          cantidad: d.cantidad,
+          cantidad: sinCantidades ? 0 : d.cantidad,
           precio_unitario: d.precio_unitario,
-          subtotal: d.subtotal,
+          subtotal: sinCantidades ? 0 : d.subtotal,
         }));
 
         const { error: detallesError } = await supabase

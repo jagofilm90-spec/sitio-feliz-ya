@@ -140,6 +140,9 @@ const CotizacionDetalleDialog = ({
     enabled: open,
   });
 
+  // Detectar si es cotización "solo precios" (sin cantidades)
+  const esSoloPrecios = cotizacion?.detalles?.every((d: any) => !d.cantidad || d.cantidad === 0) ?? false;
+
   const getStatusBadge = () => {
     if (!cotizacion) return null;
     
@@ -444,13 +447,19 @@ const CotizacionDetalleDialog = ({
     const logoBase64 = await getLogoBase64();
 
     const productosHTML = cotizacion.detalles?.map((d: any) => 
-      `<tr>
-        <td style="text-align: center;">${d.producto?.codigo || '-'}</td>
-        <td>${d.producto?.nombre || 'Producto'}</td>
-        <td style="text-align: center;">${d.cantidad} ${d.producto?.unidad || ''}</td>
-        <td style="text-align: right;">$${d.precio_unitario?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-        <td style="text-align: right;">$${d.subtotal?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-      </tr>`
+      esSoloPrecios 
+        ? `<tr>
+            <td style="text-align: center;">${d.producto?.codigo || '-'}</td>
+            <td>${d.producto?.nombre || 'Producto'}</td>
+            <td style="text-align: right;">$${d.precio_unitario?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+          </tr>`
+        : `<tr>
+            <td style="text-align: center;">${d.producto?.codigo || '-'}</td>
+            <td>${d.producto?.nombre || 'Producto'}</td>
+            <td style="text-align: center;">${d.cantidad} ${d.producto?.unidad || ''}</td>
+            <td style="text-align: right;">$${d.precio_unitario?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+            <td style="text-align: right;">$${d.subtotal?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+          </tr>`
     ).join('') || '';
 
     // Parse dates correctly to avoid timezone issues
@@ -746,9 +755,9 @@ const CotizacionDetalleDialog = ({
               <tr>
                 <th style="width: 80px; text-align: center;">Código</th>
                 <th>Producto</th>
-                <th style="width: 100px; text-align: center;">Cantidad</th>
+                ${esSoloPrecios ? '' : '<th style="width: 100px; text-align: center;">Cantidad</th>'}
                 <th style="width: 100px; text-align: right;">Precio Unit.</th>
-                <th style="width: 100px; text-align: right;">Subtotal</th>
+                ${esSoloPrecios ? '' : '<th style="width: 100px; text-align: right;">Subtotal</th>'}
               </tr>
             </thead>
             <tbody>
@@ -756,6 +765,7 @@ const CotizacionDetalleDialog = ({
             </tbody>
           </table>
 
+          ${esSoloPrecios ? '' : `
           <div class="totals">
             <div class="totals-box">
               <div class="row">
@@ -772,6 +782,7 @@ const CotizacionDetalleDialog = ({
               </div>
             </div>
           </div>
+          `}
 
           <div class="vigencia-notice">
             <h4>⏰ Vigencia de la Cotización</h4>
@@ -911,9 +922,9 @@ const CotizacionDetalleDialog = ({
               <TableHeader>
                 <TableRow>
                   <TableHead>Producto</TableHead>
-                  <TableHead className="text-center">Cantidad</TableHead>
+                  {!esSoloPrecios && <TableHead className="text-center">Cantidad</TableHead>}
                   <TableHead className="text-right">Precio Unit.</TableHead>
-                  <TableHead className="text-right">Subtotal</TableHead>
+                  {!esSoloPrecios && <TableHead className="text-right">Subtotal</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -927,37 +938,41 @@ const CotizacionDetalleDialog = ({
                         </p>
                       </div>
                     </TableCell>
-                    <TableCell className="text-center">{d.cantidad}</TableCell>
+                    {!esSoloPrecios && <TableCell className="text-center">{d.cantidad}</TableCell>}
                     <TableCell className="text-right font-mono">
                       ${formatCurrency(d.precio_unitario)}
                     </TableCell>
-                    <TableCell className="text-right font-medium font-mono">
-                      ${formatCurrency(d.subtotal)}
-                    </TableCell>
+                    {!esSoloPrecios && (
+                      <TableCell className="text-right font-medium font-mono">
+                        ${formatCurrency(d.subtotal)}
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </div>
 
-          {/* Totals */}
-          <div className="flex justify-end">
-            <div className="w-72 space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Subtotal:</span>
-                <span className="font-mono">${formatCurrency(cotizacion.subtotal)}</span>
-              </div>
-              <div className="flex justify-between text-blue-600">
-                <span>Impuestos:</span>
-                <span className="font-mono">${formatCurrency(cotizacion.impuestos)}</span>
-              </div>
-              <Separator />
-              <div className="flex justify-between font-bold text-lg">
-                <span>Total:</span>
-                <span className="font-mono">${formatCurrency(cotizacion.total)}</span>
+          {/* Totals - only show if not "solo precios" */}
+          {!esSoloPrecios && (
+            <div className="flex justify-end">
+              <div className="w-72 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Subtotal:</span>
+                  <span className="font-mono">${formatCurrency(cotizacion.subtotal)}</span>
+                </div>
+                <div className="flex justify-between text-blue-600">
+                  <span>Impuestos:</span>
+                  <span className="font-mono">${formatCurrency(cotizacion.impuestos)}</span>
+                </div>
+                <Separator />
+                <div className="flex justify-between font-bold text-lg">
+                  <span>Total:</span>
+                  <span className="font-mono">${formatCurrency(cotizacion.total)}</span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Notes */}
           {cotizacion.notas && (

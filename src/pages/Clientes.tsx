@@ -101,6 +101,7 @@ const Clientes = () => {
 
   // Email management state (inline like proveedores)
   const [correos, setCorreos] = useState<CorreoForm[]>([]);
+  const [originalCorreoIds, setOriginalCorreoIds] = useState<string[]>([]); // Track loaded IDs to know what to deactivate
   const [newCorreoEmail, setNewCorreoEmail] = useState("");
   const [newCorreoNombre, setNewCorreoNombre] = useState("");
   const [newCorreoProposito, setNewCorreoProposito] = useState("general");
@@ -159,17 +160,20 @@ const Clientes = () => {
         .order("es_principal", { ascending: false });
 
       if (error) throw error;
-      setCorreos((data || []).map(c => ({
+      const loadedCorreos = (data || []).map(c => ({
         id: c.id,
         email: c.email,
         nombre_contacto: c.nombre_contacto || "",
         proposito: c.proposito || "general",
         es_principal: c.es_principal || false,
         isNew: false,
-      })));
+      }));
+      setCorreos(loadedCorreos);
+      setOriginalCorreoIds(loadedCorreos.map(c => c.id)); // Track original IDs for deactivation logic
     } catch (error) {
       console.error("Error loading correos:", error);
       setCorreos([]);
+      setOriginalCorreoIds([]);
     }
   };
 
@@ -284,20 +288,11 @@ const Clientes = () => {
         if (error) throw error;
         clienteId = editingClient.id;
 
-        // Handle correos for editing
-        // Delete removed correos (soft delete)
-        const existingCorreoIds = correos.filter(c => !c.isNew).map(c => c.id);
-        if (existingCorreoIds.length > 0 || correos.length === 0) {
-          // Get all existing correos to mark deleted ones as inactive
-          const { data: currentCorreos } = await supabase
-            .from("cliente_correos")
-            .select("id")
-            .eq("cliente_id", clienteId)
-            .eq("activo", true);
-          
-          const idsToDeactivate = (currentCorreos || [])
-            .filter(c => !existingCorreoIds.includes(c.id))
-            .map(c => c.id);
+        // Handle correos for editing - only if we had original correos loaded
+        if (originalCorreoIds.length > 0) {
+          // Find which original correos were removed (not in current list)
+          const currentExistingIds = correos.filter(c => !c.isNew).map(c => c.id);
+          const idsToDeactivate = originalCorreoIds.filter(id => !currentExistingIds.includes(id));
           
           if (idsToDeactivate.length > 0) {
             await supabase
@@ -508,6 +503,7 @@ const Clientes = () => {
     setEntregarMismaDireccion(true);
     setSucursales([]);
     setCorreos([]);
+    setOriginalCorreoIds([]);
     setNewCorreoEmail("");
     setNewCorreoNombre("");
     setNewCorreoProposito("general");

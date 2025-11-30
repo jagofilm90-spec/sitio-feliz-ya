@@ -229,15 +229,23 @@ const Pedidos = () => {
     }
 
     try {
-      const { error } = await supabase
-        .from("pedidos")
-        .update({ 
-          factura_enviada_al_cliente: true,
-          fecha_factura_enviada: new Date().toISOString()
-        })
-        .eq("id", pedido.id);
+      // Call edge function to send email
+      const { data, error } = await supabase.functions.invoke('send-invoice-email', {
+        body: {
+          pedidoId: pedido.id,
+          clienteEmail: email,
+          clienteNombre: pedido.clientes?.nombre || 'Cliente',
+          pedidoFolio: pedido.folio,
+          total: pedido.total,
+          fechaPedido: pedido.fecha_pedido,
+        }
+      });
 
       if (error) throw error;
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Error al enviar factura');
+      }
 
       toast({ 
         title: "Factura enviada",
@@ -245,9 +253,10 @@ const Pedidos = () => {
       });
       loadPedidos();
     } catch (error: any) {
+      console.error('Error sending invoice:', error);
       toast({
         title: "Error",
-        description: "No se pudo enviar la factura",
+        description: error.message || "No se pudo enviar la factura",
         variant: "destructive",
       });
     }

@@ -398,6 +398,17 @@ const ClienteSucursalesDialog = ({
                         }}
                         className="w-32"
                       />
+                      {formData.horario_entrega && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setFormData({ ...formData, horario_entrega: '' })}
+                          className="text-muted-foreground hover:text-destructive"
+                        >
+                          Limpiar
+                        </Button>
+                      )}
                     </div>
                   </div>
                   <div className="space-y-2">

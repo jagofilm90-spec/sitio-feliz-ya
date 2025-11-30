@@ -32,7 +32,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Search, Edit, Trash2, MapPin, Truck, X, Mail } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import ClienteSucursalesDialog from "@/components/clientes/ClienteSucursalesDialog";
-import ClienteCorreosManager from "@/components/clientes/ClienteCorreosManager";
 import GoogleMapsAddressAutocomplete from "@/components/GoogleMapsAddressAutocomplete";
 
 interface Zona {
@@ -49,6 +48,15 @@ interface SucursalForm {
   contacto: string;
 }
 
+interface CorreoForm {
+  id: string;
+  email: string;
+  nombre_contacto: string;
+  proposito: string;
+  es_principal: boolean;
+  isNew?: boolean; // to track if it's a new email or existing one
+}
+
 const Clientes = () => {
   const [clientes, setClientes] = useState<any[]>([]);
   const [zonas, setZonas] = useState<Zona[]>([]);
@@ -58,8 +66,6 @@ const Clientes = () => {
   const [editingClient, setEditingClient] = useState<any>(null);
   const [sucursalesDialogOpen, setSucursalesDialogOpen] = useState(false);
   const [selectedClienteForSucursales, setSelectedClienteForSucursales] = useState<{ id: string; nombre: string } | null>(null);
-  const [correosDialogOpen, setCorreosDialogOpen] = useState(false);
-  const [selectedClienteForCorreos, setSelectedClienteForCorreos] = useState<{ id: string; nombre: string } | null>(null);
   const { toast } = useToast();
 
   // Form state
@@ -92,6 +98,12 @@ const Clientes = () => {
   // Delivery options state
   const [entregarMismaDireccion, setEntregarMismaDireccion] = useState(true);
   const [sucursales, setSucursales] = useState<SucursalForm[]>([]);
+
+  // Email management state (inline like proveedores)
+  const [correos, setCorreos] = useState<CorreoForm[]>([]);
+  const [newCorreoEmail, setNewCorreoEmail] = useState("");
+  const [newCorreoNombre, setNewCorreoNombre] = useState("");
+  const [newCorreoProposito, setNewCorreoProposito] = useState("general");
 
   useEffect(() => {
     loadClientes();
@@ -136,6 +148,76 @@ const Clientes = () => {
     }
   };
 
+  // Load correos for a client when editing
+  const loadCorreosCliente = async (clienteId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("cliente_correos")
+        .select("*")
+        .eq("cliente_id", clienteId)
+        .eq("activo", true)
+        .order("es_principal", { ascending: false });
+
+      if (error) throw error;
+      setCorreos((data || []).map(c => ({
+        id: c.id,
+        email: c.email,
+        nombre_contacto: c.nombre_contacto || "",
+        proposito: c.proposito || "general",
+        es_principal: c.es_principal || false,
+        isNew: false,
+      })));
+    } catch (error) {
+      console.error("Error loading correos:", error);
+      setCorreos([]);
+    }
+  };
+
+  // Email management functions (inline like proveedores)
+  const handleAddCorreo = () => {
+    if (!newCorreoEmail || !newCorreoEmail.includes("@")) return;
+    if (correos.some(c => c.email.toLowerCase() === newCorreoEmail.toLowerCase())) {
+      toast({
+        title: "Correo duplicado",
+        description: "Este correo ya está registrado",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const newCorreo: CorreoForm = {
+      id: crypto.randomUUID(),
+      email: newCorreoEmail.trim(),
+      nombre_contacto: newCorreoNombre.trim(),
+      proposito: newCorreoProposito,
+      es_principal: correos.length === 0, // First email is principal
+      isNew: true,
+    };
+    setCorreos([...correos, newCorreo]);
+    setNewCorreoEmail("");
+    setNewCorreoNombre("");
+    setNewCorreoProposito("general");
+  };
+
+  const handleRemoveCorreo = (correoId: string) => {
+    const correoToRemove = correos.find(c => c.id === correoId);
+    const remaining = correos.filter(c => c.id !== correoId);
+    
+    // If removing the principal, make the first remaining one principal
+    if (correoToRemove?.es_principal && remaining.length > 0) {
+      remaining[0].es_principal = true;
+    }
+    
+    setCorreos(remaining);
+  };
+
+  const handleSetPrincipal = (correoId: string) => {
+    setCorreos(correos.map(c => ({
+      ...c,
+      es_principal: c.id === correoId,
+    })));
+  };
+
   const addSucursal = () => {
     setSucursales([
       ...sucursales,
@@ -160,6 +242,17 @@ const Clientes = () => {
         s.id === id ? { ...s, [field]: value } : s
       )
     );
+  };
+
+  const getPropositoLabel = (proposito: string) => {
+    const labels: Record<string, string> = {
+      general: "General",
+      pedidos: "Pedidos",
+      facturacion: "Facturación",
+      cotizaciones: "Cotizaciones",
+      pagos: "Pagos",
+    };
+    return labels[proposito] || proposito;
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -190,6 +283,57 @@ const Clientes = () => {
 
         if (error) throw error;
         clienteId = editingClient.id;
+
+        // Handle correos for editing
+        // Delete removed correos (soft delete)
+        const existingCorreoIds = correos.filter(c => !c.isNew).map(c => c.id);
+        if (existingCorreoIds.length > 0 || correos.length === 0) {
+          // Get all existing correos to mark deleted ones as inactive
+          const { data: currentCorreos } = await supabase
+            .from("cliente_correos")
+            .select("id")
+            .eq("cliente_id", clienteId)
+            .eq("activo", true);
+          
+          const idsToDeactivate = (currentCorreos || [])
+            .filter(c => !existingCorreoIds.includes(c.id))
+            .map(c => c.id);
+          
+          if (idsToDeactivate.length > 0) {
+            await supabase
+              .from("cliente_correos")
+              .update({ activo: false })
+              .in("id", idsToDeactivate);
+          }
+        }
+
+        // Update existing correos
+        for (const correo of correos.filter(c => !c.isNew)) {
+          await supabase
+            .from("cliente_correos")
+            .update({
+              email: correo.email,
+              nombre_contacto: correo.nombre_contacto || null,
+              proposito: correo.proposito,
+              es_principal: correo.es_principal,
+            })
+            .eq("id", correo.id);
+        }
+
+        // Insert new correos
+        const newCorreos = correos.filter(c => c.isNew);
+        if (newCorreos.length > 0) {
+          await supabase.from("cliente_correos").insert(
+            newCorreos.map(c => ({
+              cliente_id: clienteId,
+              email: c.email,
+              nombre_contacto: c.nombre_contacto || null,
+              proposito: c.proposito,
+              es_principal: c.es_principal,
+            }))
+          );
+        }
+
         toast({ title: "Cliente actualizado correctamente" });
       } else {
         const { data, error } = await supabase
@@ -200,6 +344,25 @@ const Clientes = () => {
 
         if (error) throw error;
         clienteId = data.id;
+
+        // Create correos for new client
+        if (correos.length > 0) {
+          const correosData = correos.map(c => ({
+            cliente_id: clienteId,
+            email: c.email,
+            nombre_contacto: c.nombre_contacto || null,
+            proposito: c.proposito,
+            es_principal: c.es_principal,
+          }));
+
+          const { error: correoError } = await supabase
+            .from("cliente_correos")
+            .insert(correosData);
+
+          if (correoError) {
+            console.error("Error creating correos:", correoError);
+          }
+        }
 
         // Create sucursales if not delivering to fiscal address
         if (!entregarMismaDireccion && sucursales.length > 0) {
@@ -229,7 +392,7 @@ const Clientes = () => {
             } else {
               toast({ 
                 title: "Cliente creado correctamente",
-                description: `Se crearon ${sucursalesValidas.length} sucursal(es) de entrega`
+                description: `Se crearon ${sucursalesValidas.length} sucursal(es) de entrega y ${correos.length} correo(s)`
               });
             }
           } else {
@@ -269,7 +432,7 @@ const Clientes = () => {
     }
   };
 
-  const handleEdit = (client: any) => {
+  const handleEdit = async (client: any) => {
     setEditingClient(client);
     setFormData({
       codigo: client.codigo,
@@ -286,6 +449,7 @@ const Clientes = () => {
     });
     setEntregarMismaDireccion(true);
     setSucursales([]);
+    await loadCorreosCliente(client.id);
     setDialogOpen(true);
   };
 
@@ -343,6 +507,10 @@ const Clientes = () => {
     });
     setEntregarMismaDireccion(true);
     setSucursales([]);
+    setCorreos([]);
+    setNewCorreoEmail("");
+    setNewCorreoNombre("");
+    setNewCorreoProposito("general");
   };
 
   const filteredClientes = clientes.filter(
@@ -505,6 +673,110 @@ const Clientes = () => {
                     <p className="text-xs text-muted-foreground">
                       Define si este cliente normalmente requiere factura o remisión
                     </p>
+                  </div>
+                </div>
+
+                {/* Sección de Correos Electrónicos */}
+                <div className="space-y-4">
+                  <h4 className="font-medium text-lg border-b pb-2 flex items-center gap-2">
+                    <Mail className="h-5 w-5" />
+                    Correos Electrónicos
+                  </h4>
+                  
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Email *</Label>
+                        <Input
+                          type="email"
+                          placeholder="correo@cliente.com"
+                          value={newCorreoEmail}
+                          onChange={(e) => setNewCorreoEmail(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddCorreo())}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Nombre contacto</Label>
+                        <Input
+                          placeholder="Juan Pérez"
+                          value={newCorreoNombre}
+                          onChange={(e) => setNewCorreoNombre(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Propósito</Label>
+                        <div className="flex gap-2">
+                          <Select value={newCorreoProposito} onValueChange={setNewCorreoProposito}>
+                            <SelectTrigger className="flex-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="general">General</SelectItem>
+                              <SelectItem value="pedidos">Pedidos</SelectItem>
+                              <SelectItem value="facturacion">Facturación</SelectItem>
+                              <SelectItem value="cotizaciones">Cotizaciones</SelectItem>
+                              <SelectItem value="pagos">Pagos</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button type="button" variant="outline" size="icon" onClick={handleAddCorreo}>
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {correos.length > 0 && (
+                      <div className="space-y-2">
+                        {correos.map((correo) => (
+                          <div 
+                            key={correo.id} 
+                            className="flex items-center gap-2 p-2 bg-muted/50 rounded-md"
+                          >
+                            <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium truncate">{correo.email}</span>
+                                {correo.es_principal && (
+                                  <Badge variant="default" className="text-xs shrink-0">Principal</Badge>
+                                )}
+                                <Badge variant="outline" className="text-xs shrink-0">{getPropositoLabel(correo.proposito)}</Badge>
+                              </div>
+                              {correo.nombre_contacto && (
+                                <span className="text-xs text-muted-foreground">{correo.nombre_contacto}</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {!correo.es_principal && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-xs h-7"
+                                  onClick={() => handleSetPrincipal(correo.id)}
+                                >
+                                  Hacer principal
+                                </Button>
+                              )}
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 hover:bg-destructive/20"
+                                onClick={() => handleRemoveCorreo(correo.id)}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {correos.length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-2">
+                        Agrega correos para enviar cotizaciones y facturas
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -711,17 +983,6 @@ const Clientes = () => {
                           variant="ghost"
                           size="icon"
                           onClick={() => {
-                            setSelectedClienteForCorreos({ id: cliente.id, nombre: cliente.nombre });
-                            setCorreosDialogOpen(true);
-                          }}
-                          title="Gestionar correos"
-                        >
-                          <Mail className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
                             setSelectedClienteForSucursales({ id: cliente.id, nombre: cliente.nombre });
                             setSucursalesDialogOpen(true);
                           }}
@@ -733,6 +994,7 @@ const Clientes = () => {
                           variant="ghost"
                           size="icon"
                           onClick={() => handleEdit(cliente)}
+                          title="Editar cliente y correos"
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
@@ -758,15 +1020,6 @@ const Clientes = () => {
         onOpenChange={setSucursalesDialogOpen}
         cliente={selectedClienteForSucursales}
       />
-
-      {selectedClienteForCorreos && (
-        <ClienteCorreosManager
-          clienteId={selectedClienteForCorreos.id}
-          clienteNombre={selectedClienteForCorreos.nombre}
-          open={correosDialogOpen}
-          onOpenChange={setCorreosDialogOpen}
-        />
-      )}
     </Layout>
   );
 };

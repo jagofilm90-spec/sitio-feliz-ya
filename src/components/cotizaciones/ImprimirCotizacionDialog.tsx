@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
@@ -10,6 +10,9 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Printer, Download } from "lucide-react";
 import { CotizacionPrintTemplate } from "./CotizacionPrintTemplate";
+import { toast } from "sonner";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 interface ImprimirCotizacionDialogProps {
   cotizacionId: string;
@@ -23,6 +26,7 @@ const ImprimirCotizacionDialog = ({
   onOpenChange,
 }: ImprimirCotizacionDialogProps) => {
   const printRef = useRef<HTMLDivElement>(null);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const { data: cotizacion, isLoading } = useQuery({
     queryKey: ["cotizacion-print", cotizacionId],
@@ -58,7 +62,6 @@ const ImprimirCotizacionDialog = ({
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
-    // Extract and copy stylesheets
     const styles = Array.from(document.styleSheets)
       .map((styleSheet) => {
         try {
@@ -99,7 +102,42 @@ const ImprimirCotizacionDialog = ({
     }, 250);
   };
 
-  // Parse notas to remove system tags and check if "solo precios"
+  const handleDownloadPdf = async () => {
+    const printContent = printRef.current;
+    if (!printContent) return;
+
+    setIsGeneratingPdf(true);
+    
+    try {
+      const canvas = await html2canvas(printContent, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: "#ffffff",
+      });
+
+      const imgWidth = 215.9; // Letter width in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      const pdf = new jsPDF({
+        orientation: imgHeight > imgWidth ? "portrait" : "landscape",
+        unit: "mm",
+        format: "letter",
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
+      
+      pdf.save(`Cotizacion_${cotizacion?.folio || "documento"}.pdf`);
+      toast.success("PDF descargado exitosamente");
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      toast.error("Error al generar el PDF");
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
   const parseNotas = (notas: string | null) => {
     if (!notas) return { notasLimpias: "", soloPrecios: false };
     const soloPrecios = notas.includes("[Solo precios]");
@@ -148,6 +186,18 @@ const ImprimirCotizacionDialog = ({
           <DialogTitle className="flex items-center justify-between">
             <span>Vista previa - Cotización {cotizacion?.folio}</span>
             <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={handleDownloadPdf} 
+                disabled={isLoading || isGeneratingPdf}
+              >
+                {isGeneratingPdf ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4 mr-2" />
+                )}
+                Descargar PDF
+              </Button>
               <Button onClick={handlePrint} disabled={isLoading}>
                 <Printer className="h-4 w-4 mr-2" />
                 Imprimir

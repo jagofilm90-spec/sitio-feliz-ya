@@ -26,3 +26,9 @@ verify_jwt = true
 
 [functions.confirmar-oc]
 verify_jwt = false
+
+[functions.auto-reschedule-deliveries]
+verify_jwt = true
+
+[functions.send-invoice-email]
+verify_jwt = true

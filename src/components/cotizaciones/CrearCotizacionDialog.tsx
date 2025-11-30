@@ -28,7 +28,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Plus, Trash2, Search, FileText } from "lucide-react";
+import { Loader2, Plus, Trash2, Search, FileText, Mail } from "lucide-react";
+import ClienteCorreosManager from "@/components/clientes/ClienteCorreosManager";
 import { format, addDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { formatCurrency, calcularDesgloseImpuestos, validarTotales } from "@/lib/utils";
@@ -101,6 +102,7 @@ const CrearCotizacionDialog = ({
 
   const [selectedCliente, setSelectedCliente] = useState<string>("");
   const [selectedSucursal, setSelectedSucursal] = useState<string>("");
+  const [correosDialogOpen, setCorreosDialogOpen] = useState(false);
   const [vigenciaDias, setVigenciaDias] = useState(7);
   const [mesCotizacion, setMesCotizacion] = useState<string>(() => {
     const hoy = new Date();
@@ -564,18 +566,30 @@ const CrearCotizacionDialog = ({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Cliente *</Label>
-              <Select value={selectedCliente} onValueChange={setSelectedCliente}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar cliente" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clientes.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.nombre} ({c.codigo})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex gap-2">
+                <Select value={selectedCliente} onValueChange={setSelectedCliente}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Seleccionar cliente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clientes.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.nombre} ({c.codigo})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  disabled={!selectedCliente}
+                  onClick={() => setCorreosDialogOpen(true)}
+                  title="Gestionar correos del cliente"
+                >
+                  <Mail className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -921,6 +935,16 @@ const CrearCotizacionDialog = ({
         </div>
         )}
       </DialogContent>
+
+      {/* Dialog para gestionar correos del cliente */}
+      {selectedCliente && (
+        <ClienteCorreosManager
+          clienteId={selectedCliente}
+          clienteNombre={clientes.find(c => c.id === selectedCliente)?.nombre || ""}
+          open={correosDialogOpen}
+          onOpenChange={setCorreosDialogOpen}
+        />
+      )}
     </Dialog>
   );
 };

@@ -430,6 +430,16 @@ const CotizacionesTab = () => {
                               </DropdownMenuItem>
                             )}
                             
+                            {/* Resend option for already sent quotations */}
+                            {c.status === "enviada" && (
+                              <DropdownMenuItem
+                                onClick={() => setEnviarCotizacion(c)}
+                              >
+                                <RefreshCw className="h-4 w-4 mr-2" />
+                                Reenviar al cliente
+                              </DropdownMenuItem>
+                            )}
+                            
                             {(c.status === "enviada" || c.status === "aceptada") && (
                               <DropdownMenuItem
                                 onClick={() => handleConvertirPedido(c.id)}

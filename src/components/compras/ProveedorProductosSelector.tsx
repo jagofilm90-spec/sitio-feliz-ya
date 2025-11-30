@@ -143,6 +143,11 @@ const ProveedorProductosSelector = ({ proveedorId, proveedorNombre }: ProveedorP
           )}
         </div>
       </ScrollArea>
+
+      <div className="flex items-center justify-between pt-2 border-t text-sm text-muted-foreground">
+        <span>{filteredProductos.length} productos mostrados</span>
+        <span className="font-medium text-foreground">{productosProveedor.length} productos asociados</span>
+      </div>
     </div>
   );
 };

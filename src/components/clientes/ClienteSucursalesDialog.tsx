@@ -41,6 +41,7 @@ interface ClienteSucursalesDialogProps {
 interface Sucursal {
   id: string;
   nombre: string;
+  codigo_sucursal: string | null;
   direccion: string;
   zona_id: string | null;
   telefono: string | null;
@@ -78,6 +79,7 @@ const ClienteSucursalesDialog = ({
 
   const [formData, setFormData] = useState({
     nombre: "",
+    codigo_sucursal: "",
     direccion: "",
     zona_id: "",
     telefono: "",
@@ -151,6 +153,7 @@ const ClienteSucursalesDialog = ({
       const sucursalData = {
         cliente_id: cliente.id,
         nombre: formData.nombre,
+        codigo_sucursal: formData.codigo_sucursal || null,
         direccion: formData.direccion,
         zona_id: formData.zona_id || null,
         telefono: formData.telefono || null,
@@ -200,6 +203,7 @@ const ClienteSucursalesDialog = ({
     setEditingSucursal(sucursal);
     setFormData({
       nombre: sucursal.nombre,
+      codigo_sucursal: sucursal.codigo_sucursal || "",
       direccion: sucursal.direccion,
       zona_id: sucursal.zona_id || "",
       telefono: sucursal.telefono || "",
@@ -243,6 +247,7 @@ const ClienteSucursalesDialog = ({
     setEditingSucursal(null);
     setFormData({
       nombre: "",
+      codigo_sucursal: "",
       direccion: "",
       zona_id: "",
       telefono: "",
@@ -289,14 +294,25 @@ const ClienteSucursalesDialog = ({
 
           {formOpen && (
             <form onSubmit={handleSave} className="border rounded-lg p-4 space-y-4 bg-muted/30">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="suc_codigo">Código</Label>
+                  <Input
+                    id="suc_codigo"
+                    value={formData.codigo_sucursal}
+                    onChange={(e) => setFormData({ ...formData, codigo_sucursal: e.target.value })}
+                    placeholder="Ej: 41"
+                    autoComplete="off"
+                  />
+                  <p className="text-xs text-muted-foreground">ID interno del cliente</p>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="suc_nombre">Nombre *</Label>
                   <Input
                     id="suc_nombre"
                     value={formData.nombre}
                     onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                    placeholder="Ej: Sucursal Ciprés"
+                    placeholder="Ej: La Joya"
                     autoComplete="off"
                     required
                   />
@@ -521,7 +537,14 @@ const ClienteSucursalesDialog = ({
                     <TableRow key={sucursal.id}>
                       <TableCell className="font-medium">
                         <div className="flex flex-col gap-1">
-                          {sucursal.nombre}
+                          <div className="flex items-center gap-2">
+                            {sucursal.codigo_sucursal && (
+                              <Badge variant="secondary" className="text-xs font-mono">
+                                {sucursal.codigo_sucursal}
+                              </Badge>
+                            )}
+                            {sucursal.nombre}
+                          </div>
                           {sucursal.rfc && (
                             <Badge variant="outline" className="text-xs w-fit">
                               <FileText className="h-3 w-3 mr-1" />

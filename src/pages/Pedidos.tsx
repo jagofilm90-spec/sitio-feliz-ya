@@ -19,10 +19,11 @@ import {
 } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Eye, ShoppingCart, FileText, Link2, Printer, Receipt, Send, CheckCircle2, Clock } from "lucide-react";
+import { Plus, Search, Eye, ShoppingCart, FileText, Link2, Printer, Receipt, Send, CheckCircle2, Clock, BarChart3 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 import CotizacionesTab from "@/components/cotizaciones/CotizacionesTab";
+import CotizacionesAnalyticsTab from "@/components/cotizaciones/CotizacionesAnalyticsTab";
 import CotizacionDetalleDialog from "@/components/cotizaciones/CotizacionDetalleDialog";
 import { ImprimirRemisionDialog } from "@/components/remisiones/ImprimirRemisionDialog";
 import EditarEmailClienteDialog from "@/components/pedidos/EditarEmailClienteDialog";
@@ -374,6 +375,10 @@ const Pedidos = () => {
               <FileText className="h-4 w-4" />
               Cotizaciones
             </TabsTrigger>
+            <TabsTrigger value="analisis" className="gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Análisis
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="pedidos" className="mt-6 space-y-4">
@@ -531,6 +536,10 @@ const Pedidos = () => {
 
           <TabsContent value="cotizaciones" className="mt-6">
             <CotizacionesTab />
+          </TabsContent>
+
+          <TabsContent value="analisis" className="mt-6">
+            <CotizacionesAnalyticsTab />
           </TabsContent>
         </Tabs>
       </div>

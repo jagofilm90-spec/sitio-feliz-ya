@@ -283,6 +283,7 @@ export type Database = {
           gmail_cuenta_id: string | null
           id: string
           impuestos: number
+          nombre: string | null
           notas: string | null
           pedido_id: string | null
           status: string
@@ -302,6 +303,7 @@ export type Database = {
           gmail_cuenta_id?: string | null
           id?: string
           impuestos?: number
+          nombre?: string | null
           notas?: string | null
           pedido_id?: string | null
           status?: string
@@ -321,6 +323,7 @@ export type Database = {
           gmail_cuenta_id?: string | null
           id?: string
           impuestos?: number
+          nombre?: string | null
           notas?: string | null
           pedido_id?: string | null
           status?: string

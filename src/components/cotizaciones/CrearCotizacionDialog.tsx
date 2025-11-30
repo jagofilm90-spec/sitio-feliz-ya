@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -108,6 +109,7 @@ const CrearCotizacionDialog = ({
   const [notas, setNotas] = useState("");
   const [detalles, setDetalles] = useState<DetalleProducto[]>([]);
   const [folio, setFolio] = useState<string>("");
+  const [sinCantidades, setSinCantidades] = useState(false);
   const fechaCreacion = new Date();
 
   const isEditMode = !!cotizacionId;
@@ -509,6 +511,7 @@ const CrearCotizacionDialog = ({
     setDetalles([]);
     setSearchTerm("");
     setFolio("");
+    setSinCantidades(false);
   };
 
   const totales = calcularTotales();
@@ -625,6 +628,21 @@ const CrearCotizacionDialog = ({
             </div>
           </div>
 
+          {/* Switch sin cantidades */}
+          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+            <div className="space-y-0.5">
+              <Label htmlFor="sin-cantidades" className="cursor-pointer">Solo precios (sin cantidades)</Label>
+              <p className="text-xs text-muted-foreground">
+                Activar para cotizaciones donde el cliente define las cantidades en su pedido
+              </p>
+            </div>
+            <Switch
+              id="sin-cantidades"
+              checked={sinCantidades}
+              onCheckedChange={setSinCantidades}
+            />
+          </div>
+
           {/* Product search */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -700,9 +718,9 @@ const CrearCotizacionDialog = ({
                 <TableHeader>
                   <TableRow>
                     <TableHead>Producto</TableHead>
-                    <TableHead className="w-24">Cantidad</TableHead>
-                    <TableHead className="w-44">Precio Unit.</TableHead>
-                    <TableHead className="w-32 text-right">Subtotal</TableHead>
+                    {!sinCantidades && <TableHead className="w-24">Cantidad</TableHead>}
+                    <TableHead className={sinCantidades ? "w-44" : "w-44"}>Precio Unit.</TableHead>
+                    {!sinCantidades && <TableHead className="w-32 text-right">Subtotal</TableHead>}
                     <TableHead className="w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -722,17 +740,19 @@ const CrearCotizacionDialog = ({
                           </p>
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          min={1}
-                          value={d.cantidad}
-                          onChange={(e) =>
-                            actualizarCantidad(index, parseInt(e.target.value) || 1)
-                          }
-                          className="w-20"
-                        />
-                      </TableCell>
+                      {!sinCantidades && (
+                        <TableCell>
+                          <Input
+                            type="number"
+                            min={1}
+                            value={d.cantidad}
+                            onChange={(e) =>
+                              actualizarCantidad(index, parseInt(e.target.value) || 1)
+                            }
+                            className="w-20"
+                          />
+                        </TableCell>
+                      )}
                       <TableCell>
                         <div className="space-y-1">
                           <Input
@@ -783,9 +803,11 @@ const CrearCotizacionDialog = ({
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="text-right font-medium">
-                        ${formatCurrency(d.subtotal)}
-                      </TableCell>
+                      {!sinCantidades && (
+                        <TableCell className="text-right font-medium">
+                          ${formatCurrency(d.subtotal)}
+                        </TableCell>
+                      )}
                       <TableCell>
                         <Button
                           variant="ghost"
@@ -813,8 +835,8 @@ const CrearCotizacionDialog = ({
             />
           </div>
 
-          {/* Totals */}
-          {detalles.length > 0 && (
+          {/* Totals - solo mostrar cuando hay cantidades */}
+          {detalles.length > 0 && !sinCantidades && (
             <div className="flex justify-end">
               <div className="w-72 space-y-2 text-sm">
                 <div className="flex justify-between">

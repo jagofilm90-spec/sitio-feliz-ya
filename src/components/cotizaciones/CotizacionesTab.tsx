@@ -76,7 +76,7 @@ interface Cotizacion {
 const CotizacionesTab = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { isAdmin } = useUserRoles();
+  const { isAdmin, isLoading: rolesLoading } = useUserRoles();
   const [searchTerm, setSearchTerm] = useState("");
   const [crearOpen, setCrearOpen] = useState(false);
   const [editCotizacionId, setEditCotizacionId] = useState<string | null>(null);
@@ -396,7 +396,7 @@ const CotizacionesTab = () => {
                             )}
                             
                             {/* Borrador: Non-admin sends to authorization, Admin can authorize directly */}
-                            {c.status === "borrador" && !isAdmin && (
+                            {c.status === "borrador" && !rolesLoading && !isAdmin && (
                               <DropdownMenuItem
                                 onClick={() => handleEnviarAAutorizacion(c)}
                                 className="text-amber-600"
@@ -406,7 +406,7 @@ const CotizacionesTab = () => {
                               </DropdownMenuItem>
                             )}
                             
-                            {c.status === "borrador" && isAdmin && (
+                            {c.status === "borrador" && !rolesLoading && isAdmin && (
                               <DropdownMenuItem
                                 onClick={() => handleAutorizarDirecto(c)}
                                 className="text-green-600"
@@ -417,7 +417,7 @@ const CotizacionesTab = () => {
                             )}
                             
                             {/* Admin can authorize/reject pending quotations */}
-                            {isAdmin && c.status === "pendiente_autorizacion" && (
+                            {!rolesLoading && isAdmin && c.status === "pendiente_autorizacion" && (
                               <DropdownMenuItem
                                 onClick={() => setAutorizarCotizacion(c)}
                                 className="text-amber-600"

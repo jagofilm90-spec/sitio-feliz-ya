@@ -32,3 +32,6 @@ verify_jwt = true
 
 [functions.send-invoice-email]
 verify_jwt = true
+
+[functions.parse-order-email]
+verify_jwt = true

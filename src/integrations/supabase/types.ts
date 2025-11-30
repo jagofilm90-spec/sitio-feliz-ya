@@ -47,6 +47,50 @@ export type Database = {
         }
         Relationships: []
       }
+      cliente_correos: {
+        Row: {
+          activo: boolean | null
+          cliente_id: string
+          created_at: string
+          email: string
+          es_principal: boolean | null
+          id: string
+          nombre_contacto: string | null
+          proposito: string | null
+          updated_at: string
+        }
+        Insert: {
+          activo?: boolean | null
+          cliente_id: string
+          created_at?: string
+          email: string
+          es_principal?: boolean | null
+          id?: string
+          nombre_contacto?: string | null
+          proposito?: string | null
+          updated_at?: string
+        }
+        Update: {
+          activo?: boolean | null
+          cliente_id?: string
+          created_at?: string
+          email?: string
+          es_principal?: boolean | null
+          id?: string
+          nombre_contacto?: string | null
+          proposito?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cliente_correos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cliente_sucursales: {
         Row: {
           activo: boolean

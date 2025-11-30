@@ -29,9 +29,10 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Edit, Trash2, MapPin, Truck, X } from "lucide-react";
+import { Plus, Search, Edit, Trash2, MapPin, Truck, X, Mail } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import ClienteSucursalesDialog from "@/components/clientes/ClienteSucursalesDialog";
+import ClienteCorreosManager from "@/components/clientes/ClienteCorreosManager";
 import GoogleMapsAddressAutocomplete from "@/components/GoogleMapsAddressAutocomplete";
 
 interface Zona {
@@ -57,6 +58,8 @@ const Clientes = () => {
   const [editingClient, setEditingClient] = useState<any>(null);
   const [sucursalesDialogOpen, setSucursalesDialogOpen] = useState(false);
   const [selectedClienteForSucursales, setSelectedClienteForSucursales] = useState<{ id: string; nombre: string } | null>(null);
+  const [correosDialogOpen, setCorreosDialogOpen] = useState(false);
+  const [selectedClienteForCorreos, setSelectedClienteForCorreos] = useState<{ id: string; nombre: string } | null>(null);
   const { toast } = useToast();
 
   // Form state
@@ -708,6 +711,17 @@ const Clientes = () => {
                           variant="ghost"
                           size="icon"
                           onClick={() => {
+                            setSelectedClienteForCorreos({ id: cliente.id, nombre: cliente.nombre });
+                            setCorreosDialogOpen(true);
+                          }}
+                          title="Gestionar correos"
+                        >
+                          <Mail className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
                             setSelectedClienteForSucursales({ id: cliente.id, nombre: cliente.nombre });
                             setSucursalesDialogOpen(true);
                           }}
@@ -744,6 +758,15 @@ const Clientes = () => {
         onOpenChange={setSucursalesDialogOpen}
         cliente={selectedClienteForSucursales}
       />
+
+      {selectedClienteForCorreos && (
+        <ClienteCorreosManager
+          clienteId={selectedClienteForCorreos.id}
+          clienteNombre={selectedClienteForCorreos.nombre}
+          open={correosDialogOpen}
+          onOpenChange={setCorreosDialogOpen}
+        />
+      )}
     </Layout>
   );
 };

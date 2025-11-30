@@ -19,11 +19,12 @@ import {
 } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Eye, ShoppingCart, FileText, Link2 } from "lucide-react";
+import { Plus, Search, Eye, ShoppingCart, FileText, Link2, Printer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 import CotizacionesTab from "@/components/cotizaciones/CotizacionesTab";
 import CotizacionDetalleDialog from "@/components/cotizaciones/CotizacionDetalleDialog";
+import { ImprimirRemisionDialog } from "@/components/remisiones/ImprimirRemisionDialog";
 import { formatCurrency } from "@/lib/utils";
 
 interface PedidoConCotizacion {
@@ -43,6 +44,8 @@ const Pedidos = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("pedidos");
   const [selectedCotizacionId, setSelectedCotizacionId] = useState<string | null>(null);
+  const [remisionDialogOpen, setRemisionDialogOpen] = useState(false);
+  const [selectedPedidoData, setSelectedPedidoData] = useState<any>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -129,6 +132,106 @@ const Pedidos = () => {
         {labels[status] || status}
       </Badge>
     );
+  };
+
+  const getCreditLabel = (term: string) => {
+    const labels: Record<string, string> = {
+      contado: "Contado",
+      "8_dias": "8 días",
+      "15_dias": "15 días",
+      "30_dias": "30 días",
+    };
+    return labels[term] || term;
+  };
+
+  const handlePrintRemision = async (pedidoId: string) => {
+    try {
+      // Fetch full pedido data
+      const { data: pedido, error } = await supabase
+        .from("pedidos")
+        .select(`
+          *,
+          clientes (
+            id, nombre, codigo, rfc, direccion, telefono, termino_credito
+          ),
+          cliente_sucursales (
+            id, nombre, direccion
+          ),
+          profiles:vendedor_id (
+            full_name
+          ),
+          pedidos_detalles (
+            id, cantidad, precio_unitario, subtotal,
+            productos (
+              id, codigo, nombre, marca, presentacion, unidad, aplica_iva
+            )
+          )
+        `)
+        .eq("id", pedidoId)
+        .single();
+
+      if (error) throw error;
+
+      // Prepare data for remision
+      const productos = pedido.pedidos_detalles.map((detalle: any) => {
+        const producto = detalle.productos;
+        const descripcion = `${producto.nombre}${producto.marca ? ` ${producto.marca}` : ''}${producto.presentacion ? ` (${producto.presentacion}KG)` : ''}`;
+        
+        return {
+          cantidad: detalle.cantidad,
+          unidad: producto.unidad || 'pza',
+          descripcion,
+          precio_unitario: detalle.precio_unitario,
+          total: detalle.subtotal,
+        };
+      });
+
+      let subtotalConIva = 0;
+      let subtotalSinIva = 0;
+      
+      pedido.pedidos_detalles.forEach((detalle: any) => {
+        if (detalle.productos?.aplica_iva) {
+          subtotalConIva += detalle.subtotal;
+        } else {
+          subtotalSinIva += detalle.subtotal;
+        }
+      });
+
+      const baseConIva = subtotalConIva / 1.16;
+      const ivaCalculado = subtotalConIva - baseConIva;
+      const subtotalReal = baseConIva + subtotalSinIva;
+
+      const datosRemision = {
+        folio: `REM-${pedido.folio}`,
+        fecha: pedido.fecha_pedido,
+        cliente: {
+          nombre: pedido.clientes?.nombre || 'Sin nombre',
+          rfc: pedido.clientes?.rfc,
+          direccion_fiscal: pedido.clientes?.direccion,
+          telefono: pedido.clientes?.telefono,
+        },
+        sucursal: pedido.cliente_sucursales ? {
+          nombre: pedido.cliente_sucursales.nombre,
+          direccion: pedido.cliente_sucursales.direccion,
+        } : undefined,
+        productos,
+        subtotal: subtotalReal,
+        iva: ivaCalculado,
+        total: pedido.total || (subtotalReal + ivaCalculado),
+        condiciones_credito: getCreditLabel(pedido.clientes?.termino_credito || 'contado'),
+        vendedor: pedido.profiles?.full_name,
+        notas: pedido.notas,
+      };
+
+      setSelectedPedidoData(datosRemision);
+      setRemisionDialogOpen(true);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "No se pudo cargar el pedido para imprimir",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -233,9 +336,32 @@ const Pedidos = () => {
                           )}
                         </TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="icon">
-                            <Eye className="h-4 w-4" />
-                          </Button>
+                          <div className="flex gap-1">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button variant="ghost" size="icon">
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Ver detalles</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon"
+                                    onClick={() => handlePrintRemision(pedido.id)}
+                                  >
+                                    <Printer className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Imprimir Remisión</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -260,6 +386,13 @@ const Pedidos = () => {
           onUpdate={() => loadPedidos()}
         />
       )}
+
+      {/* Dialog para imprimir remisión */}
+      <ImprimirRemisionDialog
+        open={remisionDialogOpen}
+        onOpenChange={setRemisionDialogOpen}
+        datos={selectedPedidoData}
+      />
     </Layout>
   );
 };

@@ -51,6 +51,7 @@ export type Database = {
         Row: {
           activo: boolean
           cliente_id: string
+          codigo_sucursal: string | null
           contacto: string | null
           created_at: string
           dias_sin_entrega: string | null
@@ -72,6 +73,7 @@ export type Database = {
         Insert: {
           activo?: boolean
           cliente_id: string
+          codigo_sucursal?: string | null
           contacto?: string | null
           created_at?: string
           dias_sin_entrega?: string | null
@@ -93,6 +95,7 @@ export type Database = {
         Update: {
           activo?: boolean
           cliente_id?: string
+          codigo_sucursal?: string | null
           contacto?: string | null
           created_at?: string
           dias_sin_entrega?: string | null

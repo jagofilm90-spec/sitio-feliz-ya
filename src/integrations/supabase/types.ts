@@ -138,6 +138,7 @@ export type Database = {
           id: string
           limite_credito: number | null
           nombre: string
+          preferencia_facturacion: Database["public"]["Enums"]["preferencia_facturacion"]
           razon_social: string | null
           rfc: string | null
           saldo_pendiente: number | null
@@ -157,6 +158,7 @@ export type Database = {
           id?: string
           limite_credito?: number | null
           nombre: string
+          preferencia_facturacion?: Database["public"]["Enums"]["preferencia_facturacion"]
           razon_social?: string | null
           rfc?: string | null
           saldo_pendiente?: number | null
@@ -176,6 +178,7 @@ export type Database = {
           id?: string
           limite_credito?: number | null
           nombre?: string
+          preferencia_facturacion?: Database["public"]["Enums"]["preferencia_facturacion"]
           razon_social?: string | null
           rfc?: string | null
           saldo_pendiente?: number | null
@@ -1407,13 +1410,19 @@ export type Database = {
         Row: {
           cliente_id: string
           created_at: string
+          datos_fiscales_factura: Json | null
+          factura_enviada_al_cliente: boolean
+          factura_solicitada_por_cliente: boolean
+          facturado: boolean
           fecha_entrega_estimada: string | null
+          fecha_factura_enviada: string | null
           fecha_pedido: string
           folio: string
           id: string
           impuestos: number | null
           notas: string | null
           peso_total_kg: number | null
+          requiere_factura: boolean
           status: Database["public"]["Enums"]["order_status"]
           subtotal: number | null
           sucursal_id: string | null
@@ -1424,13 +1433,19 @@ export type Database = {
         Insert: {
           cliente_id: string
           created_at?: string
+          datos_fiscales_factura?: Json | null
+          factura_enviada_al_cliente?: boolean
+          factura_solicitada_por_cliente?: boolean
+          facturado?: boolean
           fecha_entrega_estimada?: string | null
+          fecha_factura_enviada?: string | null
           fecha_pedido?: string
           folio: string
           id?: string
           impuestos?: number | null
           notas?: string | null
           peso_total_kg?: number | null
+          requiere_factura?: boolean
           status?: Database["public"]["Enums"]["order_status"]
           subtotal?: number | null
           sucursal_id?: string | null
@@ -1441,13 +1456,19 @@ export type Database = {
         Update: {
           cliente_id?: string
           created_at?: string
+          datos_fiscales_factura?: Json | null
+          factura_enviada_al_cliente?: boolean
+          factura_solicitada_por_cliente?: boolean
+          facturado?: boolean
           fecha_entrega_estimada?: string | null
+          fecha_factura_enviada?: string | null
           fecha_pedido?: string
           folio?: string
           id?: string
           impuestos?: number | null
           notas?: string | null
           peso_total_kg?: number | null
+          requiere_factura?: boolean
           status?: Database["public"]["Enums"]["order_status"]
           subtotal?: number | null
           sucursal_id?: string | null
@@ -2148,6 +2169,10 @@ export type Database = {
         | "broadcast"
       credit_term: "contado" | "8_dias" | "15_dias" | "30_dias"
       order_status: "pendiente" | "en_ruta" | "entregado" | "cancelado"
+      preferencia_facturacion:
+        | "siempre_factura"
+        | "siempre_remision"
+        | "variable"
       unit_type:
         | "kg"
         | "pieza"
@@ -2301,6 +2326,11 @@ export const Constants = {
       ],
       credit_term: ["contado", "8_dias", "15_dias", "30_dias"],
       order_status: ["pendiente", "en_ruta", "entregado", "cancelado"],
+      preferencia_facturacion: [
+        "siempre_factura",
+        "siempre_remision",
+        "variable",
+      ],
       unit_type: [
         "kg",
         "pieza",

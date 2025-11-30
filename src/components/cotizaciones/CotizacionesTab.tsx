@@ -43,12 +43,14 @@ import {
   RefreshCw,
   Trash2,
   Pencil,
+  Printer,
 } from "lucide-react";
 import { format, isBefore } from "date-fns";
 import { es } from "date-fns/locale";
 import CrearCotizacionDialog from "./CrearCotizacionDialog";
 import CotizacionDetalleDialog from "./CotizacionDetalleDialog";
 import EnviarCotizacionDialog from "./EnviarCotizacionDialog";
+import ImprimirCotizacionDialog from "./ImprimirCotizacionDialog";
 import { formatCurrency } from "@/lib/utils";
 
 interface Cotizacion {
@@ -74,6 +76,7 @@ const CotizacionesTab = () => {
   const [cotizacionToDelete, setCotizacionToDelete] = useState<Cotizacion | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [enviarCotizacion, setEnviarCotizacion] = useState<Cotizacion | null>(null);
+  const [imprimirCotizacionId, setImprimirCotizacionId] = useState<string | null>(null);
 
   const { data: cotizaciones, isLoading, refetch } = useQuery({
     queryKey: ["cotizaciones"],
@@ -267,6 +270,12 @@ const CotizacionesTab = () => {
                               <Eye className="h-4 w-4 mr-2" />
                               Ver detalle
                             </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => setImprimirCotizacionId(c.id)}
+                            >
+                              <Printer className="h-4 w-4 mr-2" />
+                              Ver / Imprimir
+                            </DropdownMenuItem>
                             {c.status === "borrador" && (
                               <>
                                 <DropdownMenuItem
@@ -389,6 +398,15 @@ const CotizacionesTab = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Imprimir Cotización Dialog */}
+      {imprimirCotizacionId && (
+        <ImprimirCotizacionDialog
+          cotizacionId={imprimirCotizacionId}
+          open={!!imprimirCotizacionId}
+          onOpenChange={(open) => !open && setImprimirCotizacionId(null)}
+        />
+      )}
     </>
   );
 };

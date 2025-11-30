@@ -385,6 +385,7 @@ const VehiculosTab = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="camioneta">Camioneta</SelectItem>
+                      <SelectItem value="urvan">Urvan</SelectItem>
                       <SelectItem value="rabon">Rabón</SelectItem>
                       <SelectItem value="torton">Tortón</SelectItem>
                       <SelectItem value="trailer">Tráiler</SelectItem>

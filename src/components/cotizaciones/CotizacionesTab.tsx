@@ -328,6 +328,7 @@ const CotizacionesTab = () => {
                     <TableHead>Vigencia</TableHead>
                     <TableHead>Total</TableHead>
                     <TableHead>Estado</TableHead>
+                    <TableHead>Acciones</TableHead>
                     <TableHead className="w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -363,6 +364,51 @@ const CotizacionesTab = () => {
                       </TableCell>
                       <TableCell>
                         {getStatusBadge(c.status, c.fecha_vigencia)}
+                      </TableCell>
+                      <TableCell>
+                        {c.status === "autorizada" && (
+                          <Button 
+                            size="sm" 
+                            onClick={() => setEnviarCotizacion(c)}
+                            className="gap-1"
+                          >
+                            <Send className="h-3.5 w-3.5" />
+                            Enviar
+                          </Button>
+                        )}
+                        {c.status === "enviada" && (
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => setEnviarCotizacion(c)}
+                            className="gap-1"
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" />
+                            Reenviar
+                          </Button>
+                        )}
+                        {!rolesLoading && isAdmin && c.status === "pendiente_autorizacion" && (
+                          <Button 
+                            size="sm" 
+                            variant="secondary"
+                            onClick={() => setAutorizarCotizacion(c)}
+                            className="gap-1"
+                          >
+                            <CheckCircle className="h-3.5 w-3.5" />
+                            Autorizar
+                          </Button>
+                        )}
+                        {(c.status === "borrador" && !rolesLoading && isAdmin) && (
+                          <Button 
+                            size="sm" 
+                            variant="secondary"
+                            onClick={() => handleAutorizarDirecto(c)}
+                            className="gap-1"
+                          >
+                            <CheckCircle className="h-3.5 w-3.5" />
+                            Autorizar
+                          </Button>
+                        )}
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>
@@ -474,7 +520,7 @@ const CotizacionesTab = () => {
                   ))}
                   {filteredCotizaciones?.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-12">
+                      <TableCell colSpan={10} className="text-center py-12">
                         <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                         <p className="text-muted-foreground">
                           No hay cotizaciones registradas

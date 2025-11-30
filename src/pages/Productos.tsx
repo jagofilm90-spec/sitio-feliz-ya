@@ -208,6 +208,7 @@ const Productos = () => {
 
   const [formData, setFormData] = useState<{
     codigo: string;
+    codigo_sat: string;
     nombre: string;
     marca: string;
     categoria: string;
@@ -229,6 +230,7 @@ const Productos = () => {
     proveedor_id: string;
   }>({
     codigo: "",
+    codigo_sat: "",
     nombre: "",
     marca: "",
     categoria: "",
@@ -315,6 +317,7 @@ const Productos = () => {
     try {
       const productData = {
         codigo: formData.codigo,
+        codigo_sat: formData.codigo_sat || null,
         nombre: formData.nombre,
         marca: formData.marca || null,
         categoria: formData.categoria || null,
@@ -442,6 +445,7 @@ const Productos = () => {
     setEditingProduct(product);
     setFormData({
       codigo: product.codigo,
+      codigo_sat: product.codigo_sat || "",
       nombre: product.nombre,
       marca: product.marca || "",
       categoria: product.categoria || "",
@@ -493,6 +497,7 @@ const Productos = () => {
     setSimilarNameSuggestion(null);
     setFormData({
       codigo: "",
+      codigo_sat: "",
       nombre: "",
       marca: "",
       categoria: "",
@@ -580,7 +585,7 @@ const Productos = () => {
                   </Label>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="codigo">Código *</Label>
                     <Input
@@ -611,6 +616,19 @@ const Productos = () => {
                         ⚠️ {codigoGapWarning}
                       </p>
                     )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="codigo_sat">Código SAT</Label>
+                    <Input
+                      id="codigo_sat"
+                      value={formData.codigo_sat}
+                      onChange={(e) => setFormData({ ...formData, codigo_sat: e.target.value })}
+                      placeholder="Ej: 10121500"
+                      autoComplete="off"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Para facturación CFDI
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="unidad">Unidad *</Label>

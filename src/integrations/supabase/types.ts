@@ -1531,6 +1531,7 @@ export type Database = {
           aplica_iva: boolean
           categoria: string | null
           codigo: string
+          codigo_sat: string | null
           created_at: string
           descripcion: string | null
           fecha_ultima_compra: string | null
@@ -1558,6 +1559,7 @@ export type Database = {
           aplica_iva?: boolean
           categoria?: string | null
           codigo: string
+          codigo_sat?: string | null
           created_at?: string
           descripcion?: string | null
           fecha_ultima_compra?: string | null
@@ -1585,6 +1587,7 @@ export type Database = {
           aplica_iva?: boolean
           categoria?: string | null
           codigo?: string
+          codigo_sat?: string | null
           created_at?: string
           descripcion?: string | null
           fecha_ultima_compra?: string | null

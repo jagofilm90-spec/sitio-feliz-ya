@@ -26,6 +26,7 @@ import CotizacionesTab from "@/components/cotizaciones/CotizacionesTab";
 import CotizacionDetalleDialog from "@/components/cotizaciones/CotizacionDetalleDialog";
 import { ImprimirRemisionDialog } from "@/components/remisiones/ImprimirRemisionDialog";
 import EditarEmailClienteDialog from "@/components/pedidos/EditarEmailClienteDialog";
+import NuevoPedidoDialog from "@/components/pedidos/NuevoPedidoDialog";
 import { formatCurrency } from "@/lib/utils";
 
 interface PedidoConCotizacion {
@@ -53,6 +54,7 @@ const Pedidos = () => {
   const [selectedPedidoData, setSelectedPedidoData] = useState<any>(null);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [selectedPedidoForEmail, setSelectedPedidoForEmail] = useState<PedidoConCotizacion | null>(null);
+  const [nuevoPedidoDialogOpen, setNuevoPedidoDialogOpen] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -385,7 +387,7 @@ const Pedidos = () => {
                   className="pl-10"
                 />
               </div>
-              <Button>
+              <Button onClick={() => setNuevoPedidoDialogOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Nuevo Pedido
               </Button>
@@ -564,6 +566,12 @@ const Pedidos = () => {
           }}
         />
       )}
+
+      <NuevoPedidoDialog
+        open={nuevoPedidoDialogOpen}
+        onOpenChange={setNuevoPedidoDialogOpen}
+        onPedidoCreated={loadPedidos}
+      />
     </Layout>
   );
 };

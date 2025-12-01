@@ -262,7 +262,7 @@ Tel: (55) 56-00-77-81`);
       nota_linea: d.nota_linea,
     }));
 
-    return generarCotizacionPDF({
+    return await generarCotizacionPDF({
       folio: cotizacion.folio,
       nombre: cotizacion.nombre,
       fecha_creacion: cotizacion.fecha_creacion,

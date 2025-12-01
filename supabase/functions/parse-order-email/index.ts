@@ -234,6 +234,7 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     
     // Cereales
     'fruty rueda': ['frutirueda', 'fruti rueda', 'fruty ruedas'],
+    'hojuela natural': ['hojuela s/azucar', 'hojuela sin azucar', 'hojuela s/azúcar'],
     
     // Arroz
     'arroz 25/1kg': ['arroz morelos', 'arroz de morelos', 'morelos'],

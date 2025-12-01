@@ -84,177 +84,119 @@ function isLecarozEmail(emailFrom: string, emailSubject: string): boolean {
 
 // Parse Lecaroz email - understands their specific table structure
 function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotizado[]): { sucursales: ParsedSucursal[], confianza: number } {
-  const startTime = Date.now();
   console.log("Using Lecaroz specialized parser");
   console.log("Email size:", emailBody.length, "chars");
   
-  // Build STRICT product lookup - only exact or very close matches
-  const productNames = new Set<string>();
-  const productMap = new Map<string, { id: string, nombre: string, unidad: string }>();
-  
-  if (productosCotizados && productosCotizados.length > 0) {
-    for (const p of productosCotizados) {
-      const key = p.nombre.toLowerCase().trim();
-      productMap.set(key, { id: p.producto_id, nombre: p.nombre, unidad: p.unidad });
-      productNames.add(key);
-    }
+  if (!productosCotizados || productosCotizados.length === 0) {
+    console.log("No quoted products, falling back to AI");
+    return { sucursales: [], confianza: 0 };
   }
   
-  console.log("Product map built with", productMap.size, "products");
+  // Build product lookup with normalized names
+  const productMap = new Map<string, { id: string, nombre: string, unidad: string }>();
+  for (const p of productosCotizados) {
+    productMap.set(p.nombre.toLowerCase().trim(), { id: p.producto_id, nombre: p.nombre, unidad: p.unidad });
+  }
+  console.log("Product map size:", productMap.size);
   
-  // Strict product matching - must match at least 70% of the product name
-  const findProduct = (text: string): { id: string | null, nombre: string, unidad: string } | null => {
-    if (!text || text.length < 4) return null;
-    
+  // Simple product matching - check if text contains or is contained by a product name
+  const findProduct = (text: string): { id: string, nombre: string, unidad: string } | null => {
     const normalized = text.toLowerCase().trim();
-    
-    // Skip common non-product words
-    const skipWords = ['total', 'producto', 'pedido', 'entregar', 'cantidad', 'unidad', 'precio'];
-    if (skipWords.some(w => normalized === w)) return null;
+    if (normalized.length < 3) return null;
     
     // Exact match
-    const exact = productMap.get(normalized);
-    if (exact) return exact;
+    if (productMap.has(normalized)) return productMap.get(normalized)!;
     
-    // Check if text is contained within a product name (must be significant portion)
+    // Fuzzy match
     for (const [key, product] of productMap) {
-      // Text must be at least 60% of product name length to match
-      if (key.includes(normalized) && normalized.length >= key.length * 0.6) {
-        return product;
-      }
-      // Or product name is contained in text
-      if (normalized.includes(key) && key.length >= normalized.length * 0.6) {
-        return product;
-      }
+      if (key.includes(normalized) && normalized.length >= 4) return product;
+      if (normalized.includes(key) && key.length >= 4) return product;
     }
-    
     return null;
   };
   
-  // Convert to text
-  console.log("Converting HTML to text...");
+  // Convert HTML to structured text
   const text = stripHtmlFast(emailBody);
-  console.log("Text conversion done in", Date.now() - startTime, "ms, result:", text.length, "chars");
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 1);
+  console.log("Lines to process:", lines.length);
   
-  // Parse line by line
-  const lines = text.split('\n');
-  console.log("Processing", lines.length, "lines");
+  // Helper functions
+  const isNumber = (s: string): boolean => /^[\d,\.]+$/.test(s.replace(/,/g, '').trim());
+  const parseNum = (s: string): number => parseFloat(s.replace(/,/g, '').trim()) || 0;
   
-  const sucursalesMap = new Map<string, Map<string, ParsedProduct>>();
-  let currentProduct: { id: string | null, nombre: string, unidad: string } | null = null;
-  let productsFound = 0;
+  // Results: Map<branchName, Map<productId, product>>
+  const results = new Map<string, Map<string, ParsedProduct>>();
+  let currentProduct: { id: string, nombre: string, unidad: string } | null = null;
+  let productCount = 0;
+  let branchEntries = 0;
   
-  const isNumeric = (s: string): boolean => {
-    const cleaned = s.replace(/,/g, '').trim();
-    return /^\d+(\.\d+)?$/.test(cleaned);
-  };
-  
-  const parseNumber = (s: string): number => {
-    return parseFloat(s.replace(/,/g, '').trim()) || 0;
-  };
-  
-  // Track what looks like a header row to understand table structure
-  let inProductSection = false;
-  
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-    const line = lines[lineIndex];
-    if (!line || line.length < 2) continue;
+  for (const line of lines) {
+    const lower = line.toLowerCase();
     
-    const cols = line.split('\t').map(c => c.trim()).filter(c => c.length > 0);
+    // Skip totals and headers
+    if (lower.includes('total general') || lower.startsWith('total\t') || lower === 'total') continue;
+    if (lower.includes('producto') && lower.includes('pedido')) continue;
+    
+    const cols = line.split('\t').map(c => c.trim()).filter(c => c);
     if (cols.length === 0) continue;
     
-    const lowerLine = line.toLowerCase();
-    
-    // Skip total rows
-    if (lowerLine.includes('total general') || (cols[0] && cols[0].toLowerCase() === 'total')) {
-      continue;
+    // Check if first non-number column is a product
+    let firstTextCol = cols[0];
+    let colOffset = 0;
+    if (/^\d{1,3}$/.test(firstTextCol) && cols.length > 1) {
+      firstTextCol = cols[1];
+      colOffset = 1;
     }
     
-    // Detect product header - typically has "Producto" column header
-    if (lowerLine.includes('producto') && (lowerLine.includes('pedido') || lowerLine.includes('entregar'))) {
-      inProductSection = true;
-      continue;
-    }
-    
-    // Check if this line is a PRODUCT NAME row
-    // Product rows in Lecaroz usually have the product name as the main/only text content
-    // and might span multiple columns or have minimal numeric data
-    
-    const firstCol = cols[0];
-    
-    // A product row typically:
-    // - First column is text (not a small number)
-    // - Has minimal other data or just column headers/totals
-    // - Matches one of our quoted products
-    
-    if (firstCol && !isNumeric(firstCol) && firstCol.length >= 4) {
-      // Skip if it looks like a branch row (starts with number + text pattern)
-      const firstTwoMatch = /^\d{1,2}\s+[A-Z]/.test(line.trim());
-      if (firstTwoMatch) {
-        // This is likely a branch row like "1 LAGO 5 0"
-        // Don't try to match as product
-      } else {
-        const match = findProduct(firstCol);
-        if (match) {
-          currentProduct = match;
-          productsFound++;
-          inProductSection = true;
-          continue;
-        }
+    // Try to identify product header (usually standalone product name or product name + few numbers)
+    const product = findProduct(firstTextCol);
+    if (product) {
+      // Count how many numbers are in this line
+      const numCount = cols.filter(c => isNumber(c)).length;
+      // If mostly text or just the product with totals, treat as product header
+      if (numCount <= 2 || cols.length <= 3) {
+        currentProduct = product;
+        productCount++;
+        continue;
       }
     }
     
-    // Try to extract branch data if we have a current product
+    // Extract branch data if we have a current product
     if (currentProduct && cols.length >= 2) {
-      // Lecaroz format: [index] [branch_name] [qty_pedido] [qty_entregar] ...
-      // Or sometimes: [branch_name] [qty_pedido] [qty_entregar]
-      
       let branchName: string | null = null;
       let quantity = 0;
-      let startIndex = 0;
       
-      // Check if first column is an index number (1-3 digits)
-      if (/^\d{1,3}$/.test(cols[0])) {
-        startIndex = 1;
+      // Find branch name (first text column that's not tiny and not the product)
+      for (let i = colOffset; i < cols.length && !branchName; i++) {
+        const col = cols[i];
+        if (!isNumber(col) && col.length >= 2) {
+          const lowerCol = col.toLowerCase();
+          // Skip if it's "total" or looks like a product name
+          if (lowerCol !== 'total' && !findProduct(col)) {
+            branchName = col.toUpperCase();
+          }
+        }
       }
       
-      // Look for branch name - it's the first non-numeric text after any index
-      for (let i = startIndex; i < cols.length; i++) {
-        const col = cols[i];
-        
-        if (!branchName && !isNumeric(col) && col.length >= 2) {
-          const lowerCol = col.toLowerCase();
-          // Skip known non-branch values
-          if (lowerCol !== 'total' && !lowerCol.includes('producto') && !lowerCol.includes('pedido')) {
-            // Make sure this doesn't look like a product name
-            const possibleProduct = findProduct(col);
-            if (!possibleProduct) {
-              branchName = col.toUpperCase();
+      // Find quantity (first positive number after we found a branch or after colOffset)
+      if (branchName) {
+        for (let i = colOffset; i < cols.length; i++) {
+          if (isNumber(cols[i])) {
+            const num = parseNum(cols[i]);
+            if (num > 0 && num < 100000) {
+              quantity = num;
+              break;
             }
           }
         }
-        
-        // Get quantity - first positive number after branch name
-        if (branchName && isNumeric(col)) {
-          const num = parseNumber(col);
-          if (num > 0) {
-            quantity = num;
-            break;
-          }
-        }
       }
       
-      // Add to results
+      // Store result
       if (branchName && quantity > 0) {
-        if (!sucursalesMap.has(branchName)) {
-          sucursalesMap.set(branchName, new Map());
-        }
-        
-        const branchProducts = sucursalesMap.get(branchName)!;
-        const productKey = currentProduct.id || currentProduct.nombre;
-        
-        if (!branchProducts.has(productKey)) {
-          branchProducts.set(productKey, {
+        if (!results.has(branchName)) results.set(branchName, new Map());
+        const prods = results.get(branchName)!;
+        if (!prods.has(currentProduct.id)) {
+          prods.set(currentProduct.id, {
             nombre_producto: currentProduct.nombre,
             cantidad: quantity,
             unidad: currentProduct.unidad,
@@ -262,41 +204,33 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
             notas: null,
             producto_cotizado_id: currentProduct.id
           });
+          branchEntries++;
         }
       }
     }
   }
   
-  console.log("Parsing complete in", Date.now() - startTime, "ms");
-  console.log("Found", productsFound, "products");
+  console.log("Products found:", productCount);
+  console.log("Branch entries:", branchEntries);
+  console.log("Unique branches:", results.size);
   
-  // Convert to result format
+  // Build final result
   const sucursales: ParsedSucursal[] = [];
-  for (const [branchName, products] of sucursalesMap) {
-    const productArray = Array.from(products.values());
-    if (productArray.length > 0) {
-      sucursales.push({
-        nombre_sucursal: branchName,
-        fecha_entrega_solicitada: null,
-        productos: productArray
-      });
+  for (const [name, products] of results) {
+    const arr = Array.from(products.values());
+    if (arr.length > 0) {
+      sucursales.push({ nombre_sucursal: name, fecha_entrega_solicitada: null, productos: arr });
     }
   }
-  
   sucursales.sort((a, b) => a.nombre_sucursal.localeCompare(b.nombre_sucursal));
   
-  console.log("Final result:", sucursales.length, "branches");
-  
-  // Debug: log some sample data
+  console.log("Final branches:", sucursales.length);
   if (sucursales.length > 0) {
-    const sample = sucursales.slice(0, 3);
-    for (const s of sample) {
-      console.log(`  Sample: ${s.nombre_sucursal} has ${s.productos.length} products`);
-    }
+    sucursales.slice(0, 3).forEach(s => console.log(`  ${s.nombre_sucursal}: ${s.productos.length} products`));
   }
   
   if (sucursales.length === 0) {
-    console.log("No branches found, will fall back to AI");
+    console.log("No branches found, falling back to AI");
     return { sucursales: [], confianza: 0 };
   }
   

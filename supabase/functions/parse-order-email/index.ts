@@ -166,10 +166,25 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     }
   }
   
+  // Product synonyms mapping
+  const PRODUCT_SYNONYMS: Record<string, string[]> = {
+    'fecula de maiz': ['maizena', 'maicena'],
+  };
+  
   const findProduct = (text: string): ProductInfo | null => {
-    const normalized = text.toLowerCase().trim();
-    const normalizedNoAccents = normalized.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    let normalized = text.toLowerCase().trim();
+    let normalizedNoAccents = normalized.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     if (normalized.length < 3) return null;
+    
+    // Check synonyms first - if input matches a synonym, replace with canonical name
+    for (const [canonical, synonyms] of Object.entries(PRODUCT_SYNONYMS)) {
+      if (synonyms.some(s => normalizedNoAccents.includes(s))) {
+        console.log(`SYNONYM: "${text}" -> searching for "${canonical}"`);
+        normalizedNoAccents = canonical;
+        normalized = canonical;
+        break;
+      }
+    }
     
     // 1. Exact match with accents
     if (productExact.has(normalized)) {
@@ -424,6 +439,9 @@ REGLAS IMPORTANTES:
 2. Indica la unidad del email (KILOS, PIEZAS, CAJAS, etc.)
 3. Usa el producto_cotizado_id EXACTO del catálogo cuando encuentres una coincidencia
 4. La conversión a unidad de venta se hará después automáticamente
+
+SINÓNIMOS DE PRODUCTOS:
+- "Maizena" o "MAIZENA" = "Fécula de Maíz" (buscar fécula de maíz en el catálogo)
 ${productosContext}`;
 
   const controller = new AbortController();

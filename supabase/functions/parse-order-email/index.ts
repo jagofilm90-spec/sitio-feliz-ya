@@ -215,13 +215,55 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
   // Track unmatched products for UI feedback
   const unmatchedProducts: string[] = [];
   
+  // Lines to IGNORE - packaging descriptions, headers, categories (NOT products)
+  const IGNORED_LINES = new Set([
+    'balones de 50 kilos',
+    'balones de 50',
+    'sacos de 50 kilos',
+    'sacos de 50',
+    'costales de 50',
+    'bultos de 50',
+    'bultos de 25',
+    'cajas de 24',
+    'cajas de 12',
+    'azucar', // Category header, not a product
+    'azúcar',
+    'harinas',
+    'frutas',
+    'semillas',
+    'granos',
+    'enlatados',
+    'especias',
+    'varios',
+    'total',
+    'subtotal',
+    'gran total',
+    'total general',
+  ]);
+  
   // DETERMINISTIC MATCHING - Exact matches, synonyms, or quotation-based matching
-  const findProduct = (text: string): { product: ProductInfo | null; matchType: 'exact' | 'synonym' | 'none'; originalName: string } => {
+  const findProduct = (text: string): { product: ProductInfo | null; matchType: 'exact' | 'synonym' | 'none' | 'ignored'; originalName: string } => {
     let normalized = text.toLowerCase().trim();
     let normalizedNoAccents = normalized.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     const originalName = text.trim();
     
     if (normalized.length < 2) return { product: null, matchType: 'none', originalName };
+    
+    // Skip ignored lines (packaging descriptions, category headers)
+    if (IGNORED_LINES.has(normalizedNoAccents) || IGNORED_LINES.has(normalized)) {
+      console.log(`IGNORED: "${text}" - packaging description or category header`);
+      return { product: null, matchType: 'ignored', originalName };
+    }
+    
+    // Also ignore lines matching common packaging patterns
+    if (/^balones?\s+de\s+\d+/i.test(normalized) || 
+        /^sacos?\s+de\s+\d+/i.test(normalized) ||
+        /^costales?\s+de\s+\d+/i.test(normalized) ||
+        /^bultos?\s+de\s+\d+/i.test(normalized) ||
+        /^cajas?\s+de\s+\d+/i.test(normalized)) {
+      console.log(`IGNORED PATTERN: "${text}" - packaging description`);
+      return { product: null, matchType: 'ignored', originalName };
+    }
     
     // Clean up common suffixes/prefixes
     normalizedNoAccents = normalizedNoAccents
@@ -301,7 +343,7 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
   let currentBranch: string | null = null;
   let pendingProduct: ProductInfo | null = null;
   let pendingProductOriginalName: string | null = null;
-  let pendingMatchType: 'exact' | 'synonym' | 'none' | null = null;
+  let pendingMatchType: 'exact' | 'synonym' | 'none' | 'ignored' | null = null;
   
   // Branch pattern: "1 LAGO", "3 LAFAYETTE", "12 AGRICOLA ORIENTAL"
   const branchPattern = /^(\d{1,3})\s+([A-Z][A-Z\s]*[A-Z]?)$/i;
@@ -344,6 +386,15 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     // Try to match product name - lines starting with letters, not unit names
     if (/^[A-Za-zÀ-ÿ]/.test(line) && !/^(KILOS?|PIEZAS?|BULTOS?|CAJAS?|DE \d|TOTAL)/i.test(line)) {
       const match = findProduct(line);
+      
+      // Skip ignored lines (packaging descriptions, category headers)
+      if (match.matchType === 'ignored') {
+        pendingProduct = null;
+        pendingProductOriginalName = null;
+        pendingMatchType = null;
+        continue;
+      }
+      
       if (match.product) {
         pendingProduct = match.product;
         pendingProductOriginalName = match.originalName;

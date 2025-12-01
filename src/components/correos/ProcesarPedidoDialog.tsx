@@ -368,15 +368,49 @@ export default function ProcesarPedidoDialog({
               }
               
               // Fallback: buscar por nombre similar
-              const matched = productos.find(p => 
-                p.nombre.toLowerCase().includes(prod.nombre_producto.toLowerCase()) ||
-                prod.nombre_producto.toLowerCase().includes(p.nombre.toLowerCase())
-              );
+              // PRIMERO: Buscar en cotizaciones seleccionadas productos que contengan palabras clave
+              let matched = null;
+              let precioCotizacionPorNombre = undefined;
               
-              // Si se encontró match por nombre, buscar precio de cotización también
-              const precioCotizacionPorNombre = matched ? productosUnicos.find(
-                (pc: any) => pc.producto_id === matched.id
-              )?.precio_cotizado : undefined;
+              if (productosUnicos.length > 0) {
+                // Extraer palabras clave del nombre parseado (ignorar palabras cortas)
+                const palabrasClave = prod.nombre_producto.toLowerCase()
+                  .split(/[\s,]+/)
+                  .filter(p => p.length > 3);
+                
+                // Buscar en productos de las cotizaciones
+                const productoMatch = productosUnicos.find((pc: any) => {
+                  const producto = productos.find(p => p.id === pc.producto_id);
+                  if (!producto) return false;
+                  
+                  const nombreProducto = producto.nombre.toLowerCase();
+                  // Verificar si el producto contiene alguna palabra clave del nombre parseado
+                  return palabrasClave.some(palabra => nombreProducto.includes(palabra));
+                });
+                
+                if (productoMatch) {
+                  matched = productos.find(p => p.id === productoMatch.producto_id);
+                  precioCotizacionPorNombre = productoMatch.precio_cotizado;
+                }
+              }
+              
+              // SEGUNDO: Si no encontró en cotizaciones, buscar en todos los productos
+              if (!matched) {
+                matched = productos.find(p => 
+                  p.nombre.toLowerCase().includes(prod.nombre_producto.toLowerCase()) ||
+                  prod.nombre_producto.toLowerCase().includes(p.nombre.toLowerCase())
+                );
+                
+                // Si encontró match y hay cotizaciones, buscar precio
+                if (matched) {
+                  const precioEnCot = productosUnicos.find(
+                    (pc: any) => pc.producto_id === matched.id
+                  )?.precio_cotizado;
+                  if (precioEnCot !== undefined) {
+                    precioCotizacionPorNombre = precioEnCot;
+                  }
+                }
+              }
               
               return {
                 ...prod,

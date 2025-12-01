@@ -246,10 +246,9 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     'bolsa de polipapel 26x32': ['bolsa polipapel', 'bolsa poly'],
     
     // Frutas en lata - nombres EXACTOS de la base de datos
-    'pina': ['pina en lata', 'piña en lata', 'pina lata', 'piña lata', 'piña', 'pina rodaja', 'piña rodaja'],
+    'piña rodaja 12/850gr (12)': ['pina en lata', 'piña en lata', 'pina lata', 'piña lata', 'piña', 'pina rodaja', 'piña rodaja'],
     'mango en rebanadas 24/800gr': ['mango en lata', 'mango lata', 'mango en almibar', 'mango'],
     'durazno': ['durazno en lata', 'durazno lata', 'durazno en almibar', 'duraznos'],
-    
     // Almendras - nombre EXACTO de la base de datos
     'almendra non parel 27/30': ['almendra entera', 'almendras', 'almendra natural', 'almendra'],
     

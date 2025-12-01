@@ -219,6 +219,9 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     'ajonjoli': ['ajonjolí', 'sesamo', 'sésamo'],
     'nuez': ['nuez entera', 'nueces', 'nuez de castilla'],
     'cacahuate': ['cacahuates', 'cacahuate natural', 'mani', 'maní'],
+    
+    // Dulces / Confitería
+    'caramel cream': ['caramel creme', 'carmel creme', 'caramelo cream'],
   };
   
   // Track unmatched products for UI feedback

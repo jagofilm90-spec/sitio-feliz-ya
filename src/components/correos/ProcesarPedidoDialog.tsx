@@ -412,19 +412,35 @@ export default function ProcesarPedidoDialog({
                 }
               }
               
-              // Check if product is piña/mango in caja format - force precio_por_kilo = false
-              const isPiñaMangoCaja = prod.unidad?.toLowerCase() === 'caja' && 
-                                      matched && 
-                                      /(\d+)\s*\/\s*\d+(\.|,)?\d*\s*(gr|kg)/i.test(matched.nombre) &&
-                                      (matched.nombre.toUpperCase().includes('PIÑA') || 
-                                       matched.nombre.toUpperCase().includes('PINA') || 
-                                       matched.nombre.toUpperCase().includes('MANGO'));
+              // Check if product is piña/mango en lata con formato X/xxxgr o X/xxkg
+              const isPiñaMangoLataCatalog = matched &&
+                /piña|pina|mango/i.test(matched.nombre) &&
+                /\d+\s*\/\s*\d+(\.|,)?\d*\s*(gr|kg)/i.test(matched.nombre);
+
+              // Ajuste frontal de conversión PIEZAS/KILOS → CAJAS usando el número antes del "/"
+              let cantidadAjustada = prod.cantidad;
+              let unidadAjustada = prod.unidad;
+
+              if (isPiñaMangoLataCatalog && matched?.unidad?.toLowerCase() === 'caja') {
+                const piecesMatch = matched.nombre.match(/(\d+)\s*\/\s*\d+(\.|,)?\d*\s*(gr|kg)/i);
+                const piecesPerBox = piecesMatch ? parseInt(piecesMatch[1], 10) : null;
+                const unidadOriginal = (prod.unidad || '').toUpperCase();
+
+                // Solo corregimos si todavía viene como KILOS o PIEZAS en la UI
+                if (piecesPerBox && piecesPerBox > 0 && (unidadOriginal.includes('KILO') || unidadOriginal.includes('PIEZA'))) {
+                  const cajas = prod.cantidad / piecesPerBox;
+                  cantidadAjustada = Math.round(cajas * 100) / 100;
+                  unidadAjustada = 'caja';
+                }
+              }
               
               return {
                 ...prod,
+                cantidad: cantidadAjustada,
+                unidad: unidadAjustada,
                 producto_id: matched?.id,
                 precio_unitario: precioCotizacionPorNombre || matched?.precio_venta || prod.precio_sugerido,
-                precio_por_kilo: isPiñaMangoCaja ? false : matched?.precio_por_kilo,
+                precio_por_kilo: isPiñaMangoLataCatalog ? false : matched?.precio_por_kilo,
                 kg_por_unidad: matched?.kg_por_unidad,
                 aplica_iva: matched?.aplica_iva,
                 aplica_ieps: matched?.aplica_ieps,

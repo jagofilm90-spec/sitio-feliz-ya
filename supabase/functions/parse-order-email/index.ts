@@ -357,11 +357,13 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
   let pendingMatchType: 'exact' | 'synonym' | 'none' | 'ignored' | null = null;
   
   // Branch pattern: "199 TEZOZOMOC", "201 LA TROJE (CUAUTITLÁN)", "212 LA LUNA TLALPAN"
-  // Matches: <1-3 digit number> <space> <branch name with letters, spaces, parentheses, accents>
-  const branchPattern = /^(\d{1,3})\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿ\s\(\)]+)$/i;
+  // STRICT: Only matches lines that are EXACTLY a branch header (no extra content)
+  // Must be: <1-3 digit number> <space> <UPPERCASE branch name> and nothing else
+  const branchPattern = /^(\d{1,3})\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿ\s\(\)\-]+)$/;
   
-  // Secondary pattern for pipe-separated format: "199 TEZOZOMOC | ..."
-  const branchPatternPipe = /^(\d{1,3})\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿ\s\(\)]+?)\s*\|/i;
+  // Secondary pattern for pipe-separated format: "199 TEZOZOMOC | ..." 
+  // But only if what comes after is NOT a product quantity pattern
+  const branchPatternPipe = /^(\d{1,3})\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿ\s\(\)\-]+?)\s*\|(?!\s*\d)/;
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -389,13 +391,28 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
       // Clean up parentheses content for comparison but keep original for display
       const nameClean = name.replace(/\([^)]*\)/g, '').trim();
       
-      // Validate: must be a reasonable branch number (1-500 for flexibility) and name length
-      if (branchNum >= 1 && branchNum <= 500 && name.length >= 2 && name.length <= 50) {
-        // Check if it looks like a branch: starts with letter, no product/unit keywords
-        const looksLikeBranch = /^[A-ZÀ-Ÿ]/.test(nameClean) && 
-          !nameClean.match(/KILO|PIEZA|BULTO|CAJA|TOTAL|ENTREGAR|PRODUCTO|CANTIDAD/i);
+      // STRICT validation for branch headers:
+      // 1. Branch number must be 1-500
+      // 2. Name must be 3-40 chars (branch names like "LAFAYETTE", "TEZOZOMOC")
+      // 3. Name must NOT contain product-related keywords
+      // 4. Name must be all uppercase letters/spaces (branch headers are in bold caps)
+      // 5. Name must NOT end with numbers (product lines often have quantities)
+      const invalidKeywords = /KILO|KILOS|PIEZA|PIEZAS|BULTO|BULTOS|CAJA|CAJAS|TOTAL|ENTREGAR|PRODUCTO|CANTIDAD|LITRO|LITROS|PESO|UNIDAD|CODIGO|PEDIDO|KG|\d$/i;
+      
+      const isValidBranchNum = branchNum >= 1 && branchNum <= 500;
+      const isValidNameLength = nameClean.length >= 3 && nameClean.length <= 40;
+      const startsWithLetter = /^[A-ZÀ-Ÿ]/.test(nameClean);
+      const noInvalidKeywords = !invalidKeywords.test(nameClean);
+      // Branch names are typically short words like LAFAYETTE, TEZOZOMOC, not long product descriptions
+      const hasShortWords = nameClean.split(/\s+/).every(word => word.length <= 20);
+      
+      if (isValidBranchNum && isValidNameLength && startsWithLetter && noInvalidKeywords && hasShortWords) {
+        // Additional check: original line should NOT have been mixed case (products often are)
+        // Branch headers are typically ALL CAPS in the source
+        const originalName = branchMatch[2].trim();
+        const isAllCaps = originalName === originalName.toUpperCase();
         
-        if (looksLikeBranch) {
+        if (isAllCaps) {
           // Use full name including parentheses content as branch identifier
           const branchKey = `${branchNum} ${name}`;
           console.log(`BRANCH DETECTED: "${branchKey}" from line: "${line.substring(0, 60)}..."`);

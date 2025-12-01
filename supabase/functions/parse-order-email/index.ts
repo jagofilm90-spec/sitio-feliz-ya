@@ -82,7 +82,7 @@ function isLecarozEmail(emailFrom: string, emailSubject: string): boolean {
          emailSubject.toLowerCase().includes('lecaroz');
 }
 
-// Parse Lecaroz email - understands their specific table structure
+// Parse Lecaroz email - each row has: [Product] [Branch] [Qty1] [Qty2]
 function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotizado[]): { sucursales: ParsedSucursal[], confianza: number } {
   console.log("Using Lecaroz specialized parser");
   console.log("Email size:", emailBody.length, "chars");
@@ -92,25 +92,31 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     return { sucursales: [], confianza: 0 };
   }
   
-  // Build product lookup with normalized names
+  // Build product lookup - STRICT exact matching only
   const productMap = new Map<string, { id: string, nombre: string, unidad: string }>();
   for (const p of productosCotizados) {
-    productMap.set(p.nombre.toLowerCase().trim(), { id: p.producto_id, nombre: p.nombre, unidad: p.unidad });
+    const key = p.nombre.toLowerCase().trim();
+    productMap.set(key, { id: p.producto_id, nombre: p.nombre, unidad: p.unidad });
   }
   console.log("Product map size:", productMap.size);
   
-  // Simple product matching - check if text contains or is contained by a product name
-  const findProduct = (text: string): { id: string, nombre: string, unidad: string } | null => {
+  // STRICT product matching - only exact or very close matches
+  const findProductStrict = (text: string): { id: string, nombre: string, unidad: string } | null => {
     const normalized = text.toLowerCase().trim();
     if (normalized.length < 3) return null;
     
     // Exact match
     if (productMap.has(normalized)) return productMap.get(normalized)!;
     
-    // Fuzzy match
+    // Near-exact: product name must be 90%+ of text or vice versa
     for (const [key, product] of productMap) {
-      if (key.includes(normalized) && normalized.length >= 4) return product;
-      if (normalized.includes(key) && key.length >= 4) return product;
+      const minLen = Math.min(key.length, normalized.length);
+      const maxLen = Math.max(key.length, normalized.length);
+      if (minLen / maxLen >= 0.85) {
+        if (key.includes(normalized) || normalized.includes(key)) {
+          return product;
+        }
+      }
     }
     return null;
   };
@@ -126,92 +132,92 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
   
   // Results: Map<branchName, Map<productId, product>>
   const results = new Map<string, Map<string, ParsedProduct>>();
-  let currentProduct: { id: string, nombre: string, unidad: string } | null = null;
-  let productCount = 0;
-  let branchEntries = 0;
+  let rowsProcessed = 0;
+  let dataRowsFound = 0;
   
   for (const line of lines) {
     const lower = line.toLowerCase();
     
     // Skip totals and headers
     if (lower.includes('total general') || lower.startsWith('total\t') || lower === 'total') continue;
-    if (lower.includes('producto') && lower.includes('pedido')) continue;
+    if (lower.includes('producto') && (lower.includes('pedido') || lower.includes('sucursal'))) continue;
     
     const cols = line.split('\t').map(c => c.trim()).filter(c => c);
-    if (cols.length === 0) continue;
+    if (cols.length < 3) continue; // Need at least product, branch, quantity
     
-    // Check if first non-number column is a product
-    let firstTextCol = cols[0];
-    let colOffset = 0;
-    if (/^\d{1,3}$/.test(firstTextCol) && cols.length > 1) {
-      firstTextCol = cols[1];
-      colOffset = 1;
+    rowsProcessed++;
+    
+    // Strategy: Find product in first columns, branch in next text column, quantity in numbers
+    let product: { id: string, nombre: string, unidad: string } | null = null;
+    let branchName: string | null = null;
+    let quantity = 0;
+    let productColIdx = -1;
+    
+    // Find the product column (usually first or second)
+    for (let i = 0; i < Math.min(3, cols.length); i++) {
+      const col = cols[i];
+      if (/^\d{1,3}$/.test(col)) continue; // Skip index numbers
+      
+      const match = findProductStrict(col);
+      if (match) {
+        product = match;
+        productColIdx = i;
+        break;
+      }
     }
     
-    // Try to identify product header (usually standalone product name or product name + few numbers)
-    const product = findProduct(firstTextCol);
-    if (product) {
-      // Count how many numbers are in this line
-      const numCount = cols.filter(c => isNumber(c)).length;
-      // If mostly text or just the product with totals, treat as product header
-      if (numCount <= 2 || cols.length <= 3) {
-        currentProduct = product;
-        productCount++;
-        continue;
+    if (!product) continue;
+    
+    // Find branch name (next text column after product that's not the product)
+    for (let i = productColIdx + 1; i < cols.length; i++) {
+      const col = cols[i];
+      if (isNumber(col)) continue;
+      if (col.length < 2) continue;
+      if (col.toLowerCase() === 'total') continue;
+      
+      // Don't re-check if it's a product - just use it as branch name
+      branchName = col.toUpperCase();
+      break;
+    }
+    
+    if (!branchName) continue;
+    
+    // Find quantity (first positive number)
+    for (let i = 0; i < cols.length; i++) {
+      if (isNumber(cols[i])) {
+        const num = parseNum(cols[i]);
+        if (num > 0 && num < 100000) {
+          quantity = num;
+          break;
+        }
       }
     }
     
-    // Extract branch data if we have a current product
-    if (currentProduct && cols.length >= 2) {
-      let branchName: string | null = null;
-      let quantity = 0;
-      
-      // Find branch name (first text column that's not tiny and not the product)
-      for (let i = colOffset; i < cols.length && !branchName; i++) {
-        const col = cols[i];
-        if (!isNumber(col) && col.length >= 2) {
-          const lowerCol = col.toLowerCase();
-          // Skip if it's "total" or looks like a product name
-          if (lowerCol !== 'total' && !findProduct(col)) {
-            branchName = col.toUpperCase();
-          }
-        }
-      }
-      
-      // Find quantity (first positive number after we found a branch or after colOffset)
-      if (branchName) {
-        for (let i = colOffset; i < cols.length; i++) {
-          if (isNumber(cols[i])) {
-            const num = parseNum(cols[i]);
-            if (num > 0 && num < 100000) {
-              quantity = num;
-              break;
-            }
-          }
-        }
-      }
-      
-      // Store result
-      if (branchName && quantity > 0) {
-        if (!results.has(branchName)) results.set(branchName, new Map());
-        const prods = results.get(branchName)!;
-        if (!prods.has(currentProduct.id)) {
-          prods.set(currentProduct.id, {
-            nombre_producto: currentProduct.nombre,
-            cantidad: quantity,
-            unidad: currentProduct.unidad,
-            precio_sugerido: null,
-            notas: null,
-            producto_cotizado_id: currentProduct.id
-          });
-          branchEntries++;
-        }
-      }
+    if (quantity === 0) continue;
+    
+    dataRowsFound++;
+    
+    // Store result
+    if (!results.has(branchName)) results.set(branchName, new Map());
+    const prods = results.get(branchName)!;
+    
+    // Sum quantities if same product appears multiple times for same branch
+    if (prods.has(product.id)) {
+      prods.get(product.id)!.cantidad += quantity;
+    } else {
+      prods.set(product.id, {
+        nombre_producto: product.nombre,
+        cantidad: quantity,
+        unidad: product.unidad,
+        precio_sugerido: null,
+        notas: null,
+        producto_cotizado_id: product.id
+      });
     }
   }
   
-  console.log("Products found:", productCount);
-  console.log("Branch entries:", branchEntries);
+  console.log("Rows processed:", rowsProcessed);
+  console.log("Data rows found:", dataRowsFound);
   console.log("Unique branches:", results.size);
   
   // Build final result

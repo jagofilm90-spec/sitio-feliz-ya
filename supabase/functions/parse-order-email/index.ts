@@ -29,6 +29,7 @@ interface ParsedProduct {
   precio_sugerido: number | null;
   notas: string | null;
   producto_cotizado_id: string | null;
+  cantidad_original_kg?: number; // For warehouse reference
 }
 
 interface ParsedSucursal {
@@ -69,6 +70,53 @@ const LECAROZ_BRANCHES = new Set([
   'NORTE', 'SUR', 'ORIENTE', 'PONIENTE', 'CENTRO', 'LOMAS', 'PEDREGAL', 'COYUYA',
   'TERMINAL', 'AEROPUERTO', 'ZONA ROSA', 'DEL VALLE', 'NAPOLES', 'MIXCOAC'
 ]);
+
+// Convert quantity from kg/pieces to selling unit
+function convertToSellingUnit(
+  cantidadPedida: number,
+  unidadEmail: string, // KILOS, PIEZAS, CAJAS, etc.
+  unidadVenta: string, // kg, bulto, caja, etc.
+  kgPorUnidad: number | null
+): { cantidad: number; cantidadOriginalKg?: number } {
+  const unidadVentaLower = unidadVenta.toLowerCase();
+  const unidadEmailLower = unidadEmail.toLowerCase();
+  
+  // If product is sold by kg, no conversion needed
+  if (unidadVentaLower === 'kg' || unidadVentaLower === 'kilo' || unidadVentaLower === 'kilos') {
+    return { cantidad: cantidadPedida };
+  }
+  
+  // If email is in KILOS and we have kg_por_unidad, convert
+  if ((unidadEmailLower.includes('kilo') || unidadEmailLower === '') && kgPorUnidad && kgPorUnidad > 0) {
+    const cantidadConvertida = Math.round(cantidadPedida / kgPorUnidad);
+    console.log(`CONVERSION: ${cantidadPedida} kg ÷ ${kgPorUnidad} kg/unidad = ${cantidadConvertida} ${unidadVenta}`);
+    return { 
+      cantidad: cantidadConvertida,
+      cantidadOriginalKg: cantidadPedida
+    };
+  }
+  
+  // If email already in same unit as selling unit (CAJAS -> caja, BULTOS -> bulto)
+  if (
+    (unidadEmailLower.includes('caja') && unidadVentaLower === 'caja') ||
+    (unidadEmailLower.includes('bulto') && unidadVentaLower === 'bulto') ||
+    (unidadEmailLower.includes('saco') && unidadVentaLower === 'bulto') ||
+    (unidadEmailLower.includes('pieza') && unidadVentaLower === 'pieza') ||
+    (unidadEmailLower.includes('balon') && unidadVentaLower === 'balón')
+  ) {
+    return { cantidad: cantidadPedida };
+  }
+  
+  // If email is in PIEZAS and we have piezas_por_unidad (stored in kg_por_unidad for piece-based products)
+  if (unidadEmailLower.includes('pieza') && kgPorUnidad && kgPorUnidad > 0) {
+    const cantidadConvertida = Math.round(cantidadPedida / kgPorUnidad);
+    console.log(`CONVERSION: ${cantidadPedida} piezas ÷ ${kgPorUnidad} piezas/caja = ${cantidadConvertida} ${unidadVenta}`);
+    return { cantidad: cantidadConvertida };
+  }
+  
+  // Default: no conversion
+  return { cantidad: cantidadPedida };
+}
 
 // Parse Lecaroz email - handles cell-per-line structure
 function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotizado[]): { sucursales: ParsedSucursal[], confianza: number } {
@@ -216,34 +264,32 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     
     // Try to get quantity - number possibly followed by unit
     if (pendingProduct) {
-      const qtyMatch = line.match(/^([\d,\.]+)\s*(KILOS?|PIEZAS?|BULTOS?|CAJAS?|BALONES?)?$/i);
+      const qtyMatch = line.match(/^([\d,\.]+)\s*(KILOS?|PIEZAS?|BULTOS?|CAJAS?|BALONES?|SACOS?)?$/i);
       if (qtyMatch) {
-        let qty = parseFloat(qtyMatch[1].replace(/,/g, ''));
-        const emailUnit = (qtyMatch[2] || '').toUpperCase();
+        const rawQty = parseFloat(qtyMatch[1].replace(/,/g, ''));
+        const emailUnit = (qtyMatch[2] || 'KILOS').toUpperCase(); // Default to KILOS if not specified
         
-        if (qty > 0 && qty < 100000) {
-          // Convert quantity if email is in KILOS but product is sold by unit
-          // and we know kg_por_unidad
-          if (emailUnit.startsWith('KILO') && pendingProduct.kg_por_unidad && pendingProduct.kg_por_unidad > 0) {
-            const productUnit = pendingProduct.unidad.toLowerCase();
-            // Only convert if product is NOT sold by kg
-            if (productUnit !== 'kg' && productUnit !== 'kilo' && productUnit !== 'kilos') {
-              qty = Math.round(qty / pendingProduct.kg_por_unidad);
-              console.log(`Converted ${qtyMatch[1]} KILOS to ${qty} ${pendingProduct.unidad} for ${pendingProduct.nombre}`);
-            }
-          }
+        if (rawQty > 0 && rawQty < 100000) {
+          // Apply conversion using centralized function
+          const conversion = convertToSellingUnit(
+            rawQty,
+            emailUnit,
+            pendingProduct.unidad,
+            pendingProduct.kg_por_unidad
+          );
           
           const branchProducts = results.get(currentBranch)!;
           if (branchProducts.has(pendingProduct.id)) {
-            branchProducts.get(pendingProduct.id)!.cantidad += qty;
+            branchProducts.get(pendingProduct.id)!.cantidad += conversion.cantidad;
           } else {
             branchProducts.set(pendingProduct.id, {
               nombre_producto: pendingProduct.nombre,
-              cantidad: qty,
+              cantidad: conversion.cantidad,
               unidad: pendingProduct.unidad,
               precio_sugerido: null,
-              notas: null,
-              producto_cotizado_id: pendingProduct.id
+              notas: conversion.cantidadOriginalKg ? `${conversion.cantidadOriginalKg} kg` : null,
+              producto_cotizado_id: pendingProduct.id,
+              cantidad_original_kg: conversion.cantidadOriginalKg
             });
           }
           pendingProduct = null;
@@ -276,6 +322,69 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
   return { sucursales, confianza: confidence };
 }
 
+// Build product lookup for AI post-processing
+function buildProductLookup(productosCotizados?: ProductoCotizado[]): Map<string, ProductoCotizado> {
+  const lookup = new Map<string, ProductoCotizado>();
+  if (!productosCotizados) return lookup;
+  
+  for (const p of productosCotizados) {
+    // Index by ID
+    lookup.set(p.producto_id, p);
+    // Index by name (lowercase, no accents)
+    const nameKey = p.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    lookup.set(nameKey, p);
+  }
+  return lookup;
+}
+
+// Apply unit conversion to AI-parsed results
+function applyConversionsToAIResult(
+  result: { sucursales: ParsedSucursal[], confianza: number, notas_generales?: string },
+  productosCotizados?: ProductoCotizado[]
+): { sucursales: ParsedSucursal[], confianza: number, notas_generales?: string } {
+  if (!productosCotizados || productosCotizados.length === 0) return result;
+  
+  const productLookup = buildProductLookup(productosCotizados);
+  
+  for (const sucursal of result.sucursales) {
+    for (const producto of sucursal.productos) {
+      // Find matching product in catalog
+      let catalogProduct: ProductoCotizado | undefined;
+      
+      if (producto.producto_cotizado_id) {
+        catalogProduct = productLookup.get(producto.producto_cotizado_id);
+      }
+      if (!catalogProduct) {
+        const nameKey = producto.nombre_producto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        catalogProduct = productLookup.get(nameKey);
+      }
+      
+      if (catalogProduct) {
+        // Apply conversion
+        const emailUnit = producto.unidad || 'KILOS';
+        const conversion = convertToSellingUnit(
+          producto.cantidad,
+          emailUnit,
+          catalogProduct.unidad,
+          catalogProduct.kg_por_unidad
+        );
+        
+        console.log(`AI CONVERSION: ${producto.nombre_producto} - ${producto.cantidad} ${emailUnit} -> ${conversion.cantidad} ${catalogProduct.unidad}`);
+        
+        producto.cantidad = conversion.cantidad;
+        producto.unidad = catalogProduct.unidad;
+        producto.producto_cotizado_id = catalogProduct.producto_id;
+        if (conversion.cantidadOriginalKg) {
+          producto.notas = `${conversion.cantidadOriginalKg} kg`;
+          producto.cantidad_original_kg = conversion.cantidadOriginalKg;
+        }
+      }
+    }
+  }
+  
+  return result;
+}
+
 async function parseWithAI(emailBody: string, emailSubject: string, emailFrom: string, productosCotizados?: ProductoCotizado[]): Promise<{ sucursales: ParsedSucursal[], confianza: number, notas_generales?: string }> {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
@@ -283,10 +392,22 @@ async function parseWithAI(emailBody: string, emailSubject: string, emailFrom: s
   let cleanEmailBody = stripHtmlFast(emailBody);
   if (cleanEmailBody.length > 30000) cleanEmailBody = cleanEmailBody.substring(0, 30000) + "\n\n[... truncado ...]";
 
+  // Build product context with conversion info
   let productosContext = "";
   if (productosCotizados && productosCotizados.length > 0) {
-    productosContext = `\n\nPRODUCTOS COTIZADOS:\n${productosCotizados.map(p => `- "${p.nombre}" (ID: ${p.producto_id}, unidad: ${p.unidad})`).join('\n')}`;
+    productosContext = `\n\nPRODUCTOS COTIZADOS (usa el ID exacto del producto):\n${productosCotizados.map(p => 
+      `- "${p.nombre}" (ID: ${p.producto_id}, unidad_venta: ${p.unidad}, kg_por_unidad: ${p.kg_por_unidad || 'N/A'})`
+    ).join('\n')}`;
   }
+
+  const systemPrompt = `Eres un asistente que extrae productos y cantidades de pedidos por email.
+
+REGLAS IMPORTANTES:
+1. Extrae la cantidad TAL COMO VIENE en el email (en kilos, piezas, etc.)
+2. Indica la unidad del email (KILOS, PIEZAS, CAJAS, etc.)
+3. Usa el producto_cotizado_id EXACTO del catálogo cuando encuentres una coincidencia
+4. La conversión a unidad de venta se hará después automáticamente
+${productosContext}`;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 45000);
@@ -298,18 +419,18 @@ async function parseWithAI(emailBody: string, emailSubject: string, emailFrom: s
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [
-          { role: "system", content: `Extrae productos y cantidades del pedido, agrupados por sucursal.${productosContext}` },
+          { role: "system", content: systemPrompt },
           { role: "user", content: `ASUNTO: ${emailSubject}\nDE: ${emailFrom}\n\n${cleanEmailBody}` }
         ],
         tools: [{
           type: "function",
           function: {
             name: "extract_order",
-            description: "Extrae productos del pedido",
+            description: "Extrae productos del pedido con cantidades TAL COMO VIENEN en el email",
             parameters: {
               type: "object",
               properties: {
-                sucursales: { type: "array", items: { type: "object", properties: { nombre_sucursal: { type: "string" }, fecha_entrega_solicitada: { type: "string" }, productos: { type: "array", items: { type: "object", properties: { nombre_producto: { type: "string" }, cantidad: { type: "number" }, unidad: { type: "string" }, precio_sugerido: { type: "number" }, notas: { type: "string" }, producto_cotizado_id: { type: "string" } }, required: ["nombre_producto", "cantidad", "unidad"] } } }, required: ["nombre_sucursal", "productos"] } },
+                sucursales: { type: "array", items: { type: "object", properties: { nombre_sucursal: { type: "string" }, fecha_entrega_solicitada: { type: "string" }, productos: { type: "array", items: { type: "object", properties: { nombre_producto: { type: "string" }, cantidad: { type: "number", description: "Cantidad TAL COMO VIENE en el email" }, unidad: { type: "string", description: "Unidad del email: KILOS, PIEZAS, CAJAS, etc." }, precio_sugerido: { type: "number" }, notas: { type: "string" }, producto_cotizado_id: { type: "string", description: "ID exacto del producto del catálogo" } }, required: ["nombre_producto", "cantidad", "unidad"] } } }, required: ["nombre_sucursal", "productos"] } },
                 notas_generales: { type: "string" },
                 confianza: { type: "number" }
               },
@@ -332,7 +453,11 @@ async function parseWithAI(emailBody: string, emailSubject: string, emailFrom: s
     const aiResponse = await response.json();
     const toolCall = aiResponse.choices?.[0]?.message?.tool_calls?.[0];
     if (!toolCall || toolCall.function.name !== "extract_order") throw new Error("No se pudo extraer el pedido");
-    return JSON.parse(toolCall.function.arguments);
+    
+    const rawResult = JSON.parse(toolCall.function.arguments);
+    
+    // Apply unit conversions post-processing
+    return applyConversionsToAIResult(rawResult, productosCotizados);
   } catch (fetchError: unknown) {
     clearTimeout(timeoutId);
     if (fetchError instanceof Error && fetchError.name === 'AbortError') throw new Error("Timeout - intente de nuevo");

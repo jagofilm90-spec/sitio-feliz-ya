@@ -79,27 +79,29 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
   
   // Build product lookup with multiple matching strategies
   type ProductInfo = { id: string, nombre: string, unidad: string, kg_por_unidad: number | null };
-  const productExact = new Map<string, ProductInfo>();
-  const productWords = new Map<string, ProductInfo>();
-  const productPartial = new Map<string, ProductInfo>();
+  const productExact = new Map<string, ProductInfo>(); // exact name match (with accents)
+  const productNoAccents = new Map<string, ProductInfo>(); // exact name match (without accents)
+  const productPartial = new Map<string, ProductInfo[]>(); // partial word matches
+  
+  // Log available products for debugging
+  console.log("Available products:", productosCotizados.map(p => `${p.nombre} (${p.unidad}, kg_por_unidad: ${p.kg_por_unidad})`).join(", "));
   
   for (const p of productosCotizados) {
     const key = p.nombre.toLowerCase().trim();
-    const info: ProductInfo = { id: p.producto_id, nombre: p.nombre, unidad: p.unidad, kg_por_unidad: p.kg_por_unidad };
-    productExact.set(key, info);
-    
-    // Index by significant words (excluding common words)
-    const words = key.split(/\s+/).filter(w => w.length > 2 && !['con', 'sin', 'para', 'por'].includes(w));
-    for (const word of words) {
-      if (!productWords.has(word)) {
-        productWords.set(word, info);
-      }
-    }
-    
-    // Index by partial key words for fuzzy matching
-    // e.g., "azucar" matches "azúcar refinada" or "azúcar estándar"
     const keyNoAccents = key.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    productPartial.set(keyNoAccents, info);
+    const info: ProductInfo = { id: p.producto_id, nombre: p.nombre, unidad: p.unidad, kg_por_unidad: p.kg_por_unidad };
+    
+    productExact.set(key, info);
+    productNoAccents.set(keyNoAccents, info);
+    
+    // Index by significant words for partial matching
+    const words = keyNoAccents.split(/\s+/).filter(w => w.length > 2 && !['con', 'sin', 'para', 'por', 'del', 'las', 'los'].includes(w));
+    for (const word of words) {
+      if (!productPartial.has(word)) {
+        productPartial.set(word, []);
+      }
+      productPartial.get(word)!.push(info);
+    }
   }
   
   const findProduct = (text: string): ProductInfo | null => {
@@ -107,28 +109,49 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     const normalizedNoAccents = normalized.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     if (normalized.length < 3) return null;
     
-    // Exact match
-    if (productExact.has(normalized)) return productExact.get(normalized)!;
-    
-    // Partial match - product name contains input or vice versa
-    for (const [key, product] of productExact) {
-      if (key.includes(normalized) || normalized.includes(key)) return product;
+    // 1. Exact match with accents
+    if (productExact.has(normalized)) {
+      console.log(`MATCH exact: "${text}" -> ${productExact.get(normalized)!.nombre}`);
+      return productExact.get(normalized)!;
     }
     
-    // Try without accents
-    for (const [key, product] of productPartial) {
-      if (key.includes(normalizedNoAccents) || normalizedNoAccents.includes(key)) return product;
+    // 2. Exact match without accents
+    if (productNoAccents.has(normalizedNoAccents)) {
+      console.log(`MATCH no-accents: "${text}" -> ${productNoAccents.get(normalizedNoAccents)!.nombre}`);
+      return productNoAccents.get(normalizedNoAccents)!;
     }
     
-    // Word-based match - any word matches
-    const inputWords = normalizedNoAccents.split(/\s+/).filter(w => w.length > 3);
+    // 3. Partial match - input contains product name or vice versa
+    for (const [key, product] of productNoAccents) {
+      if (key.includes(normalizedNoAccents) || normalizedNoAccents.includes(key)) {
+        console.log(`MATCH partial: "${text}" -> ${product.nombre}`);
+        return product;
+      }
+    }
+    
+    // 4. Word-based match - find product that matches most words
+    const inputWords = normalizedNoAccents.split(/\s+/).filter(w => w.length > 2);
+    let bestMatch: ProductInfo | null = null;
+    let bestScore = 0;
+    
     for (const word of inputWords) {
-      if (productWords.has(word)) return productWords.get(word)!;
+      const matches = productPartial.get(word);
+      if (matches && matches.length === 1) {
+        // Unique match by word
+        console.log(`MATCH word "${word}": "${text}" -> ${matches[0].nombre}`);
+        return matches[0];
+      }
     }
     
-    // Last resort: check if any product word appears in input
-    for (const [word, product] of productWords) {
-      if (normalizedNoAccents.includes(word) && word.length > 4) return product;
+    // 5. Try matching first significant word
+    for (const word of inputWords) {
+      if (word.length > 4) {
+        const matches = productPartial.get(word);
+        if (matches && matches.length > 0) {
+          console.log(`MATCH first-word "${word}": "${text}" -> ${matches[0].nombre}`);
+          return matches[0];
+        }
+      }
     }
     
     return null;

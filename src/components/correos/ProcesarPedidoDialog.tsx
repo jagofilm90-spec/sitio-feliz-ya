@@ -95,6 +95,7 @@ export default function ProcesarPedidoDialog({
   const [selectedCotizacionId, setSelectedCotizacionId] = useState<string>("__all__");
   const [error, setError] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
+  const [existingOrders, setExistingOrders] = useState<Map<string, { id: string; folio: string }>>(new Map());
 
   // Fetch clientes
   const { data: clientes } = useQuery({
@@ -271,8 +272,55 @@ export default function ProcesarPedidoDialog({
       // Try to match products and sucursales
       if (data.order && productos) {
         const matchedOrder = { ...data.order };
+        
+        // Check for existing orders for today - CRITICAL for partial order handling
+        const today = new Date().toISOString().split('T')[0];
+        const existingOrdersMap = new Map<string, { id: string; folio: string }>();
+        
+        for (const suc of matchedOrder.sucursales) {
+          // Auto-match sucursal by name or use parser-provided ID
+          let matchedSucursalId = suc.sucursal_id;
+          if (!matchedSucursalId && sucursales && sucursales.length > 0) {
+            const sucursalNormalizada = suc.nombre_sucursal.toLowerCase().trim();
+            const matchedSucursal = sucursales.find(s => {
+              const nombreDb = s.nombre.toLowerCase().trim();
+              // Exact match or partial match
+              return nombreDb === sucursalNormalizada ||
+                     nombreDb.includes(sucursalNormalizada) ||
+                     sucursalNormalizada.includes(nombreDb);
+            });
+            if (matchedSucursal) {
+              matchedSucursalId = matchedSucursal.id;
+            }
+          }
+          
+          // Check for existing order TODAY for this sucursal
+          if (matchedSucursalId) {
+            const { data: existingOrder } = await supabase
+              .from("pedidos")
+              .select("id, folio")
+              .eq("cliente_id", selectedClienteId)
+              .eq("sucursal_id", matchedSucursalId)
+              .eq("fecha_pedido", today)
+              .eq("status", "pendiente")
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            
+            if (existingOrder) {
+              existingOrdersMap.set(matchedSucursalId, {
+                id: existingOrder.id,
+                folio: existingOrder.folio,
+              });
+              console.log(`✓ Existing order found for ${suc.nombre_sucursal}: ${existingOrder.folio}`);
+            }
+          }
+        }
+        
+        setExistingOrders(existingOrdersMap);
+        
         matchedOrder.sucursales = matchedOrder.sucursales.map((suc: ParsedSucursal) => {
-          // Auto-match sucursal by name
+          // Auto-match sucursal by name or use parser-provided ID
           let matchedSucursalId = suc.sucursal_id;
           if (!matchedSucursalId && sucursales && sucursales.length > 0) {
             const sucursalNormalizada = suc.nombre_sucursal.toLowerCase().trim();
@@ -357,12 +405,36 @@ export default function ProcesarPedidoDialog({
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) throw new Error("Usuario no autenticado");
 
+      const today = new Date().toISOString().split('T')[0];
       let ordersCreated = 0;
+      let ordersUpdated = 0;
 
       for (const suc of parsedOrder.sucursales) {
         // Skip sucursales without products
         const validProducts = suc.productos.filter(p => p.producto_id && p.cantidad > 0);
         if (validProducts.length === 0) continue;
+
+        // CRITICAL: Check for existing order for this sucursal TODAY
+        // This implements the "pedidos parciales" requirement
+        let existingPedido = null;
+        if (suc.sucursal_id) {
+          const { data: pedidoExistente } = await supabase
+            .from("pedidos")
+            .select("id, subtotal, impuestos, total")
+            .eq("cliente_id", selectedClienteId)
+            .eq("sucursal_id", suc.sucursal_id)
+            .eq("fecha_pedido", today)
+            .eq("status", "pendiente")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          
+          existingPedido = pedidoExistente;
+          
+          if (existingPedido) {
+            console.log(`✓ EXISTING ORDER FOUND for sucursal ${suc.nombre_sucursal}: ${existingPedido.id}`);
+          }
+        }
 
         // Calculate totals - handling precio_por_kilo and tax-inclusive prices
         let totalIva = 0;
@@ -400,78 +472,157 @@ export default function ProcesarPedidoDialog({
         const impuestos = Math.round((totalIva + totalIeps) * 100) / 100;
         const total = subtotal + impuestos;
 
-        // Generate folio
-        const currentDate = new Date();
-        const yearMonth = `${currentDate.getFullYear()}${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-        const { data: lastPedido } = await supabase
-          .from("pedidos")
-          .select("folio")
-          .like("folio", `PED-${yearMonth}-%`)
-          .order("folio", { ascending: false })
-          .limit(1)
-          .single();
+        if (existingPedido) {
+          // UPDATE EXISTING ORDER - Add/update products
+          console.log(`→ UPDATING existing order ${existingPedido.id}`);
+          
+          // Fetch existing products
+          const { data: existingDetalles } = await supabase
+            .from("pedidos_detalles")
+            .select("*")
+            .eq("pedido_id", existingPedido.id);
 
-        let nextNumber = 1;
-        if (lastPedido?.folio) {
-          const lastNum = parseInt(lastPedido.folio.split('-')[2], 10);
-          nextNumber = lastNum + 1;
-        }
-        const folio = `PED-${yearMonth}-${String(nextNumber).padStart(4, '0')}`;
+          // Merge products: update quantities if product exists, add if new
+          for (const newProd of validProducts) {
+            const cantidadEntera = Math.round(newProd.cantidad);
+            let lineSubtotal: number;
+            if (newProd.precio_por_kilo && newProd.kg_por_unidad) {
+              lineSubtotal = cantidadEntera * newProd.kg_por_unidad * (newProd.precio_unitario || 0);
+            } else {
+              lineSubtotal = cantidadEntera * (newProd.precio_unitario || 0);
+            }
 
-        // Create pedido
-        const { data: pedido, error: pedidoError } = await supabase
-          .from("pedidos")
-          .insert({
-            folio,
-            cliente_id: selectedClienteId,
-            sucursal_id: suc.sucursal_id || null,
-            vendedor_id: userData.user.id,
-            fecha_pedido: new Date().toISOString().split('T')[0],
-            fecha_entrega_estimada: suc.fecha_entrega_solicitada || null,
-            subtotal,
-            impuestos,
-            total,
-            status: "pendiente",
-            notas: parsedOrder.notas_generales 
-              ? `[Desde correo] ${parsedOrder.notas_generales}` 
-              : `[Procesado desde correo: ${emailSubject}]`,
-          })
-          .select()
-          .single();
-
-        if (pedidoError) throw pedidoError;
-
-        // Create pedido detalles - calcular subtotal según tipo de producto
-        const detalles = validProducts.map(p => {
-          // IMPORTANTE: Redondear cantidad a entero para la base de datos
-          const cantidadEntera = Math.round(p.cantidad);
-          let lineSubtotal: number;
-          if (p.precio_por_kilo && p.kg_por_unidad) {
-            lineSubtotal = cantidadEntera * p.kg_por_unidad * (p.precio_unitario || 0);
-          } else {
-            lineSubtotal = cantidadEntera * (p.precio_unitario || 0);
+            const existingDetalle = existingDetalles?.find(d => d.producto_id === newProd.producto_id);
+            
+            if (existingDetalle) {
+              // Update existing product - ADD quantities
+              const nuevaCantidad = existingDetalle.cantidad + cantidadEntera;
+              const nuevoSubtotal = Math.round(
+                (existingDetalle.subtotal + lineSubtotal) * 100
+              ) / 100;
+              
+              await supabase
+                .from("pedidos_detalles")
+                .update({
+                  cantidad: nuevaCantidad,
+                  subtotal: nuevoSubtotal,
+                })
+                .eq("id", existingDetalle.id);
+              
+              console.log(`  ↳ Updated product ${newProd.producto_id}: ${existingDetalle.cantidad} + ${cantidadEntera} = ${nuevaCantidad}`);
+            } else {
+              // Insert new product
+              await supabase
+                .from("pedidos_detalles")
+                .insert({
+                  pedido_id: existingPedido.id,
+                  producto_id: newProd.producto_id!,
+                  cantidad: cantidadEntera,
+                  precio_unitario: newProd.precio_unitario || 0,
+                  subtotal: Math.round(lineSubtotal * 100) / 100,
+                });
+              
+              console.log(`  ↳ Added new product ${newProd.producto_id}: ${cantidadEntera}`);
+            }
           }
-          return {
-            pedido_id: pedido.id,
-            producto_id: p.producto_id!,
-            cantidad: cantidadEntera,
-            precio_unitario: p.precio_unitario || 0,
-            subtotal: Math.round(lineSubtotal * 100) / 100,
-          };
-        });
 
-        const { error: detallesError } = await supabase
-          .from("pedidos_detalles")
-          .insert(detalles);
+          // Update pedido totals - ADD to existing totals
+          const updatedSubtotal = existingPedido.subtotal + subtotal;
+          const updatedImpuestos = existingPedido.impuestos + impuestos;
+          const updatedTotal = existingPedido.total + total;
 
-        if (detallesError) throw detallesError;
+          await supabase
+            .from("pedidos")
+            .update({
+              subtotal: Math.round(updatedSubtotal * 100) / 100,
+              impuestos: Math.round(updatedImpuestos * 100) / 100,
+              total: Math.round(updatedTotal * 100) / 100,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", existingPedido.id);
 
-        ordersCreated++;
+          ordersUpdated++;
+        } else {
+          // CREATE NEW ORDER
+          console.log(`→ CREATING new order for ${suc.nombre_sucursal}`);
+          
+          // Generate folio
+          const currentDate = new Date();
+          const yearMonth = `${currentDate.getFullYear()}${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+          const { data: lastPedido } = await supabase
+            .from("pedidos")
+            .select("folio")
+            .like("folio", `PED-${yearMonth}-%`)
+            .order("folio", { ascending: false })
+            .limit(1)
+            .single();
+
+          let nextNumber = 1;
+          if (lastPedido?.folio) {
+            const lastNum = parseInt(lastPedido.folio.split('-')[2], 10);
+            nextNumber = lastNum + 1;
+          }
+          const folio = `PED-${yearMonth}-${String(nextNumber).padStart(4, '0')}`;
+
+          // Create pedido
+          const { data: pedido, error: pedidoError } = await supabase
+            .from("pedidos")
+            .insert({
+              folio,
+              cliente_id: selectedClienteId,
+              sucursal_id: suc.sucursal_id || null,
+              vendedor_id: userData.user.id,
+              fecha_pedido: today,
+              fecha_entrega_estimada: suc.fecha_entrega_solicitada || null,
+              subtotal,
+              impuestos,
+              total,
+              status: "pendiente",
+              notas: parsedOrder.notas_generales 
+                ? `[Desde correo] ${parsedOrder.notas_generales}` 
+                : `[Procesado desde correo: ${emailSubject}]`,
+            })
+            .select()
+            .single();
+
+          if (pedidoError) throw pedidoError;
+
+          // Create pedido detalles - calcular subtotal según tipo de producto
+          const detalles = validProducts.map(p => {
+            // IMPORTANTE: Redondear cantidad a entero para la base de datos
+            const cantidadEntera = Math.round(p.cantidad);
+            let lineSubtotal: number;
+            if (p.precio_por_kilo && p.kg_por_unidad) {
+              lineSubtotal = cantidadEntera * p.kg_por_unidad * (p.precio_unitario || 0);
+            } else {
+              lineSubtotal = cantidadEntera * (p.precio_unitario || 0);
+            }
+            return {
+              pedido_id: pedido.id,
+              producto_id: p.producto_id!,
+              cantidad: cantidadEntera,
+              precio_unitario: p.precio_unitario || 0,
+              subtotal: Math.round(lineSubtotal * 100) / 100,
+            };
+          });
+
+          const { error: detallesError } = await supabase
+            .from("pedidos_detalles")
+            .insert(detalles);
+
+          if (detallesError) throw detallesError;
+
+          ordersCreated++;
+        }
       }
 
+      const successMessage = ordersUpdated > 0
+        ? `${ordersCreated} pedido(s) nuevo(s) + ${ordersUpdated} pedido(s) actualizado(s)`
+        : `${ordersCreated} pedido(s) creado(s)`;
+
       toast({
-        title: "Pedidos creados",
-        description: `Se crearon ${ordersCreated} pedido(s) exitosamente`,
+        title: "Pedidos procesados",
+        description: successMessage,
       });
 
       queryClient.invalidateQueries({ queryKey: ["pedidos"] });
@@ -680,12 +831,35 @@ export default function ProcesarPedidoDialog({
                 </div>
 
                 {/* Sucursales - Progressive rendering */}
-                {visibleSucursales.map((suc, sucIndex) => (
+                {visibleSucursales.map((suc, sucIndex) => {
+                  const willUpdate = suc.sucursal_id && existingOrders.has(suc.sucursal_id);
+                  const existingOrder = suc.sucursal_id ? existingOrders.get(suc.sucursal_id) : undefined;
+                  
+                  return (
                   <Card key={sucIndex}>
                     <CardHeader className="py-3">
-                      <CardTitle className="text-base flex items-center gap-2">
+                      <CardTitle className="text-base flex items-center gap-2 flex-wrap">
                         <Building2 className="h-4 w-4" />
                         {suc.nombre_sucursal}
+                        
+                        {/* Action badge - CREATE or UPDATE */}
+                        {suc.sucursal_id ? (
+                          willUpdate ? (
+                            <Badge className="bg-amber-500 hover:bg-amber-600">
+                              ACTUALIZAR PEDIDO {existingOrder?.folio}
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-blue-500 hover:bg-blue-600">
+                              CREAR NUEVO PEDIDO
+                            </Badge>
+                          )
+                        ) : (
+                          <Badge variant="destructive">
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            SUCURSAL NO ENCONTRADA
+                          </Badge>
+                        )}
+                        
                         <Badge variant="outline" className="ml-auto">
                           {sucIndex + 1}/{parsedOrder?.sucursales.length}
                         </Badge>
@@ -784,7 +958,7 @@ export default function ProcesarPedidoDialog({
                       </div>
                     </CardContent>
                   </Card>
-                ))}
+                )})}
 
                 {/* Load more button */}
                 {hasMoreSucursales && (
@@ -826,22 +1000,17 @@ export default function ProcesarPedidoDialog({
               {creating ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Creando pedidos...
-                </>
-              ) : hasUnmatchedProducts ? (
-                <>
-                  <AlertCircle className="h-4 w-4 mr-2" />
-                  Resolver {unmatchedCount} producto(s) primero
+                  Procesando...
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Crear {parsedOrder.sucursales.length} Pedido(s)
+                  Confirmar y {existingOrders.size > 0 ? 'Crear/Actualizar' : 'Crear'} Pedidos
                 </>
               )}
             </Button>
           )}
-        </DialogFooter>
+         </DialogFooter>
       </DialogContent>
     </Dialog>
   );

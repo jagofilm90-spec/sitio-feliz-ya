@@ -156,7 +156,8 @@ const Pedidos = () => {
     (p) =>
       p.folio.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.clientes?.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.cotizacion_origen?.folio.toLowerCase().includes(searchTerm.toLowerCase())
+      p.cotizacion_origen?.folio.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.sucursal?.nombre.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleSelectAll = (checked: boolean) => {

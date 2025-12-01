@@ -30,6 +30,7 @@ interface Email {
   date: string;
   isUnread: boolean;
   hasAttachments: boolean;
+  isProcesado?: boolean;
 }
 
 interface EmailDetail {
@@ -229,6 +230,28 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
 
   // Track retry attempts for email list
   const emailRetryAttemptRef = useRef(0);
+
+  // Query para obtener correos procesados (de pedidos acumulativos)
+  const { data: correosProcesados } = useQuery({
+    queryKey: ["correos-procesados"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pedidos_acumulativos")
+        .select("correos_procesados");
+      
+      if (error) throw error;
+      
+      // Aplanar todos los arrays de correos_procesados en un solo Set
+      const allProcessed = new Set<string>();
+      data?.forEach(pedido => {
+        pedido.correos_procesados?.forEach(emailId => allProcessed.add(emailId));
+      });
+      
+      return allProcessed;
+    },
+    staleTime: 1000 * 30, // 30 seconds
+    refetchInterval: 1000 * 30, // Refetch every 30 seconds
+  });
 
   // Fetch email list - every 60 seconds
   const {
@@ -1015,7 +1038,10 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
 
           <TabsContent value="inbox" className="mt-4">
             <EmailListView
-              emails={showOnlyUnread ? emails.filter(e => e.isUnread) : emails}
+              emails={(showOnlyUnread ? emails.filter(e => e.isUnread) : emails).map(email => ({
+                ...email,
+                isProcesado: correosProcesados?.has(email.id) || false,
+              }))}
               isLoading={isLoading}
               onSelectEmail={(id, index) => handleSelectEmail(id, false, index)}
               onRefresh={() => refetch()}

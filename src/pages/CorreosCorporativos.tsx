@@ -21,6 +21,7 @@ import {
   Settings,
   Shield,
   PenLine,
+  FileStack,
 } from "lucide-react";
 import {
   Dialog,
@@ -32,6 +33,7 @@ import {
 import BandejaEntrada from "@/components/correos/BandejaEntrada";
 import GmailPermisosManager from "@/components/correos/GmailPermisosManager";
 import GmailFirmasManager from "@/components/correos/GmailFirmasManager";
+import { PedidosAcumulativosTab } from "@/components/correos/PedidosAcumulativosTab";
 
 interface GmailCuenta {
   id: string;
@@ -261,6 +263,10 @@ const CorreosCorporativos = () => {
               <Inbox className="h-4 w-4" />
               Bandeja de Entrada
             </TabsTrigger>
+            <TabsTrigger value="acumulativos" className="gap-2">
+              <FileStack className="h-4 w-4" />
+              Pedidos Acumulativos
+            </TabsTrigger>
             {isAdmin && (
               <>
                 <TabsTrigger value="cuentas" className="gap-2">
@@ -313,6 +319,10 @@ const CorreosCorporativos = () => {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+
+          <TabsContent value="acumulativos" className="mt-6">
+            <PedidosAcumulativosTab />
           </TabsContent>
 
           <TabsContent value="cuentas" className="mt-6">

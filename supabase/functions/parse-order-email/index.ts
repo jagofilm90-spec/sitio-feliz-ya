@@ -36,28 +36,54 @@ interface ParsedSucursal {
   productos: ParsedProduct[];
 }
 
-// Strip HTML tags and clean up email body
-function stripHtml(html: string): string {
-  let text = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
-  text = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-  text = text.replace(/<\/tr>/gi, '\n');
-  text = text.replace(/<\/td>/gi, '\t');
-  text = text.replace(/<\/th>/gi, '\t');
-  text = text.replace(/<th[^>]*>/gi, '');
-  text = text.replace(/<td[^>]*>/gi, '');
-  text = text.replace(/<br\s*\/?>/gi, '\n');
-  text = text.replace(/<p[^>]*>/gi, '\n');
-  text = text.replace(/<\/p>/gi, '\n');
-  text = text.replace(/<[^>]+>/g, '');
-  text = text.replace(/&nbsp;/g, ' ');
-  text = text.replace(/&amp;/g, '&');
-  text = text.replace(/&lt;/g, '<');
-  text = text.replace(/&gt;/g, '>');
-  text = text.replace(/&quot;/g, '"');
-  text = text.replace(/\t+/g, '\t');
-  text = text.replace(/[ ]+/g, ' ');
-  text = text.replace(/\n\s*\n/g, '\n');
-  return text.trim();
+// Fast HTML to text conversion - optimized for large emails
+function stripHtmlFast(html: string): string {
+  // Remove style and script blocks first
+  let text = html;
+  
+  // Simple approach: split by < and process
+  const parts = text.split('<');
+  let result = parts[0] || '';
+  
+  for (let i = 1; i < parts.length; i++) {
+    const part = parts[i];
+    const closeIndex = part.indexOf('>');
+    if (closeIndex === -1) {
+      result += '<' + part;
+      continue;
+    }
+    
+    const tag = part.substring(0, closeIndex).toLowerCase();
+    const afterTag = part.substring(closeIndex + 1);
+    
+    // Skip content inside style and script
+    if (tag.startsWith('style') || tag.startsWith('script')) continue;
+    
+    // Add newlines for block elements
+    if (tag.startsWith('/tr') || tag.startsWith('br') || tag.startsWith('/p') || tag.startsWith('/div')) {
+      result += '\n';
+    }
+    // Add tabs for table cells
+    if (tag.startsWith('/td') || tag.startsWith('/th')) {
+      result += '\t';
+    }
+    
+    result += afterTag;
+  }
+  
+  // Decode common entities
+  result = result
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n)));
+  
+  // Clean up whitespace
+  result = result.replace(/\t+/g, '\t').replace(/[ ]+/g, ' ');
+  
+  return result;
 }
 
 // Check if email is from Lecaroz system
@@ -66,257 +92,193 @@ function isLecarozEmail(emailFrom: string, emailSubject: string): boolean {
          emailSubject.toLowerCase().includes('lecaroz');
 }
 
-// Parse Lecaroz email directly without AI - handles HTML table structure
+// Parse Lecaroz email - ultra-optimized for large emails
 function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotizado[]): { sucursales: ParsedSucursal[], confianza: number } {
+  const startTime = Date.now();
   console.log("Using Lecaroz specialized parser");
+  console.log("Email size:", emailBody.length, "chars");
   
-  const sucursalesMap = new Map<string, ParsedProduct[]>();
+  // Build product lookup map for fast matching
+  const productMap = new Map<string, { id: string, nombre: string, unidad: string }>();
+  const productKeywords = new Set<string>();
   
-  // Helper to find matching product from quotation
-  const findMatchingProduct = (productName: string): { id: string | null, nombre: string, unidad: string } => {
-    if (!productosCotizados || productosCotizados.length === 0) {
-      return { id: null, nombre: productName, unidad: 'bulto' };
-    }
-    
-    const normalizedName = productName.toLowerCase().trim();
-    
-    // Exact match first
+  if (productosCotizados && productosCotizados.length > 0) {
     for (const p of productosCotizados) {
-      if (p.nombre.toLowerCase().trim() === normalizedName) {
-        return { id: p.producto_id, nombre: p.nombre, unidad: p.unidad };
+      const key = p.nombre.toLowerCase().trim();
+      productMap.set(key, { id: p.producto_id, nombre: p.nombre, unidad: p.unidad });
+      
+      // Extract keywords for partial matching
+      const words = key.split(/\s+/).filter(w => w.length > 3);
+      for (const word of words) {
+        productKeywords.add(word);
+      }
+    }
+  }
+  
+  console.log("Product map built with", productMap.size, "products,", productKeywords.size, "keywords");
+  
+  // Fast product matching
+  const findProduct = (text: string): { id: string | null, nombre: string, unidad: string } | null => {
+    if (!text || text.length < 3) return null;
+    
+    const normalized = text.toLowerCase().trim();
+    
+    // Exact match
+    const exact = productMap.get(normalized);
+    if (exact) return exact;
+    
+    // Partial match - check if text contains any product name or vice versa
+    for (const [key, product] of productMap) {
+      if (key.includes(normalized) || normalized.includes(key)) {
+        return product;
+      }
+      // Check if significant words match
+      const textWords = normalized.split(/\s+/).filter(w => w.length > 3);
+      const keyWords = key.split(/\s+/).filter(w => w.length > 3);
+      const matchCount = textWords.filter(w => keyWords.some(k => k.includes(w) || w.includes(k))).length;
+      if (matchCount > 0 && matchCount >= Math.ceil(textWords.length * 0.5)) {
+        return product;
       }
     }
     
-    // Partial match - check if product name contains or is contained
-    for (const p of productosCotizados) {
-      const pName = p.nombre.toLowerCase().trim();
-      if (pName.includes(normalizedName) || normalizedName.includes(pName)) {
-        return { id: p.producto_id, nombre: p.nombre, unidad: p.unidad };
-      }
-    }
-    
-    // Word match - at least 50% of significant words match
-    const words = normalizedName.split(/\s+/).filter(w => w.length > 3);
-    for (const p of productosCotizados) {
-      const pName = p.nombre.toLowerCase();
-      const matchCount = words.filter(w => pName.includes(w)).length;
-      if (words.length > 0 && matchCount >= Math.ceil(words.length * 0.5)) {
-        return { id: p.producto_id, nombre: p.nombre, unidad: p.unidad };
-      }
-    }
-    
-    return { id: null, nombre: productName, unidad: 'bulto' };
+    return null;
   };
-
-  // Try to parse HTML tables directly
-  // Lecaroz emails have tables where each product has rows for each branch
-  // Format: Product header, then rows with branch name and quantities
   
-  // Extract all table content - look for patterns in HTML
-  const tablePattern = /<table[^>]*>([\s\S]*?)<\/table>/gi;
-  const tables = emailBody.match(tablePattern) || [];
+  // Convert to text - use fast method
+  console.log("Converting HTML to text...");
+  const text = stripHtmlFast(emailBody);
+  console.log("Text conversion done in", Date.now() - startTime, "ms, result:", text.length, "chars");
   
-  console.log("Found", tables.length, "HTML tables");
+  // Parse line by line
+  const lines = text.split('\n');
+  console.log("Processing", lines.length, "lines");
   
-  // Process each table looking for order data
-  for (const table of tables) {
-    // Extract rows
-    const rowPattern = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-    const rows = table.match(rowPattern) || [];
+  const sucursalesMap = new Map<string, Map<string, ParsedProduct>>();
+  let currentProduct: { id: string | null, nombre: string, unidad: string } | null = null;
+  let productsFound = 0;
+  let branchesFound = 0;
+  
+  const isNumeric = (s: string): boolean => {
+    const cleaned = s.replace(/,/g, '').trim();
+    return /^\d+(\.\d+)?$/.test(cleaned);
+  };
+  
+  const parseNumber = (s: string): number => {
+    return parseFloat(s.replace(/,/g, '').trim()) || 0;
+  };
+  
+  for (const line of lines) {
+    if (!line || line.length < 2) continue;
     
-    let currentProductName: string | null = null;
-    let currentProductMatch: { id: string | null, nombre: string, unidad: string } | null = null;
+    // Split by tabs to get columns
+    const cols = line.split('\t').map(c => c.trim()).filter(c => c.length > 0);
+    if (cols.length === 0) continue;
     
-    for (const row of rows) {
-      // Extract cells (td and th)
-      const cellPattern = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
-      const cells: string[] = [];
-      let cellMatch;
-      while ((cellMatch = cellPattern.exec(row)) !== null) {
-        // Clean the cell content
-        let cellContent = cellMatch[1]
-          .replace(/<[^>]+>/g, '') // Remove HTML tags
-          .replace(/&nbsp;/g, ' ')
-          .replace(/&amp;/g, '&')
-          .replace(/\s+/g, ' ')
-          .trim();
-        cells.push(cellContent);
-      }
-      
-      if (cells.length === 0) continue;
-      
-      // Skip header rows
-      const firstCell = cells[0].toLowerCase();
-      if (firstCell.includes('producto') || firstCell.includes('pedido') || 
-          firstCell.includes('entregar') || firstCell.includes('total') ||
-          firstCell === '' || firstCell === '#') {
+    // Skip obvious header/footer lines
+    const lowerLine = line.toLowerCase();
+    if (lowerLine.includes('total') || lowerLine.includes('producto') && lowerLine.includes('pedido')) {
+      continue;
+    }
+    
+    // Check if first column might be a product name
+    const firstCol = cols[0];
+    if (firstCol && !isNumeric(firstCol) && firstCol.length > 2) {
+      const match = findProduct(firstCol);
+      if (match) {
+        currentProduct = match;
+        productsFound++;
         continue;
       }
+    }
+    
+    // If we have a current product, look for branch + quantity patterns
+    if (currentProduct && cols.length >= 2) {
+      // Look for: [index?] [branch_name] [qty_pedido] [qty_entregar?]
+      let branchName: string | null = null;
+      let quantity = 0;
       
-      // Check if this might be a product row (has product name)
-      // Product rows usually have the product name in first cell and may span multiple columns
-      const isNumeric = (s: string) => /^\d+([.,]\d+)?$/.test(s.replace(/,/g, '').trim());
-      
-      // If we have a cell with text that matches a quoted product, it's a product header
-      if (cells.length >= 1 && !isNumeric(cells[0]) && cells[0].length > 2) {
-        const possibleProduct = cells[0];
-        const match = findMatchingProduct(possibleProduct);
+      for (let i = 0; i < cols.length; i++) {
+        const col = cols[i];
         
-        // If it matches a quoted product, update current product
-        if (match.id) {
-          currentProductName = match.nombre;
-          currentProductMatch = match;
-          console.log("Found product:", currentProductName);
+        // Skip single-digit index numbers
+        if (/^\d{1,2}$/.test(col) && i === 0) continue;
+        
+        // Find branch name (text, not numeric, not too short)
+        if (!branchName && !isNumeric(col) && col.length >= 2) {
+          // Skip known non-branch values
+          const lowerCol = col.toLowerCase();
+          if (!lowerCol.includes('total') && !lowerCol.includes('producto')) {
+            branchName = col.toUpperCase();
+          }
+        }
+        
+        // Find quantity (first non-zero number after branch)
+        if (branchName && isNumeric(col)) {
+          const num = parseNumber(col);
+          if (num > 0) {
+            quantity = num;
+            break; // Take first quantity (usually "Pedido" column)
+          }
         }
       }
       
-      // Look for branch + quantity patterns
-      // Typical format: [index] [branch name] [qty pedido] [qty entregar] or similar
-      if (currentProductName && currentProductMatch && cells.length >= 2) {
-        // Find the branch name (text) and quantity (number)
-        let branchName: string | null = null;
-        let quantity: number = 0;
-        
-        for (let i = 0; i < cells.length; i++) {
-          const cell = cells[i].trim();
-          
-          // Skip empty cells and index numbers
-          if (!cell || cell === '' || /^\d{1,2}$/.test(cell)) continue;
-          
-          // If cell is text (not purely numeric), it might be a branch name
-          if (!isNumeric(cell) && cell.length >= 2 && !branchName) {
-            // Skip known non-branch values
-            if (!cell.toLowerCase().includes('total') && 
-                !cell.toLowerCase().includes('producto') &&
-                !cell.toLowerCase().includes('pedido')) {
-              branchName = cell.toUpperCase();
-            }
-          }
-          
-          // If cell is numeric and we have a branch, it's the quantity
-          if (isNumeric(cell) && branchName) {
-            const num = parseFloat(cell.replace(/,/g, ''));
-            if (num > 0 && quantity === 0) {
-              quantity = num;
-              break; // Take first non-zero quantity (usually "Pedido" column)
-            }
-          }
+      // Add to results if we found valid data
+      if (branchName && quantity > 0) {
+        if (!sucursalesMap.has(branchName)) {
+          sucursalesMap.set(branchName, new Map());
+          branchesFound++;
         }
         
-        // Add to sucursales map if we found valid data
-        if (branchName && quantity > 0) {
-          if (!sucursalesMap.has(branchName)) {
-            sucursalesMap.set(branchName, []);
-          }
-          
-          const products = sucursalesMap.get(branchName)!;
-          const existing = products.find(p => p.nombre_producto === currentProductName);
-          
-          if (!existing) {
-            products.push({
-              nombre_producto: currentProductName,
-              cantidad: quantity,
-              unidad: currentProductMatch.unidad,
-              precio_sugerido: null,
-              notas: null,
-              producto_cotizado_id: currentProductMatch.id
-            });
-          }
+        const branchProducts = sucursalesMap.get(branchName)!;
+        // Use product ID as key to avoid duplicates
+        const productKey = currentProduct.id || currentProduct.nombre;
+        
+        if (!branchProducts.has(productKey)) {
+          branchProducts.set(productKey, {
+            nombre_producto: currentProduct.nombre,
+            cantidad: quantity,
+            unidad: currentProduct.unidad,
+            precio_sugerido: null,
+            notas: null,
+            producto_cotizado_id: currentProduct.id
+          });
         }
       }
     }
   }
   
-  // If HTML parsing didn't work well, try plain text parsing
-  if (sucursalesMap.size === 0) {
-    console.log("HTML parsing found nothing, trying text-based parsing...");
-    
-    // Clean the email body for text parsing
-    const cleanBody = stripHtml(emailBody);
-    const lines = cleanBody.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    
-    console.log("Lecaroz email lines:", lines.length);
-    
-    let currentProduct: string | null = null;
-    let currentProductMatch: { id: string | null, nombre: string, unidad: string } | null = null;
-    
-    for (const line of lines) {
-      const parts = line.split(/\t+/).map(p => p.trim()).filter(p => p.length > 0);
-      if (parts.length === 0) continue;
-      
-      const isNumeric = (s: string) => /^\d+([.,]\d+)?$/.test(s.replace(/,/g, '').trim());
-      
-      // Check if first part might be a product name from our quoted products
-      if (parts[0] && !isNumeric(parts[0]) && parts[0].length > 2) {
-        const match = findMatchingProduct(parts[0]);
-        if (match.id) {
-          currentProduct = match.nombre;
-          currentProductMatch = match;
-        }
-      }
-      
-      // Look for branch patterns: text followed by numbers
-      if (currentProduct && currentProductMatch) {
-        for (let i = 0; i < parts.length - 1; i++) {
-          const part = parts[i];
-          const nextPart = parts[i + 1];
-          
-          if (!isNumeric(part) && part.length >= 2 && isNumeric(nextPart)) {
-            const branchName = part.toUpperCase();
-            const qty = parseFloat(nextPart.replace(/,/g, ''));
-            
-            if (qty > 0 && !branchName.toLowerCase().includes('total')) {
-              if (!sucursalesMap.has(branchName)) {
-                sucursalesMap.set(branchName, []);
-              }
-              
-              const products = sucursalesMap.get(branchName)!;
-              if (!products.find(p => p.nombre_producto === currentProduct)) {
-                products.push({
-                  nombre_producto: currentProduct,
-                  cantidad: qty,
-                  unidad: currentProductMatch.unidad,
-                  precio_sugerido: null,
-                  notas: null,
-                  producto_cotizado_id: currentProductMatch.id
-                });
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+  console.log("Parsing complete in", Date.now() - startTime, "ms");
+  console.log("Found", productsFound, "product matches,", branchesFound, "unique branches");
   
-  // Convert map to array
+  // Convert to result format
   const sucursales: ParsedSucursal[] = [];
-  for (const [nombre, productos] of sucursalesMap) {
-    if (productos.length > 0) {
+  for (const [branchName, products] of sucursalesMap) {
+    const productArray = Array.from(products.values());
+    if (productArray.length > 0) {
       sucursales.push({
-        nombre_sucursal: nombre,
+        nombre_sucursal: branchName,
         fecha_entrega_solicitada: null,
-        productos
+        productos: productArray
       });
     }
   }
   
-  console.log("Lecaroz parser found", sucursales.length, "branches with products");
+  // Sort by branch name for consistent results
+  sucursales.sort((a, b) => a.nombre_sucursal.localeCompare(b.nombre_sucursal));
   
-  // Log summary for debugging
-  for (const suc of sucursales) {
-    console.log(`  - ${suc.nombre_sucursal}: ${suc.productos.length} products`);
+  console.log("Final result:", sucursales.length, "branches");
+  if (sucursales.length > 0 && sucursales.length <= 10) {
+    for (const s of sucursales) {
+      console.log(`  - ${s.nombre_sucursal}: ${s.productos.length} products`);
+    }
   }
   
-  // If still no good results, fall back to AI parsing
   if (sucursales.length === 0) {
-    console.log("Lecaroz parser found no branches, will fall back to AI");
+    console.log("No branches found, will fall back to AI");
     return { sucursales: [], confianza: 0 };
   }
   
-  return { 
-    sucursales, 
-    confianza: 0.90
-  };
+  return { sucursales, confianza: 0.90 };
 }
 
 // Standard AI-based parsing for non-Lecaroz emails
@@ -327,9 +289,9 @@ async function parseWithAI(emailBody: string, emailSubject: string, emailFrom: s
     throw new Error("LOVABLE_API_KEY is not configured");
   }
   
-  let cleanEmailBody = stripHtml(emailBody);
+  let cleanEmailBody = stripHtmlFast(emailBody);
   
-  // Truncate for AI (max 30K chars for standard emails)
+  // Truncate for AI (max 30K chars)
   const MAX_EMAIL_LENGTH = 30000;
   if (cleanEmailBody.length > MAX_EMAIL_LENGTH) {
     console.log("Truncating email from", cleanEmailBody.length, "to", MAX_EMAIL_LENGTH);
@@ -340,16 +302,16 @@ async function parseWithAI(emailBody: string, emailSubject: string, emailFrom: s
   if (productosCotizados && productosCotizados.length > 0) {
     productosContext = `
 
-IMPORTANTE - PRODUCTOS COTIZADOS RECIENTEMENTE A ESTE CLIENTE:
+IMPORTANTE - PRODUCTOS COTIZADOS:
 ${productosCotizados.map(p => `- "${p.nombre}" (código: ${p.codigo}, ID: ${p.producto_id}, unidad: ${p.unidad})`).join('\n')}
 
-Cuando el cliente use nombres similares o abreviados, debes hacer match con estos productos.`;
+Haz match con estos productos cuando el cliente use nombres similares.`;
   }
 
-  const systemPrompt = `Eres un asistente especializado en procesar correos de pedidos de clientes para una comercializadora de abarrotes. Extrae TODOS los productos mencionados con sus cantidades, agrupados por sucursal si aplica.
+  const systemPrompt = `Eres un asistente que procesa correos de pedidos. Extrae productos y cantidades, agrupados por sucursal.
 ${productosContext}`;
 
-  const userPrompt = `Analiza el siguiente correo de pedido:
+  const userPrompt = `Analiza este pedido:
 
 ASUNTO: ${emailSubject}
 DE: ${emailFrom}
@@ -357,7 +319,7 @@ DE: ${emailFrom}
 CONTENIDO:
 ${cleanEmailBody}`;
 
-  console.log("Calling AI gateway for standard email...");
+  console.log("Calling AI gateway...");
   
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 45000);
@@ -380,13 +342,12 @@ ${cleanEmailBody}`;
             type: "function",
             function: {
               name: "extract_order",
-              description: "Extrae los productos y cantidades del correo de pedido",
+              description: "Extrae productos y cantidades del pedido",
               parameters: {
                 type: "object",
                 properties: {
                   sucursales: {
                     type: "array",
-                    description: "Lista de sucursales con sus pedidos",
                     items: {
                       type: "object",
                       properties: {
@@ -399,7 +360,7 @@ ${cleanEmailBody}`;
                             properties: {
                               nombre_producto: { type: "string" },
                               cantidad: { type: "number" },
-                              unidad: { type: "string", enum: ["kg", "bulto", "costal", "caja", "pieza", "cubeta", "litro"] },
+                              unidad: { type: "string" },
                               precio_sugerido: { type: "number" },
                               notas: { type: "string" },
                               producto_cotizado_id: { type: "string" }
@@ -431,20 +392,20 @@ ${cleanEmailBody}`;
       console.error("AI Gateway error:", response.status, errorText);
       
       if (response.status === 429) {
-        throw new Error("Límite de solicitudes excedido, intente más tarde");
+        throw new Error("Límite de solicitudes excedido");
       }
       if (response.status === 402) {
-        throw new Error("Créditos insuficientes para IA");
+        throw new Error("Créditos insuficientes");
       }
       
-      throw new Error(`AI Gateway error: ${response.status}`);
+      throw new Error(`AI error: ${response.status}`);
     }
 
     const aiResponse = await response.json();
     const toolCall = aiResponse.choices?.[0]?.message?.tool_calls?.[0];
     
     if (!toolCall || toolCall.function.name !== "extract_order") {
-      throw new Error("No se pudo extraer la información del pedido");
+      throw new Error("No se pudo extraer el pedido");
     }
 
     return JSON.parse(toolCall.function.arguments);
@@ -452,7 +413,7 @@ ${cleanEmailBody}`;
   } catch (fetchError: unknown) {
     clearTimeout(timeoutId);
     if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-      throw new Error("La solicitud tardó demasiado, intente de nuevo");
+      throw new Error("Timeout - intente de nuevo");
     }
     throw fetchError;
   }
@@ -466,29 +427,28 @@ serve(async (req) => {
   try {
     const { emailBody, emailSubject, emailFrom, clienteId, productosCotizados }: ParseOrderRequest = await req.json();
     
-    console.log("Parsing order email from:", emailFrom);
+    console.log("Parsing order from:", emailFrom);
     console.log("Subject:", emailSubject);
-    console.log("Productos cotizados disponibles:", productosCotizados?.length || 0);
-    console.log("Email body length:", emailBody.length);
+    console.log("Products available:", productosCotizados?.length || 0);
+    console.log("Email size:", emailBody.length, "chars");
 
     let result: { sucursales: ParsedSucursal[], confianza: number, notas_generales?: string };
 
-    // Check if this is a Lecaroz email - use specialized parser
+    // Use specialized parser for Lecaroz emails
     if (isLecarozEmail(emailFrom, emailSubject)) {
       console.log("Detected Lecaroz email - using specialized parser");
       result = parseLecarozEmail(emailBody, productosCotizados);
       
-      // If specialized parser didn't find anything, fall back to AI
+      // Fall back to AI only if specialized parser found nothing
       if (result.sucursales.length === 0) {
-        console.log("Lecaroz parser failed, falling back to AI");
+        console.log("Specialized parser found nothing, trying AI...");
         result = await parseWithAI(emailBody, emailSubject, emailFrom, productosCotizados);
       }
     } else {
-      // Standard emails use AI
       result = await parseWithAI(emailBody, emailSubject, emailFrom, productosCotizados);
     }
 
-    console.log("Parsed order - sucursales:", result.sucursales.length);
+    console.log("Result: ", result.sucursales.length, "branches");
 
     return new Response(JSON.stringify({ 
       success: true, 
@@ -498,7 +458,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("Error parsing order email:", error);
+    console.error("Error:", error);
     return new Response(JSON.stringify({ 
       error: error instanceof Error ? error.message : "Error desconocido" 
     }), {

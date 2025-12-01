@@ -364,7 +364,12 @@ export default function ProcesarPedidoDialog({
                   let cantidadAjustadaId = prod.cantidad;
                   let unidadAjustadaId = prod.unidad;
 
-                  if (isPiñaMangoLataCatalogById && matchedByCotizacion.unidad?.toLowerCase() === "caja") {
+                  // Solo convertir si VIENE en piezas/kilos y el catálogo NO está ya en CAJA
+                  if (
+                    isPiñaMangoLataCatalogById &&
+                    matchedByCotizacion.unidad?.toLowerCase() === "caja" &&
+                    prod.unidad.toLowerCase() !== "caja"
+                  ) {
                     const piecesMatchId = matchedByCotizacion.nombre.match(/(\d+)\s*\/\s*\d+(\.|,)?\d*\s*(gr|kg)/i);
                     const piecesPerBoxId = piecesMatchId ? parseInt(piecesMatchId[1], 10) : null;
 
@@ -449,7 +454,11 @@ export default function ProcesarPedidoDialog({
               let cantidadAjustada = prod.cantidad;
               let unidadAjustada = prod.unidad;
 
-              if (isPiñaMangoLataCatalog && matched?.unidad?.toLowerCase() === 'caja') {
+              if (
+                isPiñaMangoLataCatalog &&
+                matched?.unidad?.toLowerCase() === 'caja' &&
+                prod.unidad.toLowerCase() !== 'caja'
+              ) {
                 const piecesMatch = matched.nombre.match(/(\d+)\s*\/\s*\d+(\.|,)?\d*\s*(gr|kg)/i);
                 const piecesPerBox = piecesMatch ? parseInt(piecesMatch[1], 10) : null;
 

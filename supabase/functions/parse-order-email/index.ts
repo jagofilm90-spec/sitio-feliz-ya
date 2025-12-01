@@ -239,6 +239,12 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     'bultos de 25',
     'cajas de 24',
     'cajas de 12',
+    'litros', // Unit description, not a product
+    'litro',
+    'kilos',
+    'kilo',
+    'piezas',
+    'pieza',
     'azucar', // Category header, not a product
     'azúcar',
     'harinas',

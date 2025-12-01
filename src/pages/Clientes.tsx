@@ -125,7 +125,8 @@ const Clientes = () => {
         .from("clientes")
         .select(`
           *,
-          zona:zona_id (id, nombre)
+          zona:zona_id (id, nombre),
+          cliente_sucursales (count)
         `)
         .order("nombre");
 
@@ -974,9 +975,18 @@ const Clientes = () => {
                             setSelectedClienteForSucursales({ id: cliente.id, nombre: cliente.nombre });
                             setSucursalesDialogOpen(true);
                           }}
-                          title="Ver sucursales"
+                          title={`Ver sucursales (${cliente.cliente_sucursales?.[0]?.count || 0})`}
+                          className="relative"
                         >
                           <MapPin className="h-4 w-4" />
+                          {cliente.cliente_sucursales?.[0]?.count > 0 && (
+                            <Badge 
+                              variant="secondary" 
+                              className="absolute -top-1 -right-1 h-5 min-w-5 flex items-center justify-center px-1 text-xs"
+                            >
+                              {cliente.cliente_sucursales[0].count}
+                            </Badge>
+                          )}
                         </Button>
                         <Button
                           variant="ghost"

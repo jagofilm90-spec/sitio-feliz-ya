@@ -126,7 +126,7 @@ ${productosCotizados && productosCotizados.length > 0 ?
     console.log("Calling AI gateway...");
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 55000); // 55 second timeout (before edge function 60s limit)
     
     try {
       const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -136,7 +136,7 @@ ${productosCotizados && productosCotizados.length > 0 ?
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model: "google/gemini-2.5-pro", // Pro model handles large contexts better
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt }

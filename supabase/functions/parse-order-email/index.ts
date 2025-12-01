@@ -518,7 +518,15 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     if (pipeProductMatch) {
       const productName = pipeProductMatch[2].trim();
       const cantidad = parseFloat((pipeProductMatch[3] || '0').replace(/,/g, ''));
-      const emailUnit = (pipeProductMatch[4] || 'KILOS').toUpperCase();
+      
+      // CRITICAL: For canned products (piña, mango with format "X/Y"), default to PIEZAS not KILOS
+      let defaultUnit = 'KILOS';
+      if (productName.match(/(\d+)\s*\/\s*\d+/)) {
+        defaultUnit = 'PIEZAS'; // Products with "X/Y" format are always in pieces
+        console.log(`  -> Product "${productName}" has X/Y format, defaulting to PIEZAS`);
+      }
+      
+      const emailUnit = (pipeProductMatch[4] || defaultUnit).toUpperCase();
       
       if (productName.length > 2 && cantidad > 0) {
         const match = findProduct(productName);
@@ -599,7 +607,16 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     const qtyMatch = line.match(/^([\d,\.]+)\s*(KILOS?|PIEZAS?|BULTOS?|CAJAS?|BALONES?|SACOS?)?$/i);
     if (qtyMatch && (pendingProduct || pendingMatchType === 'none')) {
       const rawQty = parseFloat(qtyMatch[1].replace(/,/g, ''));
-      const emailUnit = (qtyMatch[2] || 'KILOS').toUpperCase();
+      
+      // CRITICAL: For canned products (piña, mango with format "X/Y"), default to PIEZAS not KILOS
+      // Lecaroz always sends these products in pieces
+      let defaultUnit = 'KILOS';
+      if (pendingProduct && pendingProduct.nombre.match(/(\d+)\s*\/\s*\d+/)) {
+        defaultUnit = 'PIEZAS'; // Products with "X/Y" format are always in pieces
+        console.log(`  -> Product "${pendingProduct.nombre}" has X/Y format, defaulting to PIEZAS`);
+      }
+      
+      const emailUnit = (qtyMatch[2] || defaultUnit).toUpperCase();
       
       if (rawQty > 0 && rawQty < 100000) {
         const branchProducts = results.get(currentBranch)!;

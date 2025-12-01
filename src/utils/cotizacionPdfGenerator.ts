@@ -53,6 +53,27 @@ const parseNotas = (notas: string | null) => {
   return { notasLimpias, soloPrecios };
 };
 
+// Draw ALMASA logo badge
+const drawAlmasaLogo = (doc: jsPDF, x: number, y: number, width: number, height: number) => {
+  const brandRed: [number, number, number] = [139, 35, 50];
+  const white: [number, number, number] = [255, 255, 255];
+  
+  // Outer rounded rectangle (logo background)
+  doc.setFillColor(...brandRed);
+  doc.roundedRect(x, y, width, height, 4, 4, "F");
+  
+  // Inner border
+  doc.setDrawColor(...white);
+  doc.setLineWidth(0.8);
+  doc.roundedRect(x + 2, y + 2, width - 4, height - 4, 3, 3, "S");
+  
+  // ALMASA text
+  doc.setTextColor(...white);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text("ALMASA", x + width / 2, y + height / 2 + 2, { align: "center" });
+};
+
 export const generarCotizacionPDF = (datos: DatosCotizacion): string => {
   const { soloPrecios: soloFromDatos } = datos;
   const { notasLimpias, soloPrecios: soloFromNotas } = parseNotas(datos.notas || null);
@@ -72,229 +93,169 @@ export const generarCotizacionPDF = (datos: DatosCotizacion): string => {
   const margin = 15;
   let y = 12;
 
-  // Professional color palette - Almasa brand colors
-  const brandRed: [number, number, number] = [139, 35, 50]; // Almasa burgundy/maroon
-  const accentGold: [number, number, number] = [180, 142, 58]; // Elegant gold
+  // Color palette - Almasa brand
+  const brandRed: [number, number, number] = [139, 35, 50];
   const darkText: [number, number, number] = [33, 37, 41];
-  const mediumGray: [number, number, number] = [108, 117, 125];
-  const lightGray: [number, number, number] = [233, 236, 239];
+  const grayText: [number, number, number] = [100, 100, 100];
+  const tableHeader: [number, number, number] = [51, 51, 51];
   const white: [number, number, number] = [255, 255, 255];
+  const lightBg: [number, number, number] = [248, 248, 248];
 
   // === HEADER SECTION ===
-  // Top accent line
-  doc.setFillColor(...brandRed);
-  doc.rect(0, 0, pageWidth, 3, "F");
+  // ALMASA Logo (left)
+  const logoWidth = 32;
+  const logoHeight = 16;
+  drawAlmasaLogo(doc, margin, y, logoWidth, logoHeight);
 
-  // Gold accent line
-  doc.setFillColor(...accentGold);
-  doc.rect(0, 3, pageWidth, 1.5, "F");
-
-  y = 15;
-
-  // Company name - elegant typography
+  // Company name next to logo
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
+  doc.setFontSize(18);
   doc.setTextColor(...brandRed);
-  doc.text("ABARROTES LA MANITA", margin, y);
+  doc.text("ABARROTESLA MANITA", margin + logoWidth + 5, y + 7);
   
-  y += 5;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.setTextColor(...mediumGray);
-  doc.text("S.A. DE C.V.", margin, y);
+  doc.setTextColor(...grayText);
+  doc.text("ABARROTESLA MANITA, S.A. DE C.V.", margin + logoWidth + 5, y + 13);
 
-  // Cotización badge - more elegant
-  const badgeWidth = 50;
-  const badgeHeight = 18;
+  // COTIZACIÓN badge (right)
+  const badgeWidth = 45;
+  const badgeHeight = 12;
   const badgeX = pageWidth - margin - badgeWidth;
-  const badgeY = 10;
-
-  // Badge background
   doc.setFillColor(...brandRed);
-  doc.roundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 2, 2, "F");
-  
-  // Badge text
+  doc.roundedRect(badgeX, y, badgeWidth, badgeHeight, 2, 2, "F");
   doc.setTextColor(...white);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.text("COTIZACIÓN", badgeX + badgeWidth / 2, badgeY + 7, { align: "center" });
-  
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.text(datos.folio, badgeX + badgeWidth / 2, badgeY + 13, { align: "center" });
+  doc.setFontSize(12);
+  doc.text("COTIZACIÓN", badgeX + badgeWidth / 2, y + 8, { align: "center" });
 
-  // Date below badge
+  // Folio and date below badge
+  y += badgeHeight + 3;
   doc.setTextColor(...darkText);
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.text(fechaCreacion, pageWidth - margin, badgeY + badgeHeight + 5, { align: "right" });
+  doc.text(`Folio: `, pageWidth - margin - 45, y, { align: "left" });
+  doc.setFont("helvetica", "bold");
+  doc.text(datos.folio, pageWidth - margin - 35, y);
+  y += 4;
+  doc.setFont("helvetica", "normal");
+  doc.text(`Fecha: ${fechaCreacion}`, pageWidth - margin, y, { align: "right" });
 
   y = 35;
 
-  // Elegant separator line
-  doc.setDrawColor(...accentGold);
-  doc.setLineWidth(0.5);
+  // Red separator line
+  doc.setDrawColor(...brandRed);
+  doc.setLineWidth(0.8);
   doc.line(margin, y, pageWidth - margin, y);
 
   y += 8;
 
-  // === TWO COLUMN INFO SECTION ===
-  const colWidth = (pageWidth - margin * 2 - 10) / 2;
+  // === TWO COLUMN INFO ===
+  const colWidth = (pageWidth - margin * 2) / 2;
 
-  // LEFT COLUMN - Company info
+  // LEFT: Dirección Fiscal
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.setTextColor(...brandRed);
-  doc.text("INFORMACIÓN DE CONTACTO", margin, y);
+  doc.setFontSize(9);
+  doc.setTextColor(...darkText);
+  doc.text("Dirección Fiscal:", margin, y);
   
   y += 5;
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  doc.setTextColor(...darkText);
-  
-  const companyInfo = [
-    "Calle Melchor Ocampo No. 59",
-    "Col. Magdalena Mixiuhca",
-    "Venustiano Carranza, C.P. 15850",
-    "Ciudad de México",
-    "",
-    "Tel: (55) 5600-7781 / 5694-9792",
-    "Email: 1904@almasa.com.mx"
-  ];
-  
-  companyInfo.forEach(line => {
-    if (line === "") {
-      y += 2;
-    } else {
-      doc.text(line, margin, y);
-      y += 3.5;
-    }
-  });
+  doc.setFontSize(8);
+  doc.setTextColor(...grayText);
+  doc.text("Calle: MELCHOR OCAMPO No.Ext: 59", margin, y);
+  y += 4;
+  doc.text("Colonia: MAGDALENA MIXIUHCA", margin, y);
+  y += 4;
+  doc.text("Municipio: VENUSTIANO CARRANZA C.P.: 15850", margin, y);
+  y += 4;
+  doc.text("Tel: (55) 56-00-77-81 / (55) 56-94-97-92", margin, y);
 
-  // RIGHT COLUMN - Vigencia (highlighted)
-  const rightColX = margin + colWidth + 10;
+  // RIGHT: Vigencia (at same starting Y as Dirección Fiscal)
+  const rightX = margin + colWidth + 10;
   let rightY = 43;
-
-  // Vigencia box with elegant styling
-  doc.setFillColor(250, 248, 245);
-  doc.setDrawColor(...accentGold);
-  doc.setLineWidth(0.8);
-  doc.roundedRect(rightColX, rightY, colWidth, 22, 3, 3, "FD");
-
+  
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...brandRed);
+  doc.text("Vigencia de la cotización:", rightX, rightY);
+  
   rightY += 6;
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.setTextColor(...brandRed);
-  doc.text("VIGENCIA DE COTIZACIÓN", rightColX + colWidth / 2, rightY, { align: "center" });
-
-  rightY += 7;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  doc.setTextColor(...accentGold);
-  doc.text(fechaVigencia, rightColX + colWidth / 2, rightY, { align: "center" });
+  doc.setFontSize(14);
+  doc.setTextColor(...darkText);
+  doc.text(fechaVigencia, rightX, rightY);
 
   if (datos.nombre) {
     rightY += 6;
-    doc.setFont("helvetica", "italic");
-    doc.setFontSize(7);
-    doc.setTextColor(...mediumGray);
-    const refText = `Ref: ${datos.nombre}`;
-    const truncatedRef = refText.length > 40 ? refText.substring(0, 37) + "..." : refText;
-    doc.text(truncatedRef, rightColX + colWidth / 2, rightY, { align: "center" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...grayText);
+    const refText = `Referencia: ${datos.nombre}`;
+    doc.text(refText.length > 45 ? refText.substring(0, 42) + "..." : refText, rightX, rightY);
   }
 
-  y = Math.max(y, 68) + 5;
+  y = Math.max(y, rightY) + 8;
 
-  // === CLIENT INFO BOX ===
-  const clientBoxHeight = datos.sucursal ? 20 : 14;
-  
-  doc.setFillColor(...lightGray);
-  doc.setDrawColor(...brandRed);
+  // === CLIENT BOX ===
+  const clientBoxHeight = datos.sucursal ? 18 : 14;
+  doc.setDrawColor(200, 200, 200);
   doc.setLineWidth(0.3);
-  doc.roundedRect(margin, y, pageWidth - margin * 2, clientBoxHeight, 2, 2, "FD");
+  doc.roundedRect(margin, y, pageWidth - margin * 2, clientBoxHeight, 2, 2, "S");
 
   y += 5;
-  const clientCol1 = margin + 4;
-  const clientCol2 = pageWidth / 2 + 5;
-
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.setTextColor(...brandRed);
-  doc.text("CLIENTE", clientCol1, y);
-
-  doc.setTextColor(...darkText);
-  doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  const clienteName = datos.cliente.nombre.length > 35 
-    ? datos.cliente.nombre.substring(0, 32) + "..." 
-    : datos.cliente.nombre;
-  doc.text(clienteName, clientCol1 + 18, y);
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.setTextColor(...brandRed);
-  doc.text("CÓDIGO", clientCol2, y);
-  doc.setFont("helvetica", "normal");
   doc.setTextColor(...darkText);
-  doc.text(datos.cliente.codigo, clientCol2 + 18, y);
+  doc.text("Cliente: ", margin + 4, y);
+  doc.setFont("helvetica", "normal");
+  doc.text(datos.cliente.nombre, margin + 20, y);
+  
+  y += 5;
+  doc.setFont("helvetica", "bold");
+  doc.text("Código: ", margin + 4, y);
+  doc.setFont("helvetica", "normal");
+  doc.text(datos.cliente.codigo, margin + 20, y);
 
   if (datos.sucursal) {
     y += 5;
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setTextColor(...brandRed);
-    doc.text("SUCURSAL", clientCol1, y);
+    doc.text("Sucursal: ", margin + 4, y);
     doc.setFont("helvetica", "normal");
-    doc.setTextColor(...darkText);
-    doc.setFontSize(8);
-    const sucursalName = datos.sucursal.nombre.length > 30 
-      ? datos.sucursal.nombre.substring(0, 27) + "..." 
-      : datos.sucursal.nombre;
-    doc.text(sucursalName, clientCol1 + 20, y);
-
-    if (datos.sucursal.direccion) {
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(...brandRed);
-      doc.text("DIRECCIÓN", clientCol2, y);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(...darkText);
-      const maxDirWidth = pageWidth - margin - clientCol2 - 25;
-      const direccionLines = doc.splitTextToSize(datos.sucursal.direccion, maxDirWidth);
-      doc.text(direccionLines[0], clientCol2 + 22, y);
-    }
+    doc.text(datos.sucursal.nombre, margin + 22, y);
   }
 
-  y += clientBoxHeight - 3;
+  y += clientBoxHeight - (datos.sucursal ? 7 : 2);
 
   // === PRODUCTS TABLE ===
   y += 8;
-  const tableStartY = y;
 
   // Column definitions
   const cols = soloPrecios
     ? {
-        codigo: { x: margin, width: 28, label: "CÓDIGO" },
-        producto: { x: margin + 28, width: pageWidth - margin * 2 - 58, label: "PRODUCTO" },
-        precio: { x: pageWidth - margin - 30, width: 30, label: "PRECIO", align: "right" as const }
+        codigo: { x: margin, width: 30, label: "Código" },
+        producto: { x: margin + 30, width: pageWidth - margin * 2 - 60, label: "Producto" },
+        precio: { x: pageWidth - margin - 30, width: 30, label: "Precio", align: "right" as const }
       }
     : {
-        codigo: { x: margin, width: 24, label: "CÓDIGO" },
-        producto: { x: margin + 24, width: pageWidth - margin * 2 - 104, label: "PRODUCTO" },
-        cantidad: { x: pageWidth - margin - 80, width: 18, label: "CANT.", align: "center" as const },
-        unidad: { x: pageWidth - margin - 62, width: 16, label: "UND." },
-        precio: { x: pageWidth - margin - 46, width: 22, label: "PRECIO", align: "right" as const },
-        subtotal: { x: pageWidth - margin - 24, width: 24, label: "SUBTOTAL", align: "right" as const }
+        codigo: { x: margin, width: 25, label: "Código" },
+        producto: { x: margin + 25, width: pageWidth - margin * 2 - 105, label: "Producto" },
+        cantidad: { x: pageWidth - margin - 80, width: 18, label: "Cant.", align: "center" as const },
+        unidad: { x: pageWidth - margin - 62, width: 15, label: "Und." },
+        precio: { x: pageWidth - margin - 47, width: 22, label: "Precio", align: "right" as const },
+        subtotal: { x: pageWidth - margin - 25, width: 25, label: "Subtotal", align: "right" as const }
       };
 
-  // Table header
-  doc.setFillColor(...brandRed);
+  // Table header (dark)
+  doc.setFillColor(...tableHeader);
   doc.rect(margin, y, pageWidth - margin * 2, 8, "F");
 
   doc.setTextColor(...white);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7);
+  doc.setFontSize(8);
 
   Object.values(cols).forEach((col: any) => {
-    const textX = col.align === "right" ? col.x + col.width - 2 : col.align === "center" ? col.x + col.width / 2 : col.x + 2;
+    const textX = col.align === "right" ? col.x + col.width - 3 : col.align === "center" ? col.x + col.width / 2 : col.x + 3;
     doc.text(col.label, textX, y + 5.5, { align: col.align || "left" });
   });
 
@@ -303,45 +264,45 @@ export const generarCotizacionPDF = (datos: DatosCotizacion): string => {
   // Table rows
   doc.setTextColor(...darkText);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
+  doc.setFontSize(8);
 
-  const rowHeight = 7;
+  const rowHeight = 8;
   datos.productos.forEach((producto, index) => {
     // Check for page break
-    if (y > pageHeight - 60) {
+    if (y > pageHeight - 70) {
       doc.addPage();
       y = 20;
       
-      // Redraw header on new page
-      doc.setFillColor(...brandRed);
+      // Redraw header
+      doc.setFillColor(...tableHeader);
       doc.rect(margin, y, pageWidth - margin * 2, 8, "F");
       doc.setTextColor(...white);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(7);
+      doc.setFontSize(8);
       Object.values(cols).forEach((col: any) => {
-        const textX = col.align === "right" ? col.x + col.width - 2 : col.align === "center" ? col.x + col.width / 2 : col.x + 2;
+        const textX = col.align === "right" ? col.x + col.width - 3 : col.align === "center" ? col.x + col.width / 2 : col.x + 3;
         doc.text(col.label, textX, y + 5.5, { align: col.align || "left" });
       });
       y += 10;
       doc.setTextColor(...darkText);
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(7.5);
+      doc.setFontSize(8);
     }
 
     // Alternating row background
-    if (index % 2 === 0) {
-      doc.setFillColor(252, 252, 253);
+    if (index % 2 === 1) {
+      doc.setFillColor(...lightBg);
       doc.rect(margin, y - 3, pageWidth - margin * 2, rowHeight, "F");
     }
 
     // Row content
-    doc.setFont("courier", "normal");
-    doc.setFontSize(7);
-    doc.text(producto.codigo || "-", cols.codigo.x + 2, y);
-
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
-    const maxNombreWidth = cols.producto.width - 4;
+    doc.setFontSize(8);
+    doc.setTextColor(...darkText);
+    doc.text(producto.codigo || "-", cols.codigo.x + 3, y);
+
+    // Product name with truncation
+    const maxNombreWidth = cols.producto.width - 6;
     let nombreDisplay = producto.nombre;
     if (doc.getTextWidth(nombreDisplay) > maxNombreWidth) {
       while (doc.getTextWidth(nombreDisplay + "...") > maxNombreWidth && nombreDisplay.length > 0) {
@@ -349,82 +310,60 @@ export const generarCotizacionPDF = (datos: DatosCotizacion): string => {
       }
       nombreDisplay += "...";
     }
-    doc.text(nombreDisplay, cols.producto.x + 2, y);
-
-    // Add max quantity and notes if present
-    if (producto.cantidad_maxima || producto.nota_linea) {
-      doc.setFontSize(6);
-      doc.setTextColor(...accentGold);
-      let noteText = "";
-      if (producto.cantidad_maxima) {
-        noteText += `Máx: ${producto.cantidad_maxima.toLocaleString()} ${producto.unidad}`;
-      }
-      if (producto.cantidad_maxima && producto.nota_linea) noteText += " • ";
-      if (producto.nota_linea) {
-        const notaTruncada = producto.nota_linea.length > 30 
-          ? producto.nota_linea.substring(0, 27) + "..." 
-          : producto.nota_linea;
-        noteText += notaTruncada;
-      }
-      doc.text(noteText, cols.producto.x + 2, y + 3);
-      doc.setTextColor(...darkText);
-      doc.setFontSize(7.5);
-    }
+    doc.text(nombreDisplay, cols.producto.x + 3, y);
 
     if (soloPrecios) {
       doc.text(
         `$${producto.precio_unitario.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
-        cols.precio.x + cols.precio.width - 2,
+        cols.precio.x + cols.precio.width - 3,
         y,
         { align: "right" }
       );
     } else {
       const colsTyped = cols as any;
       doc.text(String(producto.cantidad), colsTyped.cantidad.x + colsTyped.cantidad.width / 2, y, { align: "center" });
-      doc.text(producto.unidad, colsTyped.unidad.x + 2, y);
+      doc.text(producto.unidad, colsTyped.unidad.x + 3, y);
       doc.text(
         `$${producto.precio_unitario.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
-        colsTyped.precio.x + colsTyped.precio.width - 2,
+        colsTyped.precio.x + colsTyped.precio.width - 3,
         y,
         { align: "right" }
       );
       doc.text(
         `$${producto.subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
-        colsTyped.subtotal.x + colsTyped.subtotal.width - 2,
+        colsTyped.subtotal.x + colsTyped.subtotal.width - 3,
         y,
         { align: "right" }
       );
     }
 
-    // Bottom border for row
-    doc.setDrawColor(230, 230, 230);
+    // Row bottom line
+    doc.setDrawColor(220, 220, 220);
     doc.setLineWidth(0.1);
-    doc.line(margin, y + 3, pageWidth - margin, y + 3);
+    doc.line(margin, y + 4, pageWidth - margin, y + 4);
 
     y += rowHeight;
   });
 
   y += 5;
 
-  // === TOTALS SECTION (if not solo precios) ===
+  // === TOTALS (if not solo precios) ===
   if (!soloPrecios) {
     const totalsWidth = 70;
     const totalsX = pageWidth - margin - totalsWidth;
 
-    // Subtotal
-    doc.setFontSize(8);
+    doc.setFontSize(9);
     doc.setTextColor(...darkText);
     doc.setFont("helvetica", "normal");
     doc.text("Subtotal:", totalsX, y);
     doc.text(`$${datos.subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, pageWidth - margin, y, { align: "right" });
     y += 5;
 
-    // Impuestos
     doc.text("Impuestos:", totalsX, y);
     doc.text(`$${datos.impuestos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, pageWidth - margin, y, { align: "right" });
     y += 6;
 
-    // Total with elegant styling
+    // Total box
     doc.setFillColor(...brandRed);
     doc.roundedRect(totalsX - 5, y - 4, totalsWidth + 5, 10, 2, 2, "F");
     doc.setTextColor(...white);
@@ -436,90 +375,69 @@ export const generarCotizacionPDF = (datos: DatosCotizacion): string => {
     y += 15;
   }
 
-  // === NOTES SECTION ===
-  if (notasLimpias) {
-    doc.setDrawColor(...accentGold);
-    doc.setLineWidth(0.5);
-    doc.setFillColor(255, 252, 245);
-    doc.roundedRect(margin, y, pageWidth - margin * 2, 16, 2, 2, "FD");
-
-    y += 5;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7);
-    doc.setTextColor(...brandRed);
-    doc.text("OBSERVACIONES:", margin + 4, y);
-
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...darkText);
-    doc.setFontSize(7);
-    const notasLines = doc.splitTextToSize(notasLimpias, pageWidth - margin * 2 - 10);
-    doc.text(notasLines.slice(0, 2), margin + 4, y + 4);
-
-    y += 16;
-  }
-
-  // === TERMS AND CONDITIONS ===
-  if (y > pageHeight - 50) {
+  // === TERMS AND CONDITIONS BOX ===
+  if (y > pageHeight - 55) {
     doc.addPage();
     y = 20;
   }
 
-  y += 3;
-  doc.setDrawColor(...mediumGray);
-  doc.setLineWidth(0.3);
-  doc.roundedRect(margin, y, pageWidth - margin * 2, 28, 2, 2, "S");
-
   y += 5;
+  const termsBoxHeight = 32;
+  doc.setFillColor(...lightBg);
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(margin, y, pageWidth - margin * 2, termsBoxHeight, 2, 2, "FD");
+
+  y += 6;
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7);
-  doc.setTextColor(...brandRed);
+  doc.setFontSize(9);
+  doc.setTextColor(...darkText);
   doc.text("TÉRMINOS Y CONDICIONES", pageWidth / 2, y, { align: "center" });
 
   y += 5;
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(6.5);
-  doc.setTextColor(...mediumGray);
+  doc.setFontSize(7);
+  doc.setTextColor(...grayText);
 
   const terms = [
-    "• Los precios están expresados en pesos mexicanos (MXN) e incluyen impuestos cuando aplique.",
-    "• Esta cotización tiene vigencia hasta la fecha indicada. Los precios pueden variar después de dicha fecha.",
+    "• Los precios están expresados en pesos mexicanos (MXN).",
+    "• Esta cotización tiene vigencia hasta la fecha indicada.",
+    "• Los precios pueden variar sin previo aviso después de la fecha de vigencia.",
     "• Los tiempos de entrega se confirmarán al momento de realizar el pedido.",
-    "• Para hacer válida esta cotización, favor de enviar confirmación por escrito.",
-    "• Sujeto a disponibilidad de existencias al momento de la confirmación del pedido."
+    "• Los precios incluyen impuestos cuando aplique."
   ];
 
   terms.forEach(term => {
-    doc.text(term, margin + 4, y);
-    y += 3.8;
+    doc.text(term, margin + 5, y);
+    y += 4;
   });
 
   // === FOOTER ===
-  y = pageHeight - 18;
+  y = pageHeight - 25;
 
-  // Footer line
-  doc.setDrawColor(...accentGold);
+  // Separator line
+  doc.setDrawColor(...brandRed);
   doc.setLineWidth(0.5);
-  doc.line(margin, y, pageWidth - margin, y);
+  doc.line(margin + 30, y, pageWidth - margin - 30, y);
 
-  y += 5;
+  y += 6;
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.setTextColor(...brandRed);
+  doc.setFontSize(9);
+  doc.setTextColor(...darkText);
   doc.text("ABARROTES LA MANITA S.A. DE C.V.", pageWidth / 2, y, { align: "center" });
 
-  y += 4;
+  y += 5;
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.setTextColor(...mediumGray);
-  doc.text("Tel: (55) 5600-7781  •  Email: 1904@almasa.com.mx  •  www.almasa.com.mx", pageWidth / 2, y, { align: "center" });
+  doc.setFontSize(8);
+  doc.setTextColor(...grayText);
+  doc.text("Email: 1904@almasa.com.mx | Tel: (55) 56-00-77-81", pageWidth / 2, y, { align: "center" });
 
-  y += 4;
+  y += 5;
   doc.setFont("helvetica", "italic");
-  doc.setFontSize(7);
-  doc.setTextColor(...accentGold);
+  doc.setFontSize(8);
+  doc.setTextColor(...brandRed);
   doc.text("Gracias por su preferencia", pageWidth / 2, y, { align: "center" });
 
-  // Return base64 PDF
   return doc.output("datauristring").split(",")[1];
 };
 

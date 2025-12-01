@@ -30,6 +30,7 @@ interface ParsedProduct {
   notas: string | null;
   producto_cotizado_id: string | null;
   cantidad_original_kg?: number; // For warehouse reference
+  match_type?: 'exact' | 'synonym' | 'none'; // For strict validation
 }
 
 interface ParsedSucursal {
@@ -133,7 +134,7 @@ function convertToSellingUnit(
 }
 
 // Parse Lecaroz email - handles cell-per-line structure
-function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotizado[]): { sucursales: ParsedSucursal[], confianza: number } {
+function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotizado[]): { sucursales: ParsedSucursal[], confianza: number, notas_generales?: string } {
   console.log("Lecaroz parser");
   if (!productosCotizados || productosCotizados.length === 0) {
     return { sucursales: [], confianza: 0 };
@@ -166,73 +167,54 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     }
   }
   
-  // Product synonyms mapping
+  // Product synonyms mapping - ONLY these explicit mappings are allowed
   const PRODUCT_SYNONYMS: Record<string, string[]> = {
     'fecula de maiz': ['maizena', 'maicena', 'fecula'],
-    'uva pasa': ['pasas', 'pasa', 'pasitas'],
+    'uva pasa': ['pasas', 'pasa', 'pasitas', 'uva pasas'],
+    'azucar estandar': ['azucar', 'azúcar'],
+    'sal de mesa': ['sal'],
   };
   
-  const findProduct = (text: string): ProductInfo | null => {
+  // Track unmatched products for UI feedback
+  const unmatchedProducts: string[] = [];
+  
+  // DETERMINISTIC MATCHING - Only exact matches or configured synonyms
+  const findProduct = (text: string): { product: ProductInfo | null; matchType: 'exact' | 'synonym' | 'none'; originalName: string } => {
     let normalized = text.toLowerCase().trim();
     let normalizedNoAccents = normalized.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    if (normalized.length < 3) return null;
+    const originalName = text.trim();
     
-    // Check synonyms first - if input matches a synonym, replace with canonical name
+    if (normalized.length < 2) return { product: null, matchType: 'none', originalName };
+    
+    // 1. Check synonyms first - ONLY explicit mappings
     for (const [canonical, synonyms] of Object.entries(PRODUCT_SYNONYMS)) {
-      if (synonyms.some(s => normalizedNoAccents.includes(s))) {
-        console.log(`SYNONYM: "${text}" -> searching for "${canonical}"`);
-        normalizedNoAccents = canonical;
-        normalized = canonical;
-        break;
-      }
-    }
-    
-    // 1. Exact match with accents
-    if (productExact.has(normalized)) {
-      console.log(`MATCH exact: "${text}" -> ${productExact.get(normalized)!.nombre}`);
-      return productExact.get(normalized)!;
-    }
-    
-    // 2. Exact match without accents
-    if (productNoAccents.has(normalizedNoAccents)) {
-      console.log(`MATCH no-accents: "${text}" -> ${productNoAccents.get(normalizedNoAccents)!.nombre}`);
-      return productNoAccents.get(normalizedNoAccents)!;
-    }
-    
-    // 3. Partial match - input contains product name or vice versa
-    for (const [key, product] of productNoAccents) {
-      if (key.includes(normalizedNoAccents) || normalizedNoAccents.includes(key)) {
-        console.log(`MATCH partial: "${text}" -> ${product.nombre}`);
-        return product;
-      }
-    }
-    
-    // 4. Word-based match - find product that matches most words
-    const inputWords = normalizedNoAccents.split(/\s+/).filter(w => w.length > 2);
-    let bestMatch: ProductInfo | null = null;
-    let bestScore = 0;
-    
-    for (const word of inputWords) {
-      const matches = productPartial.get(word);
-      if (matches && matches.length === 1) {
-        // Unique match by word
-        console.log(`MATCH word "${word}": "${text}" -> ${matches[0].nombre}`);
-        return matches[0];
-      }
-    }
-    
-    // 5. Try matching first significant word
-    for (const word of inputWords) {
-      if (word.length > 4) {
-        const matches = productPartial.get(word);
-        if (matches && matches.length > 0) {
-          console.log(`MATCH first-word "${word}": "${text}" -> ${matches[0].nombre}`);
-          return matches[0];
+      if (synonyms.some(s => normalizedNoAccents === s || normalizedNoAccents.includes(s))) {
+        // Look for the canonical product
+        if (productNoAccents.has(canonical)) {
+          console.log(`MATCH SYNONYM: "${text}" -> "${canonical}" -> ${productNoAccents.get(canonical)!.nombre}`);
+          return { product: productNoAccents.get(canonical)!, matchType: 'synonym', originalName };
         }
       }
     }
     
-    return null;
+    // 2. Exact match with accents
+    if (productExact.has(normalized)) {
+      console.log(`MATCH EXACT: "${text}" -> ${productExact.get(normalized)!.nombre}`);
+      return { product: productExact.get(normalized)!, matchType: 'exact', originalName };
+    }
+    
+    // 3. Exact match without accents
+    if (productNoAccents.has(normalizedNoAccents)) {
+      console.log(`MATCH EXACT (no accents): "${text}" -> ${productNoAccents.get(normalizedNoAccents)!.nombre}`);
+      return { product: productNoAccents.get(normalizedNoAccents)!, matchType: 'exact', originalName };
+    }
+    
+    // 4. NO FUZZY MATCHING - If no exact match, return null and log for review
+    console.log(`NO MATCH: "${text}" - requires manual selection`);
+    if (!unmatchedProducts.includes(originalName)) {
+      unmatchedProducts.push(originalName);
+    }
+    return { product: null, matchType: 'none', originalName };
   };
   
   const text = stripHtmlFast(emailBody);
@@ -244,6 +226,8 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
   const results = new Map<string, Map<string, ParsedProduct>>();
   let currentBranch: string | null = null;
   let pendingProduct: ProductInfo | null = null;
+  let pendingProductOriginalName: string | null = null;
+  let pendingMatchType: 'exact' | 'synonym' | 'none' | null = null;
   
   // Branch pattern: "1 LAGO", "3 LAFAYETTE", "12 AGRICOLA ORIENTAL"
   const branchPattern = /^(\d{1,3})\s+([A-Z][A-Z\s]*[A-Z]?)$/i;
@@ -285,22 +269,31 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     
     // Try to match product name - lines starting with letters, not unit names
     if (/^[A-Za-zÀ-ÿ]/.test(line) && !/^(KILOS?|PIEZAS?|BULTOS?|CAJAS?|DE \d|TOTAL)/i.test(line)) {
-      const product = findProduct(line);
-      if (product) {
-        pendingProduct = product;
+      const match = findProduct(line);
+      if (match.product) {
+        pendingProduct = match.product;
+        pendingProductOriginalName = match.originalName;
+        pendingMatchType = match.matchType;
         continue;
+      } else if (match.matchType === 'none' && match.originalName.length > 3) {
+        // Track unmatched product for later - store with null product
+        pendingProduct = null;
+        pendingProductOriginalName = match.originalName;
+        pendingMatchType = 'none';
       }
     }
     
     // Try to get quantity - number possibly followed by unit
-    if (pendingProduct) {
-      const qtyMatch = line.match(/^([\d,\.]+)\s*(KILOS?|PIEZAS?|BULTOS?|CAJAS?|BALONES?|SACOS?)?$/i);
-      if (qtyMatch) {
-        const rawQty = parseFloat(qtyMatch[1].replace(/,/g, ''));
-        const emailUnit = (qtyMatch[2] || 'KILOS').toUpperCase(); // Default to KILOS if not specified
+    const qtyMatch = line.match(/^([\d,\.]+)\s*(KILOS?|PIEZAS?|BULTOS?|CAJAS?|BALONES?|SACOS?)?$/i);
+    if (qtyMatch && (pendingProduct || pendingMatchType === 'none')) {
+      const rawQty = parseFloat(qtyMatch[1].replace(/,/g, ''));
+      const emailUnit = (qtyMatch[2] || 'KILOS').toUpperCase();
+      
+      if (rawQty > 0 && rawQty < 100000) {
+        const branchProducts = results.get(currentBranch)!;
         
-        if (rawQty > 0 && rawQty < 100000) {
-          // Apply conversion using centralized function - FORCE conversion for Lecaroz
+        if (pendingProduct) {
+          // MATCHED PRODUCT - Apply conversion
           const conversion = convertToSellingUnit(
             rawQty,
             emailUnit,
@@ -309,7 +302,6 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
             true // forceKiloConversion for Lecaroz
           );
           
-          const branchProducts = results.get(currentBranch)!;
           if (branchProducts.has(pendingProduct.id)) {
             branchProducts.get(pendingProduct.id)!.cantidad += conversion.cantidad;
           } else {
@@ -320,11 +312,28 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
               precio_sugerido: null,
               notas: conversion.cantidadOriginalKg ? `${conversion.cantidadOriginalKg} kg` : null,
               producto_cotizado_id: pendingProduct.id,
-              cantidad_original_kg: conversion.cantidadOriginalKg
+              cantidad_original_kg: conversion.cantidadOriginalKg,
+              match_type: pendingMatchType || undefined
             });
           }
-          pendingProduct = null;
+        } else if (pendingProductOriginalName) {
+          // UNMATCHED PRODUCT - Store for manual selection (NO GUESSING)
+          const unmatchedKey = `__unmatched__${pendingProductOriginalName}`;
+          branchProducts.set(unmatchedKey, {
+            nombre_producto: pendingProductOriginalName,
+            cantidad: rawQty, // Keep original quantity, conversion will happen after manual match
+            unidad: emailUnit,
+            precio_sugerido: null,
+            notas: `⚠️ REQUIERE SELECCIÓN MANUAL - ${rawQty} ${emailUnit}`,
+            producto_cotizado_id: null,
+            cantidad_original_kg: rawQty,
+            match_type: 'none'
+          });
         }
+        
+        pendingProduct = null;
+        pendingProductOriginalName = null;
+        pendingMatchType = null;
       }
     }
   }
@@ -346,11 +355,30 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
   
   if (sucursales.length === 0) return { sucursales: [], confianza: 0 };
   
-  // Calculate confidence based on how many products were matched
-  const totalProducts = sucursales.reduce((sum, s) => sum + s.productos.length, 0);
-  const confidence = totalProducts > 0 ? Math.min(0.95, 0.7 + (totalProducts / 100) * 0.25) : 0;
+  // DETERMINISTIC VALIDATION - Count exact matches vs unmatched
+  let productosCoincidentes = 0;
+  let productosSinCoincidencia = 0;
   
-  return { sucursales, confianza: confidence };
+  for (const suc of sucursales) {
+    for (const prod of suc.productos) {
+      if (prod.producto_cotizado_id && prod.match_type !== 'none') {
+        productosCoincidentes++;
+      } else {
+        productosSinCoincidencia++;
+      }
+    }
+  }
+  
+  console.log(`VALIDATION: ${productosCoincidentes} matched, ${productosSinCoincidencia} unmatched`);
+  
+  // Confidence is now binary: 1.0 if all match, 0 if any don't
+  const confidence = productosSinCoincidencia === 0 ? 1.0 : 0;
+  
+  return { 
+    sucursales, 
+    confianza: confidence,
+    notas_generales: `✓ ${productosCoincidentes} productos coinciden | ⚠️ ${productosSinCoincidencia} requieren selección manual`
+  };
 }
 
 // Build product lookup for AI post-processing

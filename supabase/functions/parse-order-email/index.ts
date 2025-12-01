@@ -864,7 +864,22 @@ async function parseWithAI(emailBody: string, emailSubject: string, emailFrom: s
     ).join('\n')}`;
   }
 
-const systemPrompt = `Eres un asistente que extrae productos y cantidades de pedidos por email o PDF.
+const systemPrompt = `Eres un asistente especializado en extraer información de pedidos desde correos electrónicos.
+
+Tu tarea es ÚNICAMENTE identificar productos y cantidades. NO inventes unidades.
+
+⚠️ REGLAS CRÍTICAS SOBRE UNIDADES (0% ERROR PERMITIDO):
+1. Cada producto tiene su unidad FIJA en el sistema: bulto, caja, kilo, pieza, etc.
+2. TÚ SOLO extraes las CANTIDADES numéricas del email
+3. La unidad correcta SIEMPRE viene de la configuración del producto - NUNCA LA INVENTES
+4. NUNCA uses "/kg" a menos que el producto esté configurado con unidad="kilo"
+5. Si un producto dice "Arroz 25 kg" pero su unidad es "bulto", respeta "bulto"
+6. Si un producto dice "Azúcar Refinada 25 kg" pero su unidad es "bulto", respeta "bulto"
+
+CONVERSIONES AUTOMÁTICAS (el sistema las hace):
+- Cliente pide "100 kilos" de "Arroz 25 kg" (bulto) → Extraes "100", sistema convierte a 4 bultos
+- Cliente pide "50 kilos" de "Azúcar 25 kg" (bulto) → Extraes "50", sistema convierte a 2 bultos
+- Cliente pide "96 piezas" de "Piña 12 piezas" (caja) → Extraes "96", sistema convierte a 8 cajas
 
 REGLA CRÍTICA - SEPARACIÓN DE SUCURSALES:
 - Cada sucursal empieza con un ENCABEZADO en formato: "<numero> <NOMBRE_SUCURSAL>"
@@ -874,19 +889,14 @@ REGLA CRÍTICA - SEPARACIÓN DE SUCURSALES:
 - Los productos que siguen a un encabezado pertenecen SOLO a esa sucursal
 - Cuando encuentres un NUEVO encabezado, ese es el inicio de una NUEVA sucursal
 
-FORMATO DE PRODUCTOS:
-- Los productos pueden venir en formato: "<id> <nombre> | <cantidad> (KILOS) | <entregar>"
-- O en líneas separadas: primero el nombre del producto, luego la cantidad
+PRODUCTOS DISPONIBLES CON SUS UNIDADES REALES:
+${productosContext}
 
-REGLAS DE EXTRACCIÓN:
-1. Extrae la cantidad TAL COMO VIENE (en kilos, piezas, etc.)
-2. Indica la unidad del email (KILOS, PIEZAS, CAJAS, etc.)
-3. Usa el producto_cotizado_id EXACTO del catálogo cuando encuentres una coincidencia
-4. La conversión a unidad de venta se hará después automáticamente
+RECUERDA: Extrae SOLO el número de cantidad del email. La unidad ya está definida en cada producto.
+El sistema aplicará automáticamente las conversiones necesarias.
 
 SINÓNIMOS DE PRODUCTOS:
-- "Maizena" o "MAIZENA" = "Fécula de Maíz"
-${productosContext}`;
+- "Maizena" o "MAIZENA" = "Fécula de Maíz"`;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 45000);
@@ -905,11 +915,11 @@ ${productosContext}`;
           type: "function",
           function: {
             name: "extract_order",
-            description: "Extrae productos del pedido con cantidades TAL COMO VIENEN en el email",
+            description: "Extrae productos del pedido. SOLO extrae CANTIDADES numéricas. Las unidades YA están configuradas en cada producto.",
             parameters: {
               type: "object",
               properties: {
-                sucursales: { type: "array", items: { type: "object", properties: { nombre_sucursal: { type: "string" }, fecha_entrega_solicitada: { type: "string" }, productos: { type: "array", items: { type: "object", properties: { nombre_producto: { type: "string" }, cantidad: { type: "number", description: "Cantidad TAL COMO VIENE en el email" }, unidad: { type: "string", description: "Unidad del email: KILOS, PIEZAS, CAJAS, etc." }, precio_sugerido: { type: "number" }, notas: { type: "string" }, producto_cotizado_id: { type: "string", description: "ID exacto del producto del catálogo" } }, required: ["nombre_producto", "cantidad", "unidad"] } } }, required: ["nombre_sucursal", "productos"] } },
+                sucursales: { type: "array", items: { type: "object", properties: { nombre_sucursal: { type: "string" }, fecha_entrega_solicitada: { type: "string" }, productos: { type: "array", items: { type: "object", properties: { nombre_producto: { type: "string" }, cantidad: { type: "number", description: "SOLO el número de cantidad mencionado en el email (sin unidad). Ejemplos: si dice '100 kilos' extrae 100, si dice '50 bultos' extrae 50, si dice '96 piezas' extrae 96. El sistema aplicará las conversiones automáticamente según la unidad configurada del producto." }, unidad: { type: "string", description: "Unidad del email para referencia: KILOS, PIEZAS, CAJAS, etc." }, precio_sugerido: { type: "number" }, notas: { type: "string" }, producto_cotizado_id: { type: "string", description: "ID exacto del producto del catálogo" } }, required: ["nombre_producto", "cantidad", "unidad"] } } }, required: ["nombre_sucursal", "productos"] } },
                 notas_generales: { type: "string" },
                 confianza: { type: "number" }
               },

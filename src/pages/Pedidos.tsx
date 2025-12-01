@@ -17,9 +17,20 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Eye, ShoppingCart, FileText, Link2, Printer, Receipt, Send, CheckCircle2, Clock, BarChart3 } from "lucide-react";
+import { Plus, Search, Eye, ShoppingCart, FileText, Link2, Printer, Receipt, Send, CheckCircle2, Clock, BarChart3, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 import CotizacionesTab from "@/components/cotizaciones/CotizacionesTab";
@@ -59,6 +70,9 @@ const Pedidos = () => {
   const [nuevoPedidoDialogOpen, setNuevoPedidoDialogOpen] = useState(false);
   const [selectedPedidoId, setSelectedPedidoId] = useState<string | null>(null);
   const [pedidoDetalleOpen, setPedidoDetalleOpen] = useState(false);
+  const [selectedPedidos, setSelectedPedidos] = useState<Set<string>>(new Set());
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -130,6 +144,62 @@ const Pedidos = () => {
       p.clientes?.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.cotizacion_origen?.folio.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedPedidos(new Set(filteredPedidos.map(p => p.id)));
+    } else {
+      setSelectedPedidos(new Set());
+    }
+  };
+
+  const handleSelectPedido = (pedidoId: string, checked: boolean) => {
+    const newSelected = new Set(selectedPedidos);
+    if (checked) {
+      newSelected.add(pedidoId);
+    } else {
+      newSelected.delete(pedidoId);
+    }
+    setSelectedPedidos(newSelected);
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedPedidos.size === 0) return;
+    
+    setDeleting(true);
+    try {
+      const ids = Array.from(selectedPedidos);
+      
+      // Delete related records first
+      await supabase.from("pedidos_detalles").delete().in("pedido_id", ids);
+      await supabase.from("entregas").delete().in("pedido_id", ids);
+      
+      // Delete pedidos
+      const { error } = await supabase.from("pedidos").delete().in("id", ids);
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Pedidos eliminados",
+        description: `Se eliminaron ${ids.length} pedido(s) correctamente`,
+      });
+      
+      setSelectedPedidos(new Set());
+      loadPedidos();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "No se pudieron eliminar los pedidos",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
+      setDeleteDialogOpen(false);
+    }
+  };
+
+  const allSelected = filteredPedidos.length > 0 && filteredPedidos.every(p => selectedPedidos.has(p.id));
+  const someSelected = filteredPedidos.some(p => selectedPedidos.has(p.id));
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, any> = {
@@ -386,14 +456,25 @@ const Pedidos = () => {
 
           <TabsContent value="pedidos" className="mt-6 space-y-4">
             <div className="flex justify-between items-center">
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por folio o cliente..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
+              <div className="flex items-center gap-4 flex-1">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar por folio o cliente..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                {selectedPedidos.size > 0 && (
+                  <Button 
+                    variant="destructive" 
+                    onClick={() => setDeleteDialogOpen(true)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Eliminar ({selectedPedidos.size})
+                  </Button>
+                )}
               </div>
               <Button onClick={() => setNuevoPedidoDialogOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
@@ -405,6 +486,13 @@ const Pedidos = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={allSelected}
+                        onCheckedChange={handleSelectAll}
+                        aria-label="Seleccionar todos"
+                      />
+                    </TableHead>
                     <TableHead>Folio</TableHead>
                     <TableHead>Cliente</TableHead>
                     <TableHead>Sucursal</TableHead>
@@ -420,19 +508,26 @@ const Pedidos = () => {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center">
+                      <TableCell colSpan={11} className="text-center">
                         Cargando...
                       </TableCell>
                     </TableRow>
                   ) : filteredPedidos.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center">
+                      <TableCell colSpan={11} className="text-center">
                         No hay pedidos registrados
                       </TableCell>
                     </TableRow>
                   ) : (
                     filteredPedidos.map((pedido) => (
                       <TableRow key={pedido.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedPedidos.has(pedido.id)}
+                            onCheckedChange={(checked) => handleSelectPedido(pedido.id, !!checked)}
+                            aria-label={`Seleccionar ${pedido.folio}`}
+                          />
+                        </TableCell>
                         <TableCell className="font-medium font-mono">{pedido.folio}</TableCell>
                         <TableCell>{pedido.clientes?.nombre || "—"}</TableCell>
                         <TableCell className="text-sm">{pedido.sucursal?.nombre || "—"}</TableCell>
@@ -599,6 +694,29 @@ const Pedidos = () => {
         open={pedidoDetalleOpen}
         onOpenChange={setPedidoDetalleOpen}
       />
+
+      {/* Alert Dialog para confirmar eliminación */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción eliminará permanentemente {selectedPedidos.size} pedido(s) seleccionado(s) 
+              junto con sus detalles y entregas asociadas. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteSelected}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? "Eliminando..." : "Eliminar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 };

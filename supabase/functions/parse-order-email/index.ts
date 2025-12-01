@@ -185,6 +185,9 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     // Almendras - nombre EXACTO de la base de datos
     'almendra non parel 27/30': ['almendra entera', 'almendras', 'almendra natural', 'almendra'],
     
+    // Avellana
+    'avellana sin casacara': ['avellana entera', 'avellana', 'avellanas'],
+    
     // Azúcar
     'azucar estandar': ['azucar', 'azúcar', 'azucar blanca', 'azúcar blanca', 'azucar segunda'],
     'azucar refinada': ['azucar ref', 'azúcar ref'],

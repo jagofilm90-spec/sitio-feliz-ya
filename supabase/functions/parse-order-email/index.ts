@@ -21,6 +21,35 @@ interface ParseOrderRequest {
   productosCotizados?: ProductoCotizado[];
 }
 
+// Strip HTML tags and clean up email body
+function stripHtml(html: string): string {
+  // Remove style and script tags with content
+  let text = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+  text = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+  // Replace table cells/rows with tabs/newlines for structure
+  text = text.replace(/<\/tr>/gi, '\n');
+  text = text.replace(/<\/td>/gi, '\t');
+  text = text.replace(/<\/th>/gi, '\t');
+  text = text.replace(/<th[^>]*>/gi, '');
+  text = text.replace(/<td[^>]*>/gi, '');
+  text = text.replace(/<br\s*\/?>/gi, '\n');
+  text = text.replace(/<p[^>]*>/gi, '\n');
+  text = text.replace(/<\/p>/gi, '\n');
+  // Remove all remaining HTML tags
+  text = text.replace(/<[^>]+>/g, '');
+  // Decode HTML entities
+  text = text.replace(/&nbsp;/g, ' ');
+  text = text.replace(/&amp;/g, '&');
+  text = text.replace(/&lt;/g, '<');
+  text = text.replace(/&gt;/g, '>');
+  text = text.replace(/&quot;/g, '"');
+  // Clean up whitespace
+  text = text.replace(/\t+/g, '\t');
+  text = text.replace(/[ ]+/g, ' ');
+  text = text.replace(/\n\s*\n/g, '\n');
+  return text.trim();
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -34,9 +63,13 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
+    // Clean email body - strip HTML
+    const cleanEmailBody = stripHtml(emailBody);
+    
     console.log("Parsing order email from:", emailFrom);
     console.log("Subject:", emailSubject);
     console.log("Productos cotizados disponibles:", productosCotizados?.length || 0);
+    console.log("Clean email length:", cleanEmailBody.length);
 
     // Construir contexto de productos cotizados para mejor matching
     let productosContext = "";
@@ -75,141 +108,162 @@ ASUNTO: ${emailSubject}
 DE: ${emailFrom}
 
 CONTENIDO:
-${emailBody}
+${cleanEmailBody}
 
 Responde con la información estructurada de los productos y cantidades por sucursal.
 ${productosCotizados && productosCotizados.length > 0 ? 
   'RECUERDA: Usa los nombres de productos de la cotización para normalizar los nombres que el cliente escribió.' : ''}`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "extract_order",
-              description: "Extrae los productos y cantidades del correo de pedido",
-              parameters: {
-                type: "object",
-                properties: {
-                  sucursales: {
-                    type: "array",
-                    description: "Lista de sucursales con sus pedidos",
-                    items: {
-                      type: "object",
-                      properties: {
-                        nombre_sucursal: { 
-                          type: "string",
-                          description: "Nombre de la sucursal o destino de entrega"
-                        },
-                        fecha_entrega_solicitada: {
-                          type: "string",
-                          description: "Fecha de entrega solicitada en formato YYYY-MM-DD si se menciona, null si no"
-                        },
-                        productos: {
-                          type: "array",
-                          items: {
-                            type: "object",
-                            properties: {
-                              nombre_producto: { 
-                                type: "string",
-                                description: "Nombre del producto normalizado (usar nombres de cotización si están disponibles)"
+    console.log("Calling AI gateway...");
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 50000); // 50 second timeout
+    
+    try {
+      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          tools: [
+            {
+              type: "function",
+              function: {
+                name: "extract_order",
+                description: "Extrae los productos y cantidades del correo de pedido",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    sucursales: {
+                      type: "array",
+                      description: "Lista de sucursales con sus pedidos",
+                      items: {
+                        type: "object",
+                        properties: {
+                          nombre_sucursal: { 
+                            type: "string",
+                            description: "Nombre de la sucursal o destino de entrega"
+                          },
+                          fecha_entrega_solicitada: {
+                            type: "string",
+                            description: "Fecha de entrega solicitada en formato YYYY-MM-DD si se menciona, null si no"
+                          },
+                          productos: {
+                            type: "array",
+                            items: {
+                              type: "object",
+                              properties: {
+                                nombre_producto: { 
+                                  type: "string",
+                                  description: "Nombre del producto normalizado (usar nombres de cotización si están disponibles)"
+                                },
+                                cantidad: { 
+                                  type: "number",
+                                  description: "Cantidad solicitada"
+                                },
+                                unidad: { 
+                                  type: "string",
+                                  enum: ["kg", "bulto", "costal", "caja", "pieza", "cubeta", "litro"],
+                                  description: "Unidad de medida"
+                                },
+                                precio_sugerido: {
+                                  type: "number",
+                                  description: "Precio mencionado si existe, null si no"
+                                },
+                                notas: {
+                                  type: "string",
+                                  description: "Notas adicionales sobre el producto si las hay"
+                                },
+                                producto_cotizado_id: {
+                                  type: "string",
+                                  description: "ID del producto de la cotización si hubo match, null si no"
+                                }
                               },
-                              cantidad: { 
-                                type: "number",
-                                description: "Cantidad solicitada"
-                              },
-                              unidad: { 
-                                type: "string",
-                                enum: ["kg", "bulto", "costal", "caja", "pieza", "cubeta", "litro"],
-                                description: "Unidad de medida"
-                              },
-                              precio_sugerido: {
-                                type: "number",
-                                description: "Precio mencionado si existe, null si no"
-                              },
-                              notas: {
-                                type: "string",
-                                description: "Notas adicionales sobre el producto si las hay"
-                              },
-                              producto_cotizado_id: {
-                                type: "string",
-                                description: "ID del producto de la cotización si hubo match, null si no"
-                              }
-                            },
-                            required: ["nombre_producto", "cantidad", "unidad"]
+                              required: ["nombre_producto", "cantidad", "unidad"]
+                            }
                           }
-                        }
-                      },
-                      required: ["nombre_sucursal", "productos"]
+                        },
+                        required: ["nombre_sucursal", "productos"]
+                      }
+                    },
+                    notas_generales: {
+                      type: "string",
+                      description: "Notas generales del pedido si las hay"
+                    },
+                    confianza: {
+                      type: "number",
+                      description: "Nivel de confianza en la extracción de 0 a 1"
                     }
                   },
-                  notas_generales: {
-                    type: "string",
-                    description: "Notas generales del pedido si las hay"
-                  },
-                  confianza: {
-                    type: "number",
-                    description: "Nivel de confianza en la extracción de 0 a 1"
-                  }
-                },
-                required: ["sucursales", "confianza"]
+                  required: ["sucursales", "confianza"]
+                }
               }
             }
-          }
-        ],
-        tool_choice: { type: "function", function: { name: "extract_order" } }
-      }),
-    });
+          ],
+          tool_choice: { type: "function", function: { name: "extract_order" } }
+        }),
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("AI Gateway error:", response.status, errorText);
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("AI Gateway error:", response.status, errorText);
+        
+        if (response.status === 429) {
+          return new Response(JSON.stringify({ error: "Límite de solicitudes excedido, intente más tarde" }), {
+            status: 429,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (response.status === 402) {
+          return new Response(JSON.stringify({ error: "Créditos insuficientes para IA" }), {
+            status: 402,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        throw new Error(`AI Gateway error: ${response.status}`);
+      }
+
+      const aiResponse = await response.json();
+      console.log("AI Response received successfully");
+
+      // Extract the tool call result
+      const toolCall = aiResponse.choices?.[0]?.message?.tool_calls?.[0];
+      if (!toolCall || toolCall.function.name !== "extract_order") {
+        throw new Error("No se pudo extraer la información del pedido");
+      }
+
+      const parsedOrder = JSON.parse(toolCall.function.arguments);
+      console.log("Parsed order - sucursales:", parsedOrder.sucursales?.length || 0);
+
+      return new Response(JSON.stringify({ 
+        success: true, 
+        order: parsedOrder 
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
       
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Límite de solicitudes excedido, intente más tarde" }), {
-          status: 429,
+    } catch (fetchError: unknown) {
+      clearTimeout(timeoutId);
+      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+        console.error("Request timed out");
+        return new Response(JSON.stringify({ error: "La solicitud tardó demasiado, intente de nuevo" }), {
+          status: 504,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Créditos insuficientes para IA" }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      
-      throw new Error(`AI Gateway error: ${response.status}`);
+      throw fetchError;
     }
-
-    const aiResponse = await response.json();
-    console.log("AI Response:", JSON.stringify(aiResponse, null, 2));
-
-    // Extract the tool call result
-    const toolCall = aiResponse.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall || toolCall.function.name !== "extract_order") {
-      throw new Error("No se pudo extraer la información del pedido");
-    }
-
-    const parsedOrder = JSON.parse(toolCall.function.arguments);
-    console.log("Parsed order:", JSON.stringify(parsedOrder, null, 2));
-
-    return new Response(JSON.stringify({ 
-      success: true, 
-      order: parsedOrder 
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
 
   } catch (error) {
     console.error("Error parsing order email:", error);

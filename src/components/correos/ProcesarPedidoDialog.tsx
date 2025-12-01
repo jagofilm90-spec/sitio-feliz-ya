@@ -261,12 +261,30 @@ export default function ProcesarPedidoDialog({
 
       setParsedOrder(data.order);
 
-      // Try to match products - priorizar producto_cotizado_id de la AI
+      // Try to match products and sucursales
       if (data.order && productos) {
         const matchedOrder = { ...data.order };
-        matchedOrder.sucursales = matchedOrder.sucursales.map((suc: ParsedSucursal) => ({
-          ...suc,
-          productos: suc.productos.map((prod: ParsedProduct) => {
+        matchedOrder.sucursales = matchedOrder.sucursales.map((suc: ParsedSucursal) => {
+          // Auto-match sucursal by name
+          let matchedSucursalId = suc.sucursal_id;
+          if (!matchedSucursalId && sucursales && sucursales.length > 0) {
+            const sucursalNormalizada = suc.nombre_sucursal.toLowerCase().trim();
+            const matchedSucursal = sucursales.find(s => {
+              const nombreDb = s.nombre.toLowerCase().trim();
+              // Exact match or partial match
+              return nombreDb === sucursalNormalizada ||
+                     nombreDb.includes(sucursalNormalizada) ||
+                     sucursalNormalizada.includes(nombreDb);
+            });
+            if (matchedSucursal) {
+              matchedSucursalId = matchedSucursal.id;
+            }
+          }
+          
+          return {
+            ...suc,
+            sucursal_id: matchedSucursalId,
+            productos: suc.productos.map((prod: ParsedProduct) => {
             // Primero usar el ID de producto de la cotización si la AI lo identificó
             if (prod.producto_cotizado_id) {
               const matchedByCotizacion = productos.find(p => p.id === prod.producto_cotizado_id);
@@ -302,7 +320,8 @@ export default function ProcesarPedidoDialog({
               aplica_ieps: matched?.aplica_ieps,
             };
           }),
-        }));
+        };
+        });
         setParsedOrder(matchedOrder);
       }
 

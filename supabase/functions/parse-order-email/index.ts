@@ -14,12 +14,19 @@ interface ProductoCotizado {
   kg_por_unidad: number | null;
 }
 
+interface SucursalRegistrada {
+  id: string;
+  nombre: string;
+  codigo_sucursal?: string | null;
+}
+
 interface ParseOrderRequest {
   emailBody: string;
   emailSubject: string;
   emailFrom: string;
   clienteId?: string;
   productosCotizados?: ProductoCotizado[];
+  sucursalesRegistradas?: SucursalRegistrada[]; // Sucursales from database to validate against
 }
 
 interface ParsedProduct {
@@ -134,10 +141,27 @@ function convertToSellingUnit(
 }
 
 // Parse Lecaroz email - handles cell-per-line structure
-function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotizado[]): { sucursales: ParsedSucursal[], confianza: number, notas_generales?: string } {
-  console.log("Lecaroz parser");
+function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotizado[], sucursalesRegistradas?: SucursalRegistrada[]): { sucursales: ParsedSucursal[], confianza: number, notas_generales?: string } {
+  console.log("Lecaroz parser with", sucursalesRegistradas?.length || 0, "registered branches");
   if (!productosCotizados || productosCotizados.length === 0) {
     return { sucursales: [], confianza: 0 };
+  }
+  
+  // Build branch lookup map from registered sucursales for STRICT validation
+  // This map will be used to validate that detected branches actually exist in the database
+  const registeredBranchMap = new Map<string, { id: string, nombre: string }>();
+  if (sucursalesRegistradas && sucursalesRegistradas.length > 0) {
+    for (const suc of sucursalesRegistradas) {
+      // Normalize branch name for matching (uppercase, no extra spaces)
+      const normalizedName = suc.nombre.toUpperCase().trim();
+      registeredBranchMap.set(normalizedName, { id: suc.id, nombre: suc.nombre });
+      // Also add without parenthetical content for partial matching
+      const nameWithoutParens = normalizedName.replace(/\([^)]*\)/g, '').trim();
+      if (nameWithoutParens !== normalizedName) {
+        registeredBranchMap.set(nameWithoutParens, { id: suc.id, nombre: suc.nombre });
+      }
+    }
+    console.log("Registered branch names:", Array.from(registeredBranchMap.keys()).slice(0, 20).join(", "), "...");
   }
   
   // Build product lookup with multiple matching strategies
@@ -357,13 +381,36 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
   let pendingMatchType: 'exact' | 'synonym' | 'none' | 'ignored' | null = null;
   
   // Branch pattern: "199 TEZOZOMOC", "201 LA TROJE (CUAUTITLÁN)", "212 LA LUNA TLALPAN"
-  // STRICT: Only matches lines that are EXACTLY a branch header (no extra content)
-  // Must be: <1-3 digit number> <space> <UPPERCASE branch name> and nothing else
-  const branchPattern = /^(\d{1,3})\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿ\s\(\)\-]+)$/;
+  // Extracts: <1-3 digit number> <space> <branch name>
+  const branchPattern = /^(\d{1,3})\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿa-zà-ÿ\s\(\)\-]+)$/i;
+  const branchPatternPipe = /^(\d{1,3})\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿa-zà-ÿ\s\(\)\-]+?)\s*\|/i;
   
-  // Secondary pattern for pipe-separated format: "199 TEZOZOMOC | ..." 
-  // But only if what comes after is NOT a product quantity pattern
-  const branchPatternPipe = /^(\d{1,3})\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿ\s\(\)\-]+?)\s*\|(?!\s*\d)/;
+  // Helper function to check if a name matches a registered branch
+  const matchRegisteredBranch = (candidateName: string): { id: string, nombre: string } | null => {
+    if (registeredBranchMap.size === 0) return null; // No registered branches to validate against
+    
+    const normalized = candidateName.toUpperCase().trim();
+    
+    // Exact match
+    if (registeredBranchMap.has(normalized)) {
+      return registeredBranchMap.get(normalized)!;
+    }
+    
+    // Match without parenthetical content
+    const withoutParens = normalized.replace(/\([^)]*\)/g, '').trim();
+    if (registeredBranchMap.has(withoutParens)) {
+      return registeredBranchMap.get(withoutParens)!;
+    }
+    
+    // Partial match: check if any registered branch name is contained in the candidate
+    for (const [regName, branchData] of registeredBranchMap.entries()) {
+      if (normalized.includes(regName) || regName.includes(normalized)) {
+        return branchData;
+      }
+    }
+    
+    return null;
+  };
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -376,46 +423,48 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     
     // Check for branch header: "199 TEZOZOMOC", "201 LA TROJE (CUAUTITLÁN)"
     let branchMatch = line.match(branchPattern);
-    let extractedFromPipe = false;
     
     // Try pipe-separated format if main pattern didn't match
     if (!branchMatch) {
       branchMatch = line.match(branchPatternPipe);
-      extractedFromPipe = true;
     }
     
     if (branchMatch) {
       const branchNum = parseInt(branchMatch[1]);
-      let name = branchMatch[2].trim().toUpperCase();
+      const name = branchMatch[2].trim().toUpperCase();
       
-      // Clean up parentheses content for comparison but keep original for display
-      const nameClean = name.replace(/\([^)]*\)/g, '').trim();
+      // STRICT VALIDATION: Branch must exist in registered sucursales
+      // This is the key change - we only accept branches that are in the database
+      const registeredMatch = matchRegisteredBranch(name);
       
-      // STRICT validation for branch headers:
-      // 1. Branch number must be 1-500
-      // 2. Name must be 3-40 chars (branch names like "LAFAYETTE", "TEZOZOMOC")
-      // 3. Name must NOT contain product-related keywords
-      // 4. Name must be all uppercase letters/spaces (branch headers are in bold caps)
-      // 5. Name must NOT end with numbers (product lines often have quantities)
-      const invalidKeywords = /KILO|KILOS|PIEZA|PIEZAS|BULTO|BULTOS|CAJA|CAJAS|TOTAL|ENTREGAR|PRODUCTO|CANTIDAD|LITRO|LITROS|PESO|UNIDAD|CODIGO|PEDIDO|KG|\d$/i;
-      
-      const isValidBranchNum = branchNum >= 1 && branchNum <= 500;
-      const isValidNameLength = nameClean.length >= 3 && nameClean.length <= 40;
-      const startsWithLetter = /^[A-ZÀ-Ÿ]/.test(nameClean);
-      const noInvalidKeywords = !invalidKeywords.test(nameClean);
-      // Branch names are typically short words like LAFAYETTE, TEZOZOMOC, not long product descriptions
-      const hasShortWords = nameClean.split(/\s+/).every(word => word.length <= 20);
-      
-      if (isValidBranchNum && isValidNameLength && startsWithLetter && noInvalidKeywords && hasShortWords) {
-        // Additional check: original line should NOT have been mixed case (products often are)
-        // Branch headers are typically ALL CAPS in the source
-        const originalName = branchMatch[2].trim();
-        const isAllCaps = originalName === originalName.toUpperCase();
+      if (registeredMatch) {
+        // Valid branch - found in registered sucursales
+        const branchKey = `${branchNum} ${name}`;
+        console.log(`VALID BRANCH: "${branchKey}" -> matches registered: "${registeredMatch.nombre}"`);
         
-        if (isAllCaps) {
-          // Use full name including parentheses content as branch identifier
+        currentBranch = branchKey;
+        if (!results.has(currentBranch)) {
+          results.set(currentBranch, new Map());
+          branchOrder.push(currentBranch);
+        }
+        pendingProduct = null;
+        pendingProductOriginalName = null;
+        pendingMatchType = null;
+        continue;
+      } else if (registeredBranchMap.size > 0) {
+        // Branch pattern matched but NOT in registered sucursales - treat as product line
+        console.log(`REJECTED BRANCH: "${branchNum} ${name}" - not in registered sucursales`);
+      } else {
+        // No registered sucursales to validate against - use fallback validation
+        // This is the legacy behavior for when no sucursales are passed
+        const invalidKeywords = /KILO|KILOS|PIEZA|PIEZAS|BULTO|BULTOS|CAJA|CAJAS|TOTAL|ENTREGAR|PRODUCTO|CANTIDAD|LITRO|LITROS|PESO|UNIDAD|CODIGO|PEDIDO|KG|\d$/i;
+        const nameClean = name.replace(/\([^)]*\)/g, '').trim();
+        
+        if (branchNum >= 1 && branchNum <= 500 && 
+            nameClean.length >= 3 && nameClean.length <= 40 && 
+            !invalidKeywords.test(nameClean)) {
           const branchKey = `${branchNum} ${name}`;
-          console.log(`BRANCH DETECTED: "${branchKey}" from line: "${line.substring(0, 60)}..."`);
+          console.log(`BRANCH DETECTED (fallback): "${branchKey}"`);
           
           currentBranch = branchKey;
           if (!results.has(currentBranch)) {
@@ -775,15 +824,15 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    const { emailBody, emailSubject, emailFrom, productosCotizados }: ParseOrderRequest = await req.json();
-    console.log("Parsing from:", emailFrom, "Products:", productosCotizados?.length || 0);
+    const { emailBody, emailSubject, emailFrom, productosCotizados, sucursalesRegistradas }: ParseOrderRequest = await req.json();
+    console.log("Parsing from:", emailFrom, "Products:", productosCotizados?.length || 0, "Registered branches:", sucursalesRegistradas?.length || 0);
 
     let result: { sucursales: ParsedSucursal[], confianza: number, notas_generales?: string };
     const isLecaroz = isLecarozEmail(emailFrom, emailSubject);
 
     if (isLecaroz) {
       console.log("Detected Lecaroz email - will force kg conversion");
-      result = parseLecarozEmail(emailBody, productosCotizados);
+      result = parseLecarozEmail(emailBody, productosCotizados, sucursalesRegistradas);
       if (result.sucursales.length === 0) {
         console.log("Falling back to AI...");
         result = await parseWithAI(emailBody, emailSubject, emailFrom, productosCotizados, true);

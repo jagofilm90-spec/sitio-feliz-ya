@@ -72,24 +72,37 @@ const LECAROZ_BRANCHES = new Set([
 ]);
 
 // Convert quantity from kg/pieces to selling unit
+// IMPORTANT: For Lecaroz, emails ALWAYS come in KILOS even if not explicitly stated
 function convertToSellingUnit(
   cantidadPedida: number,
   unidadEmail: string, // KILOS, PIEZAS, CAJAS, etc.
   unidadVenta: string, // kg, bulto, caja, etc.
-  kgPorUnidad: number | null
+  kgPorUnidad: number | null,
+  forceKiloConversion: boolean = false // For Lecaroz emails, force conversion assuming KILOS
 ): { cantidad: number; cantidadOriginalKg?: number } {
   const unidadVentaLower = unidadVenta.toLowerCase();
-  const unidadEmailLower = unidadEmail.toLowerCase();
+  const unidadEmailLower = (unidadEmail || '').toLowerCase();
+  
+  console.log(`convertToSellingUnit: cantidadPedida=${cantidadPedida}, unidadEmail="${unidadEmail}", unidadVenta="${unidadVenta}", kgPorUnidad=${kgPorUnidad}, forceKilo=${forceKiloConversion}`);
   
   // If product is sold by kg, no conversion needed
   if (unidadVentaLower === 'kg' || unidadVentaLower === 'kilo' || unidadVentaLower === 'kilos') {
+    console.log(`  -> Product sold by kg, no conversion: ${cantidadPedida}`);
     return { cantidad: cantidadPedida };
   }
   
-  // If email is in KILOS and we have kg_por_unidad, convert
-  if ((unidadEmailLower.includes('kilo') || unidadEmailLower === '') && kgPorUnidad && kgPorUnidad > 0) {
-    const cantidadConvertida = Math.round(cantidadPedida / kgPorUnidad);
-    console.log(`CONVERSION: ${cantidadPedida} kg ÷ ${kgPorUnidad} kg/unidad = ${cantidadConvertida} ${unidadVenta}`);
+  // If we have kg_por_unidad and should convert (forceKilo OR email says KILOS)
+  const shouldConvertFromKilos = kgPorUnidad && kgPorUnidad > 0 && (
+    forceKiloConversion ||
+    unidadEmailLower === '' ||
+    unidadEmailLower.includes('kilo') ||
+    // AI might return the selling unit but the quantity is still in kg
+    (unidadEmailLower === unidadVentaLower && cantidadPedida > kgPorUnidad * 10) // Heuristic: if qty is suspiciously high
+  );
+  
+  if (shouldConvertFromKilos) {
+    const cantidadConvertida = Math.round(cantidadPedida / kgPorUnidad!);
+    console.log(`  -> CONVERSION: ${cantidadPedida} kg ÷ ${kgPorUnidad} kg/unidad = ${cantidadConvertida} ${unidadVenta}`);
     return { 
       cantidad: cantidadConvertida,
       cantidadOriginalKg: cantidadPedida
@@ -101,20 +114,21 @@ function convertToSellingUnit(
     (unidadEmailLower.includes('caja') && unidadVentaLower === 'caja') ||
     (unidadEmailLower.includes('bulto') && unidadVentaLower === 'bulto') ||
     (unidadEmailLower.includes('saco') && unidadVentaLower === 'bulto') ||
-    (unidadEmailLower.includes('pieza') && unidadVentaLower === 'pieza') ||
     (unidadEmailLower.includes('balon') && unidadVentaLower === 'balón')
   ) {
+    console.log(`  -> Same unit, no conversion: ${cantidadPedida}`);
     return { cantidad: cantidadPedida };
   }
   
   // If email is in PIEZAS and we have piezas_por_unidad (stored in kg_por_unidad for piece-based products)
   if (unidadEmailLower.includes('pieza') && kgPorUnidad && kgPorUnidad > 0) {
     const cantidadConvertida = Math.round(cantidadPedida / kgPorUnidad);
-    console.log(`CONVERSION: ${cantidadPedida} piezas ÷ ${kgPorUnidad} piezas/caja = ${cantidadConvertida} ${unidadVenta}`);
+    console.log(`  -> CONVERSION: ${cantidadPedida} piezas ÷ ${kgPorUnidad} piezas/caja = ${cantidadConvertida} ${unidadVenta}`);
     return { cantidad: cantidadConvertida };
   }
   
   // Default: no conversion
+  console.log(`  -> No conversion applied: ${cantidadPedida}`);
   return { cantidad: cantidadPedida };
 }
 
@@ -270,12 +284,13 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
         const emailUnit = (qtyMatch[2] || 'KILOS').toUpperCase(); // Default to KILOS if not specified
         
         if (rawQty > 0 && rawQty < 100000) {
-          // Apply conversion using centralized function
+          // Apply conversion using centralized function - FORCE conversion for Lecaroz
           const conversion = convertToSellingUnit(
             rawQty,
             emailUnit,
             pendingProduct.unidad,
-            pendingProduct.kg_por_unidad
+            pendingProduct.kg_por_unidad,
+            true // forceKiloConversion for Lecaroz
           );
           
           const branchProducts = results.get(currentBranch)!;
@@ -340,7 +355,8 @@ function buildProductLookup(productosCotizados?: ProductoCotizado[]): Map<string
 // Apply unit conversion to AI-parsed results
 function applyConversionsToAIResult(
   result: { sucursales: ParsedSucursal[], confianza: number, notas_generales?: string },
-  productosCotizados?: ProductoCotizado[]
+  productosCotizados?: ProductoCotizado[],
+  isLecaroz: boolean = false
 ): { sucursales: ParsedSucursal[], confianza: number, notas_generales?: string } {
   if (!productosCotizados || productosCotizados.length === 0) return result;
   
@@ -360,13 +376,14 @@ function applyConversionsToAIResult(
       }
       
       if (catalogProduct) {
-        // Apply conversion
+        // Apply conversion - force for Lecaroz since they always send KILOS
         const emailUnit = producto.unidad || 'KILOS';
         const conversion = convertToSellingUnit(
           producto.cantidad,
           emailUnit,
           catalogProduct.unidad,
-          catalogProduct.kg_por_unidad
+          catalogProduct.kg_por_unidad,
+          isLecaroz // forceKiloConversion for Lecaroz
         );
         
         console.log(`AI CONVERSION: ${producto.nombre_producto} - ${producto.cantidad} ${emailUnit} -> ${conversion.cantidad} ${catalogProduct.unidad}`);
@@ -385,7 +402,7 @@ function applyConversionsToAIResult(
   return result;
 }
 
-async function parseWithAI(emailBody: string, emailSubject: string, emailFrom: string, productosCotizados?: ProductoCotizado[]): Promise<{ sucursales: ParsedSucursal[], confianza: number, notas_generales?: string }> {
+async function parseWithAI(emailBody: string, emailSubject: string, emailFrom: string, productosCotizados?: ProductoCotizado[], isLecaroz: boolean = false): Promise<{ sucursales: ParsedSucursal[], confianza: number, notas_generales?: string }> {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
   
@@ -457,7 +474,7 @@ ${productosContext}`;
     const rawResult = JSON.parse(toolCall.function.arguments);
     
     // Apply unit conversions post-processing
-    return applyConversionsToAIResult(rawResult, productosCotizados);
+    return applyConversionsToAIResult(rawResult, productosCotizados, isLecaroz);
   } catch (fetchError: unknown) {
     clearTimeout(timeoutId);
     if (fetchError instanceof Error && fetchError.name === 'AbortError') throw new Error("Timeout - intente de nuevo");
@@ -473,16 +490,17 @@ serve(async (req) => {
     console.log("Parsing from:", emailFrom, "Products:", productosCotizados?.length || 0);
 
     let result: { sucursales: ParsedSucursal[], confianza: number, notas_generales?: string };
+    const isLecaroz = isLecarozEmail(emailFrom, emailSubject);
 
-    if (isLecarozEmail(emailFrom, emailSubject)) {
-      console.log("Detected Lecaroz email");
+    if (isLecaroz) {
+      console.log("Detected Lecaroz email - will force kg conversion");
       result = parseLecarozEmail(emailBody, productosCotizados);
       if (result.sucursales.length === 0) {
         console.log("Falling back to AI...");
-        result = await parseWithAI(emailBody, emailSubject, emailFrom, productosCotizados);
+        result = await parseWithAI(emailBody, emailSubject, emailFrom, productosCotizados, true);
       }
     } else {
-      result = await parseWithAI(emailBody, emailSubject, emailFrom, productosCotizados);
+      result = await parseWithAI(emailBody, emailSubject, emailFrom, productosCotizados, false);
     }
 
     console.log("Result:", result.sucursales.length, "branches");

@@ -87,7 +87,7 @@ export default function ProcesarPedidoDialog({
   const [creating, setCreating] = useState(false);
   const [parsedOrder, setParsedOrder] = useState<ParsedOrder | null>(null);
   const [selectedClienteId, setSelectedClienteId] = useState<string>("");
-  const [selectedCotizacionId, setSelectedCotizacionId] = useState<string>("");
+  const [selectedCotizacionId, setSelectedCotizacionId] = useState<string>("__all__");
   const [error, setError] = useState<string | null>(null);
 
   // Fetch clientes
@@ -179,7 +179,7 @@ export default function ProcesarPedidoDialog({
 
   // Reset cotizacion selection when cliente changes
   useEffect(() => {
-    setSelectedCotizacionId("");
+    setSelectedCotizacionId("__all__");
   }, [selectedClienteId]);
 
   // Auto-detect cliente from email
@@ -206,7 +206,7 @@ export default function ProcesarPedidoDialog({
       // Si hay una cotización seleccionada, usar solo esos productos
       // Si no, usar todas las cotizaciones recientes
       let cotizacionesParaUsar = cotizacionesRecientes || [];
-      if (selectedCotizacionId) {
+      if (selectedCotizacionId && selectedCotizacionId !== "__all__") {
         cotizacionesParaUsar = cotizacionesRecientes?.filter(c => c.id === selectedCotizacionId) || [];
       }
 
@@ -533,7 +533,7 @@ export default function ProcesarPedidoDialog({
                   <SelectValue placeholder="Usar todas las cotizaciones recientes" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Usar todas las cotizaciones recientes</SelectItem>
+                  <SelectItem value="__all__">Usar todas las cotizaciones recientes</SelectItem>
                   {cotizacionesRecientes.map(cot => (
                     <SelectItem key={cot.id} value={cot.id}>
                       {cot.folio} - {cot.nombre || new Date(cot.fecha_creacion).toLocaleDateString('es-MX')}
@@ -541,7 +541,7 @@ export default function ProcesarPedidoDialog({
                   ))}
                 </SelectContent>
               </Select>
-              {selectedCotizacionId && (
+              {selectedCotizacionId && selectedCotizacionId !== "__all__" && (
                 <p className="text-xs text-muted-foreground">
                   Se usarán los productos y precios de esta cotización específica
                 </p>

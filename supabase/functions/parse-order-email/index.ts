@@ -118,10 +118,14 @@ function convertToSellingUnit(
     return { cantidad: cantidadPedida };
   }
   
-  // Special case: If product name contains format "##/" (like "MANGO 24/40" or "PIÑA 12/850")
+  // Special case: If product name contains format "##/##" (like "MANGO 24/40", "PIÑA 24/800gr", "6/2.800kg")
   // Extract the number before "/" as pieces per box and convert
+  // IMPORTANT: Ignore numbers in parentheses like "(8)" - those are informational only
   if (unidadEmailLower.includes('pieza')) {
-    const piecesPerBoxMatch = nombreProducto.match(/\b(\d+)\//);
+    // Match pattern: number / number (with optional units after)
+    // Examples: "24/800gr", "6/2.800kg", "12/850"
+    // Will NOT match: "(8)" because there's no "/" pattern
+    const piecesPerBoxMatch = nombreProducto.match(/(\d+)\s*\/\s*\d+/);
     if (piecesPerBoxMatch) {
       const piecesPerBox = parseInt(piecesPerBoxMatch[1]);
       const cantidadConvertida = Math.round(cantidadPedida / piecesPerBox);

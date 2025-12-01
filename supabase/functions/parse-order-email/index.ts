@@ -57,6 +57,18 @@ function isLecarozEmail(emailFrom: string, emailSubject: string): boolean {
   return emailFrom.includes('lecarozint.com') || emailSubject.toLowerCase().includes('lecaroz');
 }
 
+// Known Lecaroz branch names for validation
+const LECAROZ_BRANCHES = new Set([
+  'LAGO', 'COYOACAN', 'LAFAYETTE', 'NARVARTE', 'XOLA', 'PERISUR', 'UNIVERSIDAD',
+  'POLANCO', 'CONDESA', 'ROMA', 'SATELITE', 'INTERLOMAS', 'SANTA FE', 'CUERNAVACA',
+  'PUEBLA', 'QUERETARO', 'LEON', 'AGUASCALIENTES', 'GUADALAJARA', 'MONTERREY',
+  'TOLUCA', 'MORELIA', 'SAN LUIS', 'VERACRUZ', 'TIJUANA', 'CANCUN', 'MERIDA',
+  'AGRICOLA ORIENTAL', 'AGUILAS', 'KANSAS', 'DALLAS', 'MIAMI', 'HOUSTON', 'CHICAGO',
+  'LINDAVISTA', 'TLALPAN', 'COAPA', 'CHURUBUSCO', 'INSURGENTES', 'REFORMA', 'CENTRAL',
+  'NORTE', 'SUR', 'ORIENTE', 'PONIENTE', 'CENTRO', 'LOMAS', 'PEDREGAL', 'COYUYA',
+  'TERMINAL', 'AEROPUERTO', 'ZONA ROSA', 'DEL VALLE', 'NAPOLES', 'MIXCOAC'
+]);
+
 // Parse Lecaroz email - handles cell-per-line structure
 function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotizado[]): { sucursales: ParsedSucursal[], confianza: number } {
   console.log("Lecaroz parser");
@@ -64,19 +76,38 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     return { sucursales: [], confianza: 0 };
   }
   
-  // Build product lookup
+  // Build product lookup with multiple matching strategies
   const productExact = new Map<string, { id: string, nombre: string, unidad: string }>();
+  const productWords = new Map<string, { id: string, nombre: string, unidad: string }>();
+  
   for (const p of productosCotizados) {
-    productExact.set(p.nombre.toLowerCase().trim(), { id: p.producto_id, nombre: p.nombre, unidad: p.unidad });
+    const key = p.nombre.toLowerCase().trim();
+    productExact.set(key, { id: p.producto_id, nombre: p.nombre, unidad: p.unidad });
+    // Also index by first significant word
+    const words = key.split(/\s+/).filter(w => w.length > 2);
+    if (words.length > 0) {
+      productWords.set(words[0], { id: p.producto_id, nombre: p.nombre, unidad: p.unidad });
+    }
   }
   
   const findProduct = (text: string): { id: string, nombre: string, unidad: string } | null => {
     const normalized = text.toLowerCase().trim();
     if (normalized.length < 3) return null;
+    
+    // Exact match
     if (productExact.has(normalized)) return productExact.get(normalized)!;
+    
+    // Partial match - product name contains input or vice versa
     for (const [key, product] of productExact) {
       if (key.includes(normalized) || normalized.includes(key)) return product;
     }
+    
+    // Word-based match
+    const inputWords = normalized.split(/\s+/).filter(w => w.length > 2);
+    for (const word of inputWords) {
+      if (productWords.has(word)) return productWords.get(word)!;
+    }
+    
     return null;
   };
   
@@ -84,38 +115,52 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
   const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
   console.log("Lines:", lines.length);
   
+  // Use array to preserve order (not Map)
+  const branchOrder: string[] = [];
   const results = new Map<string, Map<string, ParsedProduct>>();
   let currentBranch: string | null = null;
   let pendingProduct: { id: string, nombre: string, unidad: string } | null = null;
   
-  // Branch pattern: "1 LAGO", "3 LAFAYETTE"
-  const branchPattern = /^(\d+)\s+([A-Z][A-Z\s]*[A-Z])$/i;
+  // Branch pattern: "1 LAGO", "3 LAFAYETTE", "12 AGRICOLA ORIENTAL"
+  const branchPattern = /^(\d{1,3})\s+([A-Z][A-Z\s]*[A-Z]?)$/i;
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (line.length < 2) continue;
     
-    // Skip headers
+    // Skip common headers
     const lower = line.toLowerCase();
-    if (lower === 'producto' || lower === 'pedido' || lower === 'entregar') continue;
-    if (lower.includes('total general')) continue;
+    if (lower === 'producto' || lower === 'pedido' || lower === 'entregar' || lower === 'codigo') continue;
+    if (lower.includes('total general') || lower.includes('gran total')) continue;
     
-    // Check for branch header: "1 LAGO"
+    // Check for branch header: "1 LAGO", "12 AGRICOLA ORIENTAL"
     const branchMatch = line.match(branchPattern);
     if (branchMatch) {
+      const branchNum = parseInt(branchMatch[1]);
       const name = branchMatch[2].trim().toUpperCase();
-      if (name.length >= 2 && name.length <= 30) {
-        currentBranch = name;
-        if (!results.has(currentBranch)) results.set(currentBranch, new Map());
-        pendingProduct = null;
-        continue;
+      
+      // Validate: must be a reasonable branch number and name length
+      if (branchNum >= 1 && branchNum <= 200 && name.length >= 2 && name.length <= 30) {
+        // Check if it looks like a known branch or has typical branch name structure
+        const isKnownBranch = LECAROZ_BRANCHES.has(name);
+        const looksLikeBranch = /^[A-Z][A-Z\s]{1,25}$/.test(name) && !name.match(/^\d/) && !name.match(/KILO|PIEZA|BULTO|CAJA|TOTAL/i);
+        
+        if (isKnownBranch || looksLikeBranch) {
+          currentBranch = name;
+          if (!results.has(currentBranch)) {
+            results.set(currentBranch, new Map());
+            branchOrder.push(currentBranch);
+          }
+          pendingProduct = null;
+          continue;
+        }
       }
     }
     
     if (!currentBranch) continue;
     
-    // Try to match product name
-    if (/^[A-Za-zÀ-ÿ]/.test(line) && !/^(KILOS?|PIEZAS?|BULTOS?|CAJAS?|DE \d)/i.test(line)) {
+    // Try to match product name - lines starting with letters, not unit names
+    if (/^[A-Za-zÀ-ÿ]/.test(line) && !/^(KILOS?|PIEZAS?|BULTOS?|CAJAS?|DE \d|TOTAL)/i.test(line)) {
       const product = findProduct(line);
       if (product) {
         pendingProduct = product;
@@ -123,9 +168,9 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
       }
     }
     
-    // Try to get quantity - look for number followed by KILOS/PIEZAS
+    // Try to get quantity - number possibly followed by unit
     if (pendingProduct) {
-      const qtyMatch = line.match(/^([\d,\.]+)\s*(KILOS?|PIEZAS?)?$/i);
+      const qtyMatch = line.match(/^([\d,\.]+)\s*(KILOS?|PIEZAS?|BULTOS?|CAJAS?)?$/i);
       if (qtyMatch) {
         const qty = parseFloat(qtyMatch[1].replace(/,/g, ''));
         if (qty > 0 && qty < 100000) {
@@ -148,18 +193,28 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     }
   }
   
+  // Build result in original order (not alphabetically)
   const sucursales: ParsedSucursal[] = [];
-  for (const [name, products] of results) {
-    const arr = Array.from(products.values());
-    if (arr.length > 0) {
-      sucursales.push({ nombre_sucursal: name, fecha_entrega_solicitada: null, productos: arr });
+  for (const name of branchOrder) {
+    const products = results.get(name);
+    if (products && products.size > 0) {
+      sucursales.push({ 
+        nombre_sucursal: name, 
+        fecha_entrega_solicitada: null, 
+        productos: Array.from(products.values()) 
+      });
     }
   }
-  sucursales.sort((a, b) => a.nombre_sucursal.localeCompare(b.nombre_sucursal));
+  
   console.log("Branches:", sucursales.length);
   
   if (sucursales.length === 0) return { sucursales: [], confianza: 0 };
-  return { sucursales, confianza: 0.90 };
+  
+  // Calculate confidence based on how many products were matched
+  const totalProducts = sucursales.reduce((sum, s) => sum + s.productos.length, 0);
+  const confidence = totalProducts > 0 ? Math.min(0.95, 0.7 + (totalProducts / 100) * 0.25) : 0;
+  
+  return { sucursales, confianza: confidence };
 }
 
 async function parseWithAI(emailBody: string, emailSubject: string, emailFrom: string, productosCotizados?: ProductoCotizado[]): Promise<{ sucursales: ParsedSucursal[], confianza: number, notas_generales?: string }> {

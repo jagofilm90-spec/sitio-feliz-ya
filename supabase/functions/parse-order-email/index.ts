@@ -89,6 +89,49 @@ function convertToSellingUnit(
     return { cantidad: cantidadPedida };
   }
   
+  // CRITICAL: Special logic for canned products (piña, mango)
+  // Rules:
+  // 1. Applies only to products containing "PIÑA"/"PINA" or "MANGO" (case-insensitive)
+  // 2. Product must be sold by CAJA (unidad_venta = "caja")
+  // 3. Product name must contain pattern X/xxxgr or X/xxkg (e.g., 12/850gr, 24/800gr, 6/2.800kg)
+  // 4. Number before "/" = pieces per box (NOT the number in parentheses like "(12)")
+  // 5. Lecaroz always sends these products in PIEZAS (never in kilos)
+  // 6. Conversion: cajas = piezas_pdf / piezas_por_caja
+  
+  // Helper: Check if product is piña or mango
+  const esPiñaOMango = (nombre: string): boolean => {
+    const n = nombre.toUpperCase();
+    return n.includes('PIÑA') || n.includes('PINA') || n.includes('MANGO');
+  };
+  
+  // Helper: Extract pieces per box from product name (number before "/" with gr/kg after)
+  // Pattern: "12/850gr", "24/800gr", "6/2.800kg"
+  // Returns null if pattern not found
+  const extractPiecesPerBox = (nombre: string): number | null => {
+    // Match: digits, optional space, /, optional space, digits (with optional comma/dot), optional space, gr or kg
+    // Examples: "12/850gr", "24/800gr", "6/2.800kg", "6 / 2.800 kg"
+    const match = nombre.match(/(\d+)\s*\/\s*\d+(\.|,)?\d*\s*(gr|kg)/i);
+    if (match) {
+      console.log(`  -> Extracted pieces per box: ${match[1]} from "${nombre}"`);
+      return parseInt(match[1]);
+    }
+    return null;
+  };
+  
+  // FIRST: If this is a piña/mango canned product for Lecaroz, ALWAYS treat cantidadPedida as PIEZAS
+  // Even if the unidad leída del PDF/AI dice "KILOS", Lecaroz nunca manda estas latas en kilos
+  if (forceKiloConversion && unidadVentaLower === 'caja' && esPiñaOMango(nombreProducto)) {
+    const piecesPerBox = extractPiecesPerBox(nombreProducto);
+    if (piecesPerBox) {
+      const cajas = cantidadPedida / piecesPerBox;
+      const cajasRedondeadas = Math.round(cajas * 100) / 100; // Round to 2 decimals
+      console.log(`  -> PIÑA/MANGO (FORZADO) CONVERSION: ${cantidadPedida} piezas ÷ ${piecesPerBox} piezas/caja = ${cajasRedondeadas} cajas`);
+      return { cantidad: cajasRedondeadas };
+    } else {
+      console.log(`  -> WARNING: Piña/Mango product without X/Ygr pattern: "${nombreProducto}"`);
+    }
+  }
+  
   // If we have kg_por_unidad and should convert (forceKilo OR email says KILOS)
   const shouldConvertFromKilos = kgPorUnidad && kgPorUnidad > 0 && (
     forceKiloConversion ||
@@ -118,50 +161,7 @@ function convertToSellingUnit(
     return { cantidad: cantidadPedida };
   }
   
-  // CRITICAL: Special logic for canned products (piña, mango)
-  // Rules:
-  // 1. Applies only to products containing "PIÑA"/"PINA" or "MANGO" (case-insensitive)
-  // 2. Product must be sold by CAJA (unidad_venta = "caja")
-  // 3. Product name must contain pattern X/xxxgr or X/xxkg (e.g., 12/850gr, 24/800gr, 6/2.800kg)
-  // 4. Number before "/" = pieces per box (NOT the number in parentheses like "(12)")
-  // 5. Lecaroz always sends these products in PIEZAS
-  // 6. Conversion: cajas = piezas_pdf / piezas_por_caja
-  
-  // Helper: Check if product is piña or mango
-  const esPiñaOMango = (nombre: string): boolean => {
-    const n = nombre.toUpperCase();
-    return n.includes('PIÑA') || n.includes('PINA') || n.includes('MANGO');
-  };
-  
-  // Helper: Extract pieces per box from product name (number before "/" with gr/kg after)
-  // Pattern: "12/850gr", "24/800gr", "6/2.800kg"
-  // Returns null if pattern not found
-  const extractPiecesPerBox = (nombre: string): number | null => {
-    // Match: digits, optional space, /, optional space, digits (with optional comma/dot), optional space, gr or kg
-    // Examples: "12/850gr", "24/800gr", "6/2.800kg", "6 / 2.800 kg"
-    const match = nombre.match(/(\d+)\s*\/\s*\d+(\.|,)?\d*\s*(gr|kg)/i);
-    if (match) {
-      console.log(`  -> Extracted pieces per box: ${match[1]} from "${nombre}"`);
-      return parseInt(match[1]);
-    }
-    return null;
-  };
-  
-  // Apply special logic for piña/mango canned products
-  if (unidadEmailLower.includes('pieza') && unidadVentaLower === 'caja' && esPiñaOMango(nombreProducto)) {
-    const piecesPerBox = extractPiecesPerBox(nombreProducto);
-    if (piecesPerBox) {
-      const cajas = cantidadPedida / piecesPerBox;
-      const cajasRedondeadas = Math.round(cajas * 100) / 100; // Round to 2 decimals
-      console.log(`  -> PIÑA/MANGO CONVERSION: ${cantidadPedida} piezas ÷ ${piecesPerBox} piezas/caja = ${cajasRedondeadas} cajas`);
-      return { cantidad: cajasRedondeadas };
-    } else {
-      console.log(`  -> WARNING: Piña/Mango product without X/Ygr pattern: "${nombreProducto}"`);
-    }
-  }
-  
-  // General case: If email in PIEZAS and product name contains format "##/##"
-  // (for other products like mango/piña without explicit gr/kg suffix)
+  // SECOND: Generic PIEZAS -> unidad_venta conversion for other products
   if (unidadEmailLower.includes('pieza')) {
     const piecesPerBoxMatch = nombreProducto.match(/(\d+)\s*\/\s*\d+/);
     if (piecesPerBoxMatch) {

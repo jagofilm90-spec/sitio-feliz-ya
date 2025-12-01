@@ -118,9 +118,9 @@ function convertToSellingUnit(
     return null;
   };
   
-  // FIRST: If this is a piña/mango canned product and la unidad leída del PDF es PIEZAS,
-  // SIEMPRE tratar cantidadPedida como PIEZAS y convertir a CAJAS usando el número antes del " / "
-  if (unidadEmailLower.includes('pieza') && esPiñaOMango(nombreProducto)) {
+  // FIRST: If this is a piña/mango canned product y sabemos que viene de Lecaroz,
+  // TRATAR SIEMPRE cantidadPedida como PIEZAS (aunque la unidad leída sea KILOS)
+  if ((unidadEmailLower.includes('pieza') || forceKiloConversion) && esPiñaOMango(nombreProducto)) {
     const piecesPerBox = extractPiecesPerBox(nombreProducto);
     if (piecesPerBox) {
       const cajas = cantidadPedida / piecesPerBox;

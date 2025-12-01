@@ -370,10 +370,10 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
   let pendingProductOriginalName: string | null = null;
   let pendingMatchType: 'exact' | 'synonym' | 'none' | 'ignored' | null = null;
   
-  // Branch pattern: "199 TEZOZOMOC", "201 LA TROJE (CUAUTITLÁN)", "212 LA LUNA TLALPAN"
-  // Extracts: <1-3 digit number> <space> <branch name>
-  const branchPattern = /^(\d{1,3})\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿa-zà-ÿ\s\(\)\-]+)$/i;
-  const branchPatternPipe = /^(\d{1,3})\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿa-zà-ÿ\s\(\)\-]+?)\s*\|/i;
+  // Branch pattern: "199 TEZOZOMOC", "201 LA TROJE (CUAUTITLÁN)", "212 LA LUNA TLALPAN", "52 PEÑON 2"
+  // Extracts: <1-3 digit number> <space> <branch name (can include numbers)>
+  const branchPattern = /^(\d{1,3})\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿa-zà-ÿ0-9\s\(\)\-]+)$/i;
+  const branchPatternPipe = /^(\d{1,3})\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿa-zà-ÿ0-9\s\(\)\-]+?)\s*\|/i;
   
   // Helper function to check if a name matches a registered branch - STRICT VALIDATION
   // Only returns a match if the candidate EXACTLY matches a registered branch name (case-insensitive)

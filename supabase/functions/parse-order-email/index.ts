@@ -42,6 +42,7 @@ interface ParsedProduct {
 
 interface ParsedSucursal {
   nombre_sucursal: string;
+  sucursal_id?: string; // ID of the registered sucursal from database
   fecha_entrega_solicitada: string | null;
   productos: ParsedProduct[];
 }
@@ -66,18 +67,6 @@ function stripHtmlFast(html: string): string {
 function isLecarozEmail(emailFrom: string, emailSubject: string): boolean {
   return emailFrom.includes('lecarozint.com') || emailSubject.toLowerCase().includes('lecaroz');
 }
-
-// Known Lecaroz branch names for validation
-const LECAROZ_BRANCHES = new Set([
-  'LAGO', 'COYOACAN', 'LAFAYETTE', 'NARVARTE', 'XOLA', 'PERISUR', 'UNIVERSIDAD',
-  'POLANCO', 'CONDESA', 'ROMA', 'SATELITE', 'INTERLOMAS', 'SANTA FE', 'CUERNAVACA',
-  'PUEBLA', 'QUERETARO', 'LEON', 'AGUASCALIENTES', 'GUADALAJARA', 'MONTERREY',
-  'TOLUCA', 'MORELIA', 'SAN LUIS', 'VERACRUZ', 'TIJUANA', 'CANCUN', 'MERIDA',
-  'AGRICOLA ORIENTAL', 'AGUILAS', 'KANSAS', 'DALLAS', 'MIAMI', 'HOUSTON', 'CHICAGO',
-  'LINDAVISTA', 'TLALPAN', 'COAPA', 'CHURUBUSCO', 'INSURGENTES', 'REFORMA', 'CENTRAL',
-  'NORTE', 'SUR', 'ORIENTE', 'PONIENTE', 'CENTRO', 'LOMAS', 'PEDREGAL', 'COYUYA',
-  'TERMINAL', 'AEROPUERTO', 'ZONA ROSA', 'DEL VALLE', 'NAPOLES', 'MIXCOAC'
-]);
 
 // Convert quantity from kg/pieces to selling unit
 // IMPORTANT: For Lecaroz, emails ALWAYS come in KILOS even if not explicitly stated
@@ -387,34 +376,40 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
   const branchPatternPipe = /^(\d{1,3})\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿa-zà-ÿ\s\(\)\-]+?)\s*\|/i;
   
   // Helper function to check if a name matches a registered branch - STRICT VALIDATION
-  // Only returns a match if the candidate EXACTLY matches a registered branch name
+  // Only returns a match if the candidate EXACTLY matches a registered branch name (case-insensitive)
+  // This prevents products like "AVENA" or "AZÚCAR" from being detected as branches
   const matchRegisteredBranch = (candidateName: string): { id: string, nombre: string } | null => {
     if (registeredBranchMap.size === 0) return null; // No registered branches to validate against
     
     const normalized = candidateName.toUpperCase().trim();
     
-    // 1. Exact match - highest priority
+    // 1. Exact match - highest priority (case-insensitive)
     if (registeredBranchMap.has(normalized)) {
+      console.log(`✓ EXACT MATCH: "${candidateName}" -> "${registeredBranchMap.get(normalized)!.nombre}"`);
       return registeredBranchMap.get(normalized)!;
     }
     
     // 2. Match without parenthetical content from the candidate
     const withoutParens = normalized.replace(/\([^)]*\)/g, '').trim();
     if (withoutParens !== normalized && registeredBranchMap.has(withoutParens)) {
+      console.log(`✓ MATCH WITHOUT PARENS: "${candidateName}" -> "${registeredBranchMap.get(withoutParens)!.nombre}"`);
       return registeredBranchMap.get(withoutParens)!;
     }
     
-    // 3. Check if a registered branch name (without parens) matches
+    // 3. Check if a registered branch name (without parens) matches the candidate
     for (const [regName, branchData] of registeredBranchMap.entries()) {
       const regNameClean = regName.replace(/\([^)]*\)/g, '').trim();
-      // Only match if the ENTIRE name matches (not partial)
+      // Only match if the ENTIRE name matches (not partial - prevents "AVENA" matching "AVENA BRANCH")
       if (normalized === regNameClean || withoutParens === regNameClean) {
+        console.log(`✓ MATCH CLEAN NAME: "${candidateName}" -> "${branchData.nombre}"`);
         return branchData;
       }
     }
     
-    // NO PARTIAL MATCHING - This was causing false positives
-    // If no exact match found, return null to reject this as a branch
+    // NO PARTIAL MATCHING OR FUZZY MATCHING
+    // If no exact case-insensitive match found, return null to reject this as a branch
+    // This prevents product names like "AVENA", "AZÚCAR" from being detected as branches
+    console.log(`✗ NO MATCH: "${candidateName}" - not found in registered sucursales`);
     return null;
   };
   
@@ -439,30 +434,42 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
       const branchNum = parseInt(branchMatch[1]);
       const name = branchMatch[2].trim().toUpperCase();
       
-      // STRICT VALIDATION: Branch must exist in registered sucursales
-      // This is the key change - we only accept branches that are in the database
+      // CRITICAL: STRICT VALIDATION against registered sucursales database
+      // This prevents products or invalid names from being detected as branches
       const registeredMatch = matchRegisteredBranch(name);
       
       if (registeredMatch) {
-        // Valid branch - found in registered sucursales
+        // ✓ VALID BRANCH - Found in registered sucursales from database
         const branchKey = `${branchNum} ${name}`;
-        console.log(`VALID BRANCH: "${branchKey}" -> matches registered: "${registeredMatch.nombre}"`);
+        console.log(`✓ VALID BRANCH DETECTED: "${branchKey}" -> registered as "${registeredMatch.nombre}" (ID: ${registeredMatch.id})`);
         
         currentBranch = branchKey;
         if (!results.has(currentBranch)) {
           results.set(currentBranch, new Map());
           branchOrder.push(currentBranch);
+          // Store sucursal_id for later use
+          results.get(currentBranch)!.set('__sucursal_id__', { 
+            nombre_producto: '__metadata__',
+            cantidad: 0,
+            unidad: '',
+            precio_sugerido: null,
+            notas: null,
+            producto_cotizado_id: registeredMatch.id,
+            match_type: 'exact'
+          });
         }
         pendingProduct = null;
         pendingProductOriginalName = null;
         pendingMatchType = null;
         continue;
       } else if (registeredBranchMap.size > 0) {
-        // Branch pattern matched but NOT in registered sucursales - treat as product line
-        console.log(`REJECTED BRANCH: "${branchNum} ${name}" - not in registered sucursales`);
+        // ✗ REJECTED - Branch pattern matched but NOT in registered sucursales
+        // This line should be treated as a product, not a branch header
+        console.log(`✗ REJECTED AS BRANCH: "${branchNum} ${name}" - not found in ${registeredBranchMap.size} registered sucursales`);
+        // Continue to product parsing - this line might be a product
       } else {
-        // No registered sucursales to validate against - use fallback validation
-        // This is the legacy behavior for when no sucursales are passed
+        // FALLBACK: No registered sucursales provided - use legacy heuristic validation
+        // This should only happen for non-Lecaroz clients
         const invalidKeywords = /KILO|KILOS|PIEZA|PIEZAS|BULTO|BULTOS|CAJA|CAJAS|TOTAL|ENTREGAR|PRODUCTO|CANTIDAD|LITRO|LITROS|PESO|UNIDAD|CODIGO|PEDIDO|KG|\d$/i;
         const nameClean = name.replace(/\([^)]*\)/g, '').trim();
         
@@ -470,7 +477,7 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
             nameClean.length >= 3 && nameClean.length <= 40 && 
             !invalidKeywords.test(nameClean)) {
           const branchKey = `${branchNum} ${name}`;
-          console.log(`BRANCH DETECTED (fallback): "${branchKey}"`);
+          console.log(`⚠ BRANCH DETECTED (fallback - no validation): "${branchKey}"`);
           
           currentBranch = branchKey;
           if (!results.has(currentBranch)) {
@@ -481,6 +488,8 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
           pendingProductOriginalName = null;
           pendingMatchType = null;
           continue;
+        } else {
+          console.log(`✗ REJECTED BY HEURISTIC: "${branchNum} ${name}" - invalid branch format or keywords`);
         }
       }
     }
@@ -628,11 +637,21 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
   for (const name of branchOrder) {
     const products = results.get(name);
     if (products && products.size > 0) {
-      sucursales.push({ 
-        nombre_sucursal: name, 
-        fecha_entrega_solicitada: null, 
-        productos: Array.from(products.values()) 
-      });
+      // Extract sucursal_id metadata if available
+      const metadata = products.get('__sucursal_id__');
+      const sucursal_id = metadata?.producto_cotizado_id;
+      
+      // Filter out metadata from products list
+      const productList = Array.from(products.values()).filter(p => p.nombre_producto !== '__metadata__');
+      
+      if (productList.length > 0) {
+        sucursales.push({ 
+          nombre_sucursal: name, 
+          sucursal_id: sucursal_id || undefined,
+          fecha_entrega_solicitada: null, 
+          productos: productList
+        });
+      }
     }
   }
   

@@ -55,7 +55,7 @@ interface PedidoConCotizacion {
   clientes: { id: string; nombre: string; email: string | null } | null;
   profiles: { full_name: string } | null;
   cotizacion_origen?: { id: string; folio: string } | null;
-  sucursal?: { nombre: string; email_facturacion: string | null } | null;
+  sucursal?: { nombre: string; email_facturacion: string | null; codigo_sucursal: string | null } | null;
 }
 
 const Pedidos = () => {
@@ -99,7 +99,7 @@ const Pedidos = () => {
           sucursal_id,
           clientes (id, nombre, email),
           profiles:vendedor_id (full_name),
-          cliente_sucursales:sucursal_id (nombre, email_facturacion)
+          cliente_sucursales:sucursal_id (nombre, email_facturacion, codigo_sucursal)
         `)
         .order("fecha_pedido", { ascending: false });
 
@@ -127,6 +127,18 @@ const Pedidos = () => {
         cotizacion_origen: cotizacionMap.get(p.id) || null,
         sucursal: p.cliente_sucursales,
       }));
+
+      // Ordenar por código de sucursal (numérico)
+      pedidosConCotizacion.sort((a, b) => {
+        const codigoA = a.sucursal?.codigo_sucursal || '';
+        const codigoB = b.sucursal?.codigo_sucursal || '';
+        
+        // Extraer números del código
+        const numA = parseInt(codigoA) || 0;
+        const numB = parseInt(codigoB) || 0;
+        
+        return numA - numB;
+      });
 
       setPedidos(pedidosConCotizacion);
     } catch (error: any) {

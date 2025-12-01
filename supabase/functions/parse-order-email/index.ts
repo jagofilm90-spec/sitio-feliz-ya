@@ -66,26 +66,16 @@ function isLecarozEmail(emailFrom: string, emailSubject: string): boolean {
          emailSubject.toLowerCase().includes('lecaroz');
 }
 
-// Parse Lecaroz email directly without AI - much faster and handles all branches
+// Parse Lecaroz email directly without AI - handles HTML table structure
 function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotizado[]): { sucursales: ParsedSucursal[], confianza: number } {
   console.log("Using Lecaroz specialized parser");
   
   const sucursalesMap = new Map<string, ParsedProduct[]>();
   
-  // Clean the email body for parsing
-  const cleanBody = stripHtml(emailBody);
-  const lines = cleanBody.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-  
-  console.log("Lecaroz email lines:", lines.length);
-  
-  // Track current product being processed
-  let currentProduct: string | null = null;
-  let currentProductId: string | null = null;
-  
   // Helper to find matching product from quotation
-  const findMatchingProduct = (productName: string): { id: string | null, nombre: string } => {
+  const findMatchingProduct = (productName: string): { id: string | null, nombre: string, unidad: string } => {
     if (!productosCotizados || productosCotizados.length === 0) {
-      return { id: null, nombre: productName };
+      return { id: null, nombre: productName, unidad: 'bulto' };
     }
     
     const normalizedName = productName.toLowerCase().trim();
@@ -93,184 +83,202 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     // Exact match first
     for (const p of productosCotizados) {
       if (p.nombre.toLowerCase().trim() === normalizedName) {
-        return { id: p.producto_id, nombre: p.nombre };
+        return { id: p.producto_id, nombre: p.nombre, unidad: p.unidad };
       }
     }
     
-    // Partial match
+    // Partial match - check if product name contains or is contained
     for (const p of productosCotizados) {
       const pName = p.nombre.toLowerCase().trim();
       if (pName.includes(normalizedName) || normalizedName.includes(pName)) {
-        return { id: p.producto_id, nombre: p.nombre };
+        return { id: p.producto_id, nombre: p.nombre, unidad: p.unidad };
       }
     }
     
-    // Word match
+    // Word match - at least 50% of significant words match
     const words = normalizedName.split(/\s+/).filter(w => w.length > 3);
     for (const p of productosCotizados) {
       const pName = p.nombre.toLowerCase();
       const matchCount = words.filter(w => pName.includes(w)).length;
-      if (matchCount >= Math.ceil(words.length * 0.5)) {
-        return { id: p.producto_id, nombre: p.nombre };
+      if (words.length > 0 && matchCount >= Math.ceil(words.length * 0.5)) {
+        return { id: p.producto_id, nombre: p.nombre, unidad: p.unidad };
       }
     }
     
-    return { id: null, nombre: productName };
+    return { id: null, nombre: productName, unidad: 'bulto' };
   };
+
+  // Try to parse HTML tables directly
+  // Lecaroz emails have tables where each product has rows for each branch
+  // Format: Product header, then rows with branch name and quantities
   
-  // Parse the tabular data - Lecaroz format has:
-  // Product name in one row, then branch quantities in subsequent rows
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const parts = line.split('\t').map(p => p.trim()).filter(p => p.length > 0);
+  // Extract all table content - look for patterns in HTML
+  const tablePattern = /<table[^>]*>([\s\S]*?)<\/table>/gi;
+  const tables = emailBody.match(tablePattern) || [];
+  
+  console.log("Found", tables.length, "HTML tables");
+  
+  // Process each table looking for order data
+  for (const table of tables) {
+    // Extract rows
+    const rowPattern = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    const rows = table.match(rowPattern) || [];
     
-    if (parts.length === 0) continue;
+    let currentProductName: string | null = null;
+    let currentProductMatch: { id: string | null, nombre: string, unidad: string } | null = null;
     
-    // Check if this is a product header line (usually has "Producto" and "Pedido" and "Entregar")
-    if (line.toLowerCase().includes('producto') && line.toLowerCase().includes('pedido')) {
-      continue; // Skip header
-    }
-    
-    // Check if this looks like a product name (text followed by numeric columns)
-    // Product lines typically have the product name and may have totals
-    const firstPart = parts[0];
-    const isNumeric = (s: string) => /^\d+([.,]\d+)?$/.test(s.replace(/,/g, ''));
-    
-    // If first part is text and not a number, and subsequent parts are numbers, it might be a product
-    if (firstPart && !isNumeric(firstPart) && firstPart.length > 2) {
-      // Check if any remaining parts are numeric (quantities)
-      const hasQuantities = parts.slice(1).some(p => isNumeric(p));
+    for (const row of rows) {
+      // Extract cells (td and th)
+      const cellPattern = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
+      const cells: string[] = [];
+      let cellMatch;
+      while ((cellMatch = cellPattern.exec(row)) !== null) {
+        // Clean the cell content
+        let cellContent = cellMatch[1]
+          .replace(/<[^>]+>/g, '') // Remove HTML tags
+          .replace(/&nbsp;/g, ' ')
+          .replace(/&amp;/g, '&')
+          .replace(/\s+/g, ' ')
+          .trim();
+        cells.push(cellContent);
+      }
       
-      if (!hasQuantities && parts.length <= 3) {
-        // This might be a product name line
-        const match = findMatchingProduct(firstPart);
-        currentProduct = match.nombre;
-        currentProductId = match.id;
+      if (cells.length === 0) continue;
+      
+      // Skip header rows
+      const firstCell = cells[0].toLowerCase();
+      if (firstCell.includes('producto') || firstCell.includes('pedido') || 
+          firstCell.includes('entregar') || firstCell.includes('total') ||
+          firstCell === '' || firstCell === '#') {
         continue;
       }
-    }
-    
-    // Parse branch lines - format is typically: BranchCode BranchName Qty1 Qty2
-    // Or sometimes just: BranchName Qty
-    // Look for lines with numeric values
-    for (let j = 0; j < parts.length; j++) {
-      const part = parts[j];
       
-      // Skip if it's clearly not a branch entry
-      if (part.length < 2) continue;
+      // Check if this might be a product row (has product name)
+      // Product rows usually have the product name in first cell and may span multiple columns
+      const isNumeric = (s: string) => /^\d+([.,]\d+)?$/.test(s.replace(/,/g, '').trim());
       
-      // Check if this part is a number (potential quantity)
-      if (isNumeric(part)) {
-        const qty = parseFloat(part.replace(',', '.'));
-        if (qty > 0 && currentProduct) {
-          // The branch name should be before this number
-          // Could be parts[j-1] or parts[j-2] depending on format
-          let branchName = '';
+      // If we have a cell with text that matches a quoted product, it's a product header
+      if (cells.length >= 1 && !isNumeric(cells[0]) && cells[0].length > 2) {
+        const possibleProduct = cells[0];
+        const match = findMatchingProduct(possibleProduct);
+        
+        // If it matches a quoted product, update current product
+        if (match.id) {
+          currentProductName = match.nombre;
+          currentProductMatch = match;
+          console.log("Found product:", currentProductName);
+        }
+      }
+      
+      // Look for branch + quantity patterns
+      // Typical format: [index] [branch name] [qty pedido] [qty entregar] or similar
+      if (currentProductName && currentProductMatch && cells.length >= 2) {
+        // Find the branch name (text) and quantity (number)
+        let branchName: string | null = null;
+        let quantity: number = 0;
+        
+        for (let i = 0; i < cells.length; i++) {
+          const cell = cells[i].trim();
           
-          // Look backwards for the branch name
-          for (let k = j - 1; k >= 0; k--) {
-            if (!isNumeric(parts[k]) && parts[k].length > 1) {
-              branchName = parts[k];
-              break;
+          // Skip empty cells and index numbers
+          if (!cell || cell === '' || /^\d{1,2}$/.test(cell)) continue;
+          
+          // If cell is text (not purely numeric), it might be a branch name
+          if (!isNumeric(cell) && cell.length >= 2 && !branchName) {
+            // Skip known non-branch values
+            if (!cell.toLowerCase().includes('total') && 
+                !cell.toLowerCase().includes('producto') &&
+                !cell.toLowerCase().includes('pedido')) {
+              branchName = cell.toUpperCase();
             }
           }
           
-          if (branchName && qty > 0) {
-            // Add to sucursales map
-            if (!sucursalesMap.has(branchName)) {
-              sucursalesMap.set(branchName, []);
-            }
-            
-            const existingProducts = sucursalesMap.get(branchName)!;
-            const existingProduct = existingProducts.find(p => p.nombre_producto === currentProduct);
-            
-            if (!existingProduct) {
-              existingProducts.push({
-                nombre_producto: currentProduct,
-                cantidad: qty,
-                unidad: 'bulto',
-                precio_sugerido: null,
-                notas: null,
-                producto_cotizado_id: currentProductId
-              });
+          // If cell is numeric and we have a branch, it's the quantity
+          if (isNumeric(cell) && branchName) {
+            const num = parseFloat(cell.replace(/,/g, ''));
+            if (num > 0 && quantity === 0) {
+              quantity = num;
+              break; // Take first non-zero quantity (usually "Pedido" column)
             }
           }
         }
-        break; // Move to next line after finding a quantity
+        
+        // Add to sucursales map if we found valid data
+        if (branchName && quantity > 0) {
+          if (!sucursalesMap.has(branchName)) {
+            sucursalesMap.set(branchName, []);
+          }
+          
+          const products = sucursalesMap.get(branchName)!;
+          const existing = products.find(p => p.nombre_producto === currentProductName);
+          
+          if (!existing) {
+            products.push({
+              nombre_producto: currentProductName,
+              cantidad: quantity,
+              unidad: currentProductMatch.unidad,
+              precio_sugerido: null,
+              notas: null,
+              producto_cotizado_id: currentProductMatch.id
+            });
+          }
+        }
       }
     }
   }
   
-  // Alternative parsing - look for pattern: number followed by text (branch) followed by numbers (quantities)
-  // This handles: "1 LAGO ... 3 0" type format
+  // If HTML parsing didn't work well, try plain text parsing
   if (sucursalesMap.size === 0) {
-    console.log("Trying alternative Lecaroz parsing...");
+    console.log("HTML parsing found nothing, trying text-based parsing...");
     
-    // Pattern: Look for lines that start with a number (branch index) followed by branch name
-    const branchPattern = /^(\d+)\s+([A-Z][A-Z\s]+)/;
-    const productSections: { product: string, productId: string | null, content: string }[] = [];
+    // Clean the email body for text parsing
+    const cleanBody = stripHtml(emailBody);
+    const lines = cleanBody.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     
-    let currentSection = '';
-    let lastProduct = '';
-    let lastProductId: string | null = null;
+    console.log("Lecaroz email lines:", lines.length);
+    
+    let currentProduct: string | null = null;
+    let currentProductMatch: { id: string | null, nombre: string, unidad: string } | null = null;
     
     for (const line of lines) {
-      // Check if this is a product header (usually all caps or known product name)
-      const trimmedLine = line.trim();
+      const parts = line.split(/\t+/).map(p => p.trim()).filter(p => p.length > 0);
+      if (parts.length === 0) continue;
       
-      // Product names are usually in the quotation list
-      if (productosCotizados) {
-        for (const p of productosCotizados) {
-          if (trimmedLine.toLowerCase().includes(p.nombre.toLowerCase().substring(0, 10))) {
-            if (currentSection && lastProduct) {
-              productSections.push({ product: lastProduct, productId: lastProductId, content: currentSection });
-            }
-            lastProduct = p.nombre;
-            lastProductId = p.producto_id;
-            currentSection = '';
-            break;
-          }
+      const isNumeric = (s: string) => /^\d+([.,]\d+)?$/.test(s.replace(/,/g, '').trim());
+      
+      // Check if first part might be a product name from our quoted products
+      if (parts[0] && !isNumeric(parts[0]) && parts[0].length > 2) {
+        const match = findMatchingProduct(parts[0]);
+        if (match.id) {
+          currentProduct = match.nombre;
+          currentProductMatch = match;
         }
       }
       
-      currentSection += line + '\n';
-    }
-    
-    if (currentSection && lastProduct) {
-      productSections.push({ product: lastProduct, productId: lastProductId, content: currentSection });
-    }
-    
-    // Parse each product section for branches and quantities
-    for (const section of productSections) {
-      const sectionLines = section.content.split('\n');
-      
-      for (const sLine of sectionLines) {
-        // Look for branch patterns like "1 LAGO 3 0" or "LAGO 3"
-        const parts = sLine.split(/\s+/).filter(p => p.length > 0);
-        
+      // Look for branch patterns: text followed by numbers
+      if (currentProduct && currentProductMatch) {
         for (let i = 0; i < parts.length - 1; i++) {
-          const current = parts[i];
-          const next = parts[i + 1];
+          const part = parts[i];
+          const nextPart = parts[i + 1];
           
-          // If current is text (branch name) and next is a number (quantity)
-          if (!/^\d+$/.test(current) && current.length > 2 && /^\d+$/.test(next)) {
-            const qty = parseInt(next);
-            if (qty > 0) {
-              const branchName = current;
-              
+          if (!isNumeric(part) && part.length >= 2 && isNumeric(nextPart)) {
+            const branchName = part.toUpperCase();
+            const qty = parseFloat(nextPart.replace(/,/g, ''));
+            
+            if (qty > 0 && !branchName.toLowerCase().includes('total')) {
               if (!sucursalesMap.has(branchName)) {
                 sucursalesMap.set(branchName, []);
               }
               
               const products = sucursalesMap.get(branchName)!;
-              if (!products.find(p => p.nombre_producto === section.product)) {
+              if (!products.find(p => p.nombre_producto === currentProduct)) {
                 products.push({
-                  nombre_producto: section.product,
+                  nombre_producto: currentProduct,
                   cantidad: qty,
-                  unidad: 'bulto',
+                  unidad: currentProductMatch.unidad,
                   precio_sugerido: null,
                   notas: null,
-                  producto_cotizado_id: section.productId
+                  producto_cotizado_id: currentProductMatch.id
                 });
               }
             }
@@ -292,9 +300,14 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     }
   }
   
-  console.log("Lecaroz parser found", sucursales.length, "branches");
+  console.log("Lecaroz parser found", sucursales.length, "branches with products");
   
-  // If still no results, fall back to AI parsing
+  // Log summary for debugging
+  for (const suc of sucursales) {
+    console.log(`  - ${suc.nombre_sucursal}: ${suc.productos.length} products`);
+  }
+  
+  // If still no good results, fall back to AI parsing
   if (sucursales.length === 0) {
     console.log("Lecaroz parser found no branches, will fall back to AI");
     return { sucursales: [], confianza: 0 };
@@ -302,7 +315,7 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
   
   return { 
     sucursales, 
-    confianza: 0.85
+    confianza: 0.90
   };
 }
 

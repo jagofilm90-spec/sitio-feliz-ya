@@ -356,8 +356,12 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
   let pendingProductOriginalName: string | null = null;
   let pendingMatchType: 'exact' | 'synonym' | 'none' | 'ignored' | null = null;
   
-  // Branch pattern: "1 LAGO", "3 LAFAYETTE", "12 AGRICOLA ORIENTAL"
-  const branchPattern = /^(\d{1,3})\s+([A-Z][A-Z\s]*[A-Z]?)$/i;
+  // Branch pattern: "199 TEZOZOMOC", "201 LA TROJE (CUAUTITLÁN)", "212 LA LUNA TLALPAN"
+  // Matches: <1-3 digit number> <space> <branch name with letters, spaces, parentheses, accents>
+  const branchPattern = /^(\d{1,3})\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿ\s\(\)]+)$/i;
+  
+  // Secondary pattern for pipe-separated format: "199 TEZOZOMOC | ..."
+  const branchPatternPipe = /^(\d{1,3})\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿ\s\(\)]+?)\s*\|/i;
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -368,31 +372,104 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     if (lower === 'producto' || lower === 'pedido' || lower === 'entregar' || lower === 'codigo') continue;
     if (lower.includes('total general') || lower.includes('gran total')) continue;
     
-    // Check for branch header: "1 LAGO", "12 AGRICOLA ORIENTAL"
-    const branchMatch = line.match(branchPattern);
+    // Check for branch header: "199 TEZOZOMOC", "201 LA TROJE (CUAUTITLÁN)"
+    let branchMatch = line.match(branchPattern);
+    let extractedFromPipe = false;
+    
+    // Try pipe-separated format if main pattern didn't match
+    if (!branchMatch) {
+      branchMatch = line.match(branchPatternPipe);
+      extractedFromPipe = true;
+    }
+    
     if (branchMatch) {
       const branchNum = parseInt(branchMatch[1]);
-      const name = branchMatch[2].trim().toUpperCase();
+      let name = branchMatch[2].trim().toUpperCase();
       
-      // Validate: must be a reasonable branch number and name length
-      if (branchNum >= 1 && branchNum <= 200 && name.length >= 2 && name.length <= 30) {
-        // Check if it looks like a known branch or has typical branch name structure
-        const isKnownBranch = LECAROZ_BRANCHES.has(name);
-        const looksLikeBranch = /^[A-Z][A-Z\s]{1,25}$/.test(name) && !name.match(/^\d/) && !name.match(/KILO|PIEZA|BULTO|CAJA|TOTAL/i);
+      // Clean up parentheses content for comparison but keep original for display
+      const nameClean = name.replace(/\([^)]*\)/g, '').trim();
+      
+      // Validate: must be a reasonable branch number (1-500 for flexibility) and name length
+      if (branchNum >= 1 && branchNum <= 500 && name.length >= 2 && name.length <= 50) {
+        // Check if it looks like a branch: starts with letter, no product/unit keywords
+        const looksLikeBranch = /^[A-ZÀ-Ÿ]/.test(nameClean) && 
+          !nameClean.match(/KILO|PIEZA|BULTO|CAJA|TOTAL|ENTREGAR|PRODUCTO|CANTIDAD/i);
         
-        if (isKnownBranch || looksLikeBranch) {
-          currentBranch = name;
+        if (looksLikeBranch) {
+          // Use full name including parentheses content as branch identifier
+          const branchKey = `${branchNum} ${name}`;
+          console.log(`BRANCH DETECTED: "${branchKey}" from line: "${line.substring(0, 60)}..."`);
+          
+          currentBranch = branchKey;
           if (!results.has(currentBranch)) {
             results.set(currentBranch, new Map());
             branchOrder.push(currentBranch);
           }
           pendingProduct = null;
+          pendingProductOriginalName = null;
+          pendingMatchType = null;
           continue;
         }
       }
     }
     
     if (!currentBranch) continue;
+    
+    // Check for pipe-separated product format: "<id> <producto> | <cantidad> (KILOS) | <entregar>"
+    const pipeProductMatch = line.match(/^(\d+)?\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s\(\)]+?)\s*\|\s*([\d,\.]+)\s*(KILOS?|PIEZAS?|LITROS?|BULTOS?|CAJAS?)?\s*\|?\s*([\d,\.]*)?$/i);
+    if (pipeProductMatch) {
+      const productName = pipeProductMatch[2].trim();
+      const cantidad = parseFloat((pipeProductMatch[3] || '0').replace(/,/g, ''));
+      const emailUnit = (pipeProductMatch[4] || 'KILOS').toUpperCase();
+      
+      if (productName.length > 2 && cantidad > 0) {
+        const match = findProduct(productName);
+        
+        if (match.matchType !== 'ignored') {
+          const branchProducts = results.get(currentBranch)!;
+          
+          if (match.product) {
+            // MATCHED PRODUCT - Apply conversion
+            const conversion = convertToSellingUnit(
+              cantidad,
+              emailUnit,
+              match.product.unidad,
+              match.product.kg_por_unidad,
+              true // forceKiloConversion for Lecaroz
+            );
+            
+            if (branchProducts.has(match.product.id)) {
+              branchProducts.get(match.product.id)!.cantidad += conversion.cantidad;
+            } else {
+              branchProducts.set(match.product.id, {
+                nombre_producto: match.product.nombre,
+                cantidad: conversion.cantidad,
+                unidad: match.product.unidad,
+                precio_sugerido: null,
+                notas: conversion.cantidadOriginalKg ? `${conversion.cantidadOriginalKg} kg` : null,
+                producto_cotizado_id: match.product.id,
+                cantidad_original_kg: conversion.cantidadOriginalKg,
+                match_type: match.matchType || undefined
+              });
+            }
+          } else {
+            // UNMATCHED PRODUCT - Store for manual selection
+            const unmatchedKey = `__unmatched__${productName}`;
+            branchProducts.set(unmatchedKey, {
+              nombre_producto: productName,
+              cantidad: cantidad,
+              unidad: emailUnit,
+              precio_sugerido: null,
+              notas: `⚠️ REQUIERE SELECCIÓN MANUAL - ${cantidad} ${emailUnit}`,
+              producto_cotizado_id: null,
+              cantidad_original_kg: cantidad,
+              match_type: 'none'
+            });
+          }
+        }
+        continue;
+      }
+    }
     
     // Try to match product name - lines starting with letters, not unit names
     if (/^[A-Za-zÀ-ÿ]/.test(line) && !/^(KILOS?|PIEZAS?|BULTOS?|CAJAS?|DE \d|TOTAL)/i.test(line)) {
@@ -597,16 +674,28 @@ async function parseWithAI(emailBody: string, emailSubject: string, emailFrom: s
     ).join('\n')}`;
   }
 
-  const systemPrompt = `Eres un asistente que extrae productos y cantidades de pedidos por email.
+const systemPrompt = `Eres un asistente que extrae productos y cantidades de pedidos por email o PDF.
 
-REGLAS IMPORTANTES:
-1. Extrae la cantidad TAL COMO VIENE en el email (en kilos, piezas, etc.)
+REGLA CRÍTICA - SEPARACIÓN DE SUCURSALES:
+- Cada sucursal empieza con un ENCABEZADO en formato: "<numero> <NOMBRE_SUCURSAL>"
+- Ejemplos: "199 TEZOZOMOC", "201 LA TROJE (CUAUTITLÁN)", "212 LA LUNA TLALPAN"
+- CADA ENCABEZADO = UN PEDIDO SEPARADO (una sucursal nueva)
+- NUNCA mezcles productos de diferentes sucursales en el mismo pedido
+- Los productos que siguen a un encabezado pertenecen SOLO a esa sucursal
+- Cuando encuentres un NUEVO encabezado, ese es el inicio de una NUEVA sucursal
+
+FORMATO DE PRODUCTOS:
+- Los productos pueden venir en formato: "<id> <nombre> | <cantidad> (KILOS) | <entregar>"
+- O en líneas separadas: primero el nombre del producto, luego la cantidad
+
+REGLAS DE EXTRACCIÓN:
+1. Extrae la cantidad TAL COMO VIENE (en kilos, piezas, etc.)
 2. Indica la unidad del email (KILOS, PIEZAS, CAJAS, etc.)
 3. Usa el producto_cotizado_id EXACTO del catálogo cuando encuentres una coincidencia
 4. La conversión a unidad de venta se hará después automáticamente
 
 SINÓNIMOS DE PRODUCTOS:
-- "Maizena" o "MAIZENA" = "Fécula de Maíz" (buscar fécula de maíz en el catálogo)
+- "Maizena" o "MAIZENA" = "Fécula de Maíz"
 ${productosContext}`;
 
   const controller = new AbortController();

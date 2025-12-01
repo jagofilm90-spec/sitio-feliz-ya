@@ -71,8 +71,8 @@ serve(async (req) => {
     console.log("Productos cotizados disponibles:", productosCotizados?.length || 0);
     console.log("Original clean email length:", cleanEmailBody.length);
     
-    // Truncate very long emails to prevent timeouts (max ~50K chars to capture more branches)
-    const MAX_EMAIL_LENGTH = 50000;
+    // Truncate very long emails to prevent timeouts (max ~40K chars)
+    const MAX_EMAIL_LENGTH = 40000;
     if (cleanEmailBody.length > MAX_EMAIL_LENGTH) {
       console.log("Truncating email from", cleanEmailBody.length, "to", MAX_EMAIL_LENGTH);
       cleanEmailBody = cleanEmailBody.substring(0, MAX_EMAIL_LENGTH) + "\n\n[... contenido truncado ...]";
@@ -126,7 +126,7 @@ ${productosCotizados && productosCotizados.length > 0 ?
     console.log("Calling AI gateway...");
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 55000); // 55 second timeout (before edge function 60s limit)
+    const timeoutId = setTimeout(() => controller.abort(), 50000); // 50 second timeout
     
     try {
       const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -136,7 +136,7 @@ ${productosCotizados && productosCotizados.length > 0 ?
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-pro", // Pro model handles large contexts better
+          model: "google/gemini-2.5-flash", // Flash model - faster for large contexts
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt }

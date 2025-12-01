@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +28,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Trash2,
+  ChevronDown,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -72,6 +73,9 @@ interface ProcesarPedidoDialogProps {
   onSuccess?: () => void;
 }
 
+// Progressive rendering batch size
+const BATCH_SIZE = 15;
+
 export default function ProcesarPedidoDialog({
   open,
   onOpenChange,
@@ -89,6 +93,7 @@ export default function ProcesarPedidoDialog({
   const [selectedClienteId, setSelectedClienteId] = useState<string>("");
   const [selectedCotizacionId, setSelectedCotizacionId] = useState<string>("__all__");
   const [error, setError] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
 
   // Fetch clientes
   const { data: clientes } = useQuery({
@@ -181,6 +186,13 @@ export default function ProcesarPedidoDialog({
   useEffect(() => {
     setSelectedCotizacionId("__all__");
   }, [selectedClienteId]);
+
+  // Reset visible count when new order is parsed
+  useEffect(() => {
+    if (parsedOrder) {
+      setVisibleCount(BATCH_SIZE);
+    }
+  }, [parsedOrder?.sucursales.length]);
 
   // Auto-detect cliente from email
   useEffect(() => {
@@ -496,6 +508,19 @@ export default function ProcesarPedidoDialog({
     sum + s.productos.filter(p => p.producto_id).length, 0
   ) || 0;
 
+  // Progressive rendering - only show visibleCount sucursales
+  const visibleSucursales = useMemo(() => {
+    if (!parsedOrder) return [];
+    return parsedOrder.sucursales.slice(0, visibleCount);
+  }, [parsedOrder, visibleCount]);
+
+  const hasMoreSucursales = parsedOrder ? visibleCount < parsedOrder.sucursales.length : false;
+  const remainingCount = parsedOrder ? parsedOrder.sucursales.length - visibleCount : 0;
+
+  const loadMoreSucursales = useCallback(() => {
+    setVisibleCount(prev => Math.min(prev + BATCH_SIZE, parsedOrder?.sucursales.length || 0));
+  }, [parsedOrder?.sucursales.length]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh]">
@@ -595,13 +620,16 @@ export default function ProcesarPedidoDialog({
                   )}
                 </div>
 
-                {/* Sucursales */}
-                {parsedOrder.sucursales.map((suc, sucIndex) => (
+                {/* Sucursales - Progressive rendering */}
+                {visibleSucursales.map((suc, sucIndex) => (
                   <Card key={sucIndex}>
                     <CardHeader className="py-3">
                       <CardTitle className="text-base flex items-center gap-2">
                         <Building2 className="h-4 w-4" />
                         {suc.nombre_sucursal}
+                        <Badge variant="outline" className="ml-auto">
+                          {sucIndex + 1}/{parsedOrder?.sucursales.length}
+                        </Badge>
                       </CardTitle>
                       {sucursales && sucursales.length > 0 && (
                         <Select 
@@ -692,6 +720,18 @@ export default function ProcesarPedidoDialog({
                     </CardContent>
                   </Card>
                 ))}
+
+                {/* Load more button */}
+                {hasMoreSucursales && (
+                  <Button 
+                    variant="outline" 
+                    onClick={loadMoreSucursales}
+                    className="w-full"
+                  >
+                    <ChevronDown className="h-4 w-4 mr-2" />
+                    Cargar {Math.min(BATCH_SIZE, remainingCount)} sucursales más ({remainingCount} restantes)
+                  </Button>
+                )}
 
                 {/* Notes */}
                 {parsedOrder.notas_generales && (

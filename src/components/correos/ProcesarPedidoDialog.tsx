@@ -336,46 +336,59 @@ export default function ProcesarPedidoDialog({
             }
           }
           
-          return {
-            ...suc,
-            sucursal_id: matchedSucursalId,
-            productos: suc.productos.map((prod: ParsedProduct) => {
-            // Primero usar el ID de producto de la cotización si la AI lo identificó
-            if (prod.producto_cotizado_id) {
-              const matchedByCotizacion = productos.find(p => p.id === prod.producto_cotizado_id);
-              if (matchedByCotizacion) {
-                // Buscar precio de cotización si existe
-                const precioCotizacion = productosUnicos.find(
-                  (pc: any) => pc.producto_id === prod.producto_cotizado_id
-                )?.precio_cotizado;
-                return {
-                  ...prod,
-                  producto_id: matchedByCotizacion.id,
-                  precio_unitario: precioCotizacion || matchedByCotizacion.precio_venta,
-                  precio_por_kilo: matchedByCotizacion.precio_por_kilo,
-                  kg_por_unidad: matchedByCotizacion.kg_por_unidad,
-                  aplica_iva: matchedByCotizacion.aplica_iva,
-                  aplica_ieps: matchedByCotizacion.aplica_ieps,
-                };
-              }
-            }
-            
-            // Fallback: buscar por nombre similar
-            const matched = productos.find(p => 
-              p.nombre.toLowerCase().includes(prod.nombre_producto.toLowerCase()) ||
-              prod.nombre_producto.toLowerCase().includes(p.nombre.toLowerCase())
-            );
             return {
-              ...prod,
-              producto_id: matched?.id,
-              precio_unitario: matched?.precio_venta || prod.precio_sugerido,
-              precio_por_kilo: matched?.precio_por_kilo,
-              kg_por_unidad: matched?.kg_por_unidad,
-              aplica_iva: matched?.aplica_iva,
-              aplica_ieps: matched?.aplica_ieps,
-            };
-          }),
-        };
+              ...suc,
+              sucursal_id: matchedSucursalId,
+              productos: suc.productos.map((prod: ParsedProduct) => {
+              // Primero usar el ID de producto de la cotización si la AI lo identificó
+              if (prod.producto_cotizado_id) {
+                const matchedByCotizacion = productos.find(p => p.id === prod.producto_cotizado_id);
+                if (matchedByCotizacion) {
+                  // Buscar precio de cotización si existe en las cotizaciones seleccionadas
+                  const precioCotizacion = productosUnicos.find(
+                    (pc: any) => pc.producto_id === prod.producto_cotizado_id
+                  )?.precio_cotizado;
+                  
+                  // CRITICAL FIX: Si no hay precio de cotización, usar precio_venta del producto
+                  // Esto ocurre cuando se seleccionan cotizaciones específicas que no incluyen este producto
+                  const precioFinal = precioCotizacion !== undefined && precioCotizacion !== null 
+                    ? precioCotizacion 
+                    : matchedByCotizacion.precio_venta;
+                  
+                  return {
+                    ...prod,
+                    producto_id: matchedByCotizacion.id,
+                    precio_unitario: precioFinal,
+                    precio_por_kilo: matchedByCotizacion.precio_por_kilo,
+                    kg_por_unidad: matchedByCotizacion.kg_por_unidad,
+                    aplica_iva: matchedByCotizacion.aplica_iva,
+                    aplica_ieps: matchedByCotizacion.aplica_ieps,
+                  };
+                }
+              }
+              
+              // Fallback: buscar por nombre similar
+              const matched = productos.find(p => 
+                p.nombre.toLowerCase().includes(prod.nombre_producto.toLowerCase()) ||
+                prod.nombre_producto.toLowerCase().includes(p.nombre.toLowerCase())
+              );
+              
+              // Si se encontró match por nombre, buscar precio de cotización también
+              const precioCotizacionPorNombre = matched ? productosUnicos.find(
+                (pc: any) => pc.producto_id === matched.id
+              )?.precio_cotizado : undefined;
+              
+              return {
+                ...prod,
+                producto_id: matched?.id,
+                precio_unitario: precioCotizacionPorNombre || matched?.precio_venta || prod.precio_sugerido,
+                precio_por_kilo: matched?.precio_por_kilo,
+                kg_por_unidad: matched?.kg_por_unidad,
+                aplica_iva: matched?.aplica_iva,
+                aplica_ieps: matched?.aplica_ieps,
+              };
+            }),
+          };
         });
         setParsedOrder(matchedOrder);
       }

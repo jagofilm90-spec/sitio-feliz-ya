@@ -190,6 +190,7 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     // Azúcar
     'azucar estandar': ['azucar', 'azúcar', 'azucar blanca', 'azúcar blanca'],
     'azucar refinada': ['azucar', 'azúcar', 'azucar blanca', 'azúcar blanca'],
+    'azucar glass': ['azucar glas', 'azúcar glas', 'azucar glass', 'azúcar glass', 'glass', 'glas'],
     
     // Sal
     'sal de mesa': ['sal', 'sal refinada', 'sal fina'],

@@ -1,0 +1,307 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Package, MapPin, Calendar, Trash2, Check } from "lucide-react";
+import { toast } from "sonner";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+
+export function PedidosAcumulativosManager() {
+  const [selectedPedido, setSelectedPedido] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  // Fetch pedidos acumulativos en borrador
+  const { data: pedidosAcumulativos, isLoading } = useQuery({
+    queryKey: ["pedidos-acumulativos", "borrador"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pedidos_acumulativos")
+        .select(`
+          *,
+          clientes:cliente_id(nombre, codigo),
+          cliente_sucursales:sucursal_id(nombre, direccion)
+        `)
+        .eq("status", "borrador")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Fetch detalles del pedido seleccionado
+  const { data: detalles } = useQuery({
+    queryKey: ["pedidos-acumulativos-detalles", selectedPedido],
+    enabled: !!selectedPedido,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pedidos_acumulativos_detalles")
+        .select(`
+          *,
+          productos:producto_id(codigo, nombre, unidad)
+        `)
+        .eq("pedido_acumulativo_id", selectedPedido);
+
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Mutation para eliminar pedido acumulativo
+  const deleteMutation = useMutation({
+    mutationFn: async (pedidoId: string) => {
+      const { error } = await supabase
+        .from("pedidos_acumulativos")
+        .delete()
+        .eq("id", pedidoId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Pedido acumulativo eliminado");
+      queryClient.invalidateQueries({ queryKey: ["pedidos-acumulativos"] });
+    },
+    onError: (error: any) => {
+      toast.error("Error al eliminar: " + error.message);
+    },
+  });
+
+  // Mutation para generar pedido final
+  const finalizarMutation = useMutation({
+    mutationFn: async (pedidoAcumulativoId: string) => {
+      // Obtener pedido acumulativo y sus detalles
+      const { data: pedidoAcum, error: pedidoError } = await supabase
+        .from("pedidos_acumulativos")
+        .select("*, pedidos_acumulativos_detalles(*)")
+        .eq("id", pedidoAcumulativoId)
+        .single();
+
+      if (pedidoError) throw pedidoError;
+
+      // Obtener ID del usuario actual
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("No authenticated user");
+
+      // Generar folio para el pedido
+      const { data: lastPedido } = await supabase
+        .from("pedidos")
+        .select("folio")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      let newFolioNumber = 1;
+      if (lastPedido?.folio) {
+        const match = lastPedido.folio.match(/PED-(\d+)/);
+        if (match) {
+          newFolioNumber = parseInt(match[1]) + 1;
+        }
+      }
+      const folio = `PED-${String(newFolioNumber).padStart(6, "0")}`;
+
+      // Crear pedido final
+      const { data: newPedido, error: pedidoInsertError } = await supabase
+        .from("pedidos")
+        .insert({
+          folio,
+          cliente_id: pedidoAcum.cliente_id,
+          sucursal_id: pedidoAcum.sucursal_id,
+          vendedor_id: user.id,
+          fecha_pedido: new Date().toISOString(),
+          fecha_entrega_estimada: pedidoAcum.fecha_entrega,
+          subtotal: pedidoAcum.subtotal,
+          impuestos: pedidoAcum.impuestos,
+          total: pedidoAcum.total,
+          notas: pedidoAcum.notas || "Pedido consolidado de Lecaroz",
+          status: "pendiente",
+        })
+        .select()
+        .single();
+
+      if (pedidoInsertError) throw pedidoInsertError;
+
+      // Insertar detalles del pedido
+      const detallesInsert = pedidoAcum.pedidos_acumulativos_detalles.map((det: any) => ({
+        pedido_id: newPedido.id,
+        producto_id: det.producto_id,
+        cantidad: det.cantidad,
+        precio_unitario: det.precio_unitario,
+        subtotal: det.subtotal,
+      }));
+
+      const { error: detallesError } = await supabase
+        .from("pedidos_detalles")
+        .insert(detallesInsert);
+
+      if (detallesError) throw detallesError;
+
+      // Marcar pedido acumulativo como finalizado
+      const { error: updateError } = await supabase
+        .from("pedidos_acumulativos")
+        .update({ status: "finalizado" })
+        .eq("id", pedidoAcumulativoId);
+
+      if (updateError) throw updateError;
+
+      return { pedido: newPedido };
+    },
+    onSuccess: (data) => {
+      toast.success(`Pedido ${data.pedido.folio} generado exitosamente`);
+      queryClient.invalidateQueries({ queryKey: ["pedidos-acumulativos"] });
+      queryClient.invalidateQueries({ queryKey: ["pedidos"] });
+      setSelectedPedido(null);
+    },
+    onError: (error: any) => {
+      toast.error("Error al generar pedido: " + error.message);
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center p-8">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="text-lg font-semibold">Pedidos Acumulativos de Lecaroz</h3>
+          <p className="text-sm text-muted-foreground">
+            Gestiona pedidos en borrador por sucursal
+          </p>
+        </div>
+        <Badge variant="secondary">
+          {pedidosAcumulativos?.length || 0} en borrador
+        </Badge>
+      </div>
+
+      {!pedidosAcumulativos || pedidosAcumulativos.length === 0 ? (
+        <Card>
+          <CardContent className="p-8 text-center text-muted-foreground">
+            No hay pedidos acumulativos en borrador
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4">
+          {pedidosAcumulativos.map((pedido: any) => (
+            <Card key={pedido.id}>
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Package className="h-4 w-4" />
+                      {pedido.clientes?.nombre || "Cliente desconocido"}
+                    </CardTitle>
+                    <CardDescription className="flex items-center gap-4 mt-2">
+                      <span className="flex items-center gap-1">
+                        <MapPin className="h-3 w-3" />
+                        {pedido.cliente_sucursales?.nombre || "Sin sucursal"}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {format(new Date(pedido.fecha_entrega), "dd MMM yyyy", { locale: es })}
+                      </span>
+                    </CardDescription>
+                  </div>
+                  <Badge variant="outline">
+                    {pedido.correos_procesados?.length || 0} correos
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="flex justify-between items-center">
+                  <div className="text-2xl font-bold">
+                    ${pedido.total?.toFixed(2) || "0.00"}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedPedido(pedido.id)}
+                    >
+                      Ver detalles
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => finalizarMutation.mutate(pedido.id)}
+                      disabled={finalizarMutation.isPending}
+                    >
+                      {finalizarMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Check className="h-4 w-4 mr-1" />
+                      )}
+                      Generar pedido final
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => deleteMutation.mutate(pedido.id)}
+                      disabled={deleteMutation.isPending}
+                    >
+                      {deleteMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Dialog para ver detalles */}
+      <Dialog open={!!selectedPedido} onOpenChange={() => setSelectedPedido(null)}>
+        <DialogContent className="max-w-3xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Detalles del Pedido Acumulativo</DialogTitle>
+            <DialogDescription>
+              Productos incluidos en este pedido
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="h-[500px] pr-4">
+            {detalles && detalles.length > 0 ? (
+              <div className="space-y-2">
+                {detalles.map((detalle: any, idx: number) => (
+                  <div key={detalle.id}>
+                    {idx > 0 && <Separator className="my-2" />}
+                    <div className="flex justify-between items-start p-3 bg-muted/50 rounded-lg">
+                      <div className="flex-1">
+                        <div className="font-medium">
+                          {detalle.productos?.codigo} - {detalle.productos?.nombre}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {detalle.cantidad} {detalle.productos?.unidad} × ${detalle.precio_unitario.toFixed(2)}
+                        </div>
+                      </div>
+                      <div className="text-right font-semibold">
+                        ${detalle.subtotal.toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center text-muted-foreground p-8">
+                No hay productos en este pedido
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

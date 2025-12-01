@@ -91,11 +91,18 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
   const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
   console.log("Lines:", lines.length);
   
+  // Log first 30 lines to understand structure
+  console.log("First 30 lines:");
+  for (let i = 0; i < Math.min(30, lines.length); i++) {
+    console.log(`  [${i}]: "${lines[i].substring(0, 100)}"`);
+  }
+  
   const results = new Map<string, Map<string, ParsedProduct>>();
   let currentBranch: string | null = null;
   
-  // Branch header pattern: "3 LAFAYETTE" or "12 DALLAS"
-  const branchHeaderPattern = /^(\d+)\s+([A-Z][A-Z\s]+)$/i;
+  // Branch header patterns - more flexible
+  // "3 LAFAYETTE" or "12DALLAS" or just detecting number + uppercase text
+  const branchHeaderPattern = /^(\d+)\s*([A-Z][A-Z\s]*[A-Z])$/i;
   
   for (const line of lines) {
     if (line.length < 2) continue;

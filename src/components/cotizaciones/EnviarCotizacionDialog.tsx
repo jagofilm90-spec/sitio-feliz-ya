@@ -19,7 +19,7 @@ import ClienteCorreosManager from "@/components/clientes/ClienteCorreosManager";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { logEmailAction } from "@/hooks/useGmailPermisos";
-import logoAlmasa from "@/assets/logo-almasa.png";
+import { jsPDF } from "jspdf";
 
 interface ClienteCorreo {
   id: string;
@@ -38,23 +38,6 @@ interface EnviarCotizacionDialogProps {
   folio: string;
   onSuccess?: () => void;
 }
-
-// Helper to convert image to base64
-const getLogoBase64 = async (): Promise<string> => {
-  try {
-    const response = await fetch(logoAlmasa);
-    const blob = await response.blob();
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  } catch (error) {
-    console.error('Error loading logo:', error);
-    return '';
-  }
-};
 
 // Helper to parse date correctly
 const parseDateLocal = (dateStr: string) => {
@@ -197,145 +180,300 @@ Tel: (55) 56-00-77-81`);
     return { notasLimpias, soloPrecios };
   };
 
-  // Generate HTML for the quotation
-  const generarHTMLCotizacion = async () => {
+  // Generate PDF for the quotation using jsPDF
+  const generarPDFCotizacion = async (): Promise<string> => {
     if (!cotizacion) return "";
 
-    const logoBase64 = await getLogoBase64();
     const { soloPrecios, notasLimpias } = parseNotas(cotizacion.notas);
     
-    const fechaCreacion = format(new Date(cotizacion.fecha_creacion), "dd/MM/yyyy");
-    const fechaVigencia = format(parseDateLocal(cotizacion.fecha_vigencia), "dd/MM/yyyy");
+    const fechaCreacion = format(new Date(cotizacion.fecha_creacion), "dd 'de' MMMM 'de' yyyy", { locale: es });
+    const fechaVigencia = format(parseDateLocal(cotizacion.fecha_vigencia), "dd 'de' MMMM 'de' yyyy", { locale: es });
 
-    const productosHTML = cotizacion.detalles?.map((d: any) => 
-      soloPrecios 
-        ? `<tr>
-            <td style="padding: 8px; border-bottom: 1px solid #ddd; font-family: monospace;">${d.producto?.codigo || '-'}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #ddd;">${d.producto?.nombre || 'Producto'}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">$${d.precio_unitario?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-          </tr>`
-        : `<tr>
-            <td style="padding: 8px; border-bottom: 1px solid #ddd; font-family: monospace;">${d.producto?.codigo || '-'}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #ddd;">${d.producto?.nombre || 'Producto'}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${d.cantidad} ${d.producto?.unidad || ''}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">$${d.precio_unitario?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">$${d.subtotal?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-          </tr>`
-    ).join('') || '';
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "letter",
+    });
 
-    return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Cotización ${cotizacion.folio}</title>
-</head>
-<body style="font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; color: #333;">
-  <!-- Header -->
-  <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #2563eb; padding-bottom: 15px; margin-bottom: 20px;">
-    <div style="display: flex; align-items: center; gap: 15px;">
-      ${logoBase64 ? `<img src="${logoBase64}" alt="ALMASA" style="height: 60px; width: 60px; object-fit: contain;">` : ''}
-      <div>
-        <h1 style="margin: 0; color: #2563eb; font-size: 24px;">ABARROTES LA MANITA</h1>
-        <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">ABARROTES LA MANITA, S.A. DE C.V.</p>
-      </div>
-    </div>
-    <div style="text-align: right;">
-      <div style="background: #2563eb; color: white; padding: 10px 20px; border-radius: 5px; font-size: 18px; font-weight: bold;">
-        COTIZACIÓN
-      </div>
-      <p style="margin: 8px 0 0 0; font-size: 12px;">Folio: <strong>${cotizacion.folio}</strong></p>
-      <p style="margin: 3px 0 0 0; font-size: 12px;">Fecha: ${fechaCreacion}</p>
-    </div>
-  </div>
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 15;
+    let y = 15;
 
-  <!-- Vigencia -->
-  <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 5px; padding: 15px; margin-bottom: 20px;">
-    <p style="margin: 0; font-size: 14px;"><strong>Vigencia de esta cotización:</strong> <span style="color: #2563eb; font-size: 18px; font-weight: bold;">${fechaVigencia}</span></p>
-    ${cotizacion.nombre ? `<p style="margin: 5px 0 0 0; font-size: 12px;">Referencia: ${cotizacion.nombre}</p>` : ''}
-  </div>
+    // Colors
+    const primaryColor: [number, number, number] = [37, 99, 235]; // #2563eb
+    const darkColor: [number, number, number] = [31, 41, 55]; // #1f2937
+    const grayColor: [number, number, number] = [107, 114, 128];
 
-  <!-- Client Info -->
-  <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
-    <table style="width: 100%; font-size: 12px;">
-      <tr>
-        <td style="width: 50%; vertical-align: top;">
-          <p style="margin: 0;"><strong>Cliente:</strong> ${cotizacion.cliente?.nombre}</p>
-          <p style="margin: 3px 0 0 0;"><strong>Código:</strong> ${cotizacion.cliente?.codigo}</p>
-        </td>
-        <td style="width: 50%; vertical-align: top;">
-          ${cotizacion.sucursal ? `
-            <p style="margin: 0;"><strong>Sucursal:</strong> ${cotizacion.sucursal.nombre}</p>
-            ${cotizacion.sucursal.direccion ? `<p style="margin: 3px 0 0 0;"><strong>Dirección:</strong> ${cotizacion.sucursal.direccion}</p>` : ''}
-          ` : ''}
-        </td>
-      </tr>
-    </table>
-  </div>
+    // Header
+    doc.setFontSize(20);
+    doc.setTextColor(...primaryColor);
+    doc.setFont("helvetica", "bold");
+    doc.text("ABARROTES LA MANITA", margin, y);
+    y += 6;
+    doc.setFontSize(9);
+    doc.setTextColor(...grayColor);
+    doc.setFont("helvetica", "normal");
+    doc.text("ABARROTES LA MANITA, S.A. DE C.V.", margin, y);
 
-  <!-- Products Table -->
-  <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px;">
-    <thead>
-      <tr style="background: #1f2937; color: white;">
-        <th style="padding: 10px; text-align: left;">Código</th>
-        <th style="padding: 10px; text-align: left;">Producto</th>
-        ${!soloPrecios ? '<th style="padding: 10px; text-align: center;">Cantidad</th>' : ''}
-        <th style="padding: 10px; text-align: right;">Precio</th>
-        ${!soloPrecios ? '<th style="padding: 10px; text-align: right;">Subtotal</th>' : ''}
-      </tr>
-    </thead>
-    <tbody>
-      ${productosHTML}
-    </tbody>
-  </table>
+    // Cotización badge
+    doc.setFillColor(...primaryColor);
+    doc.roundedRect(pageWidth - 60, 10, 45, 12, 2, 2, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("COTIZACIÓN", pageWidth - 37.5, 18, { align: "center" });
 
-  ${!soloPrecios ? `
-  <!-- Totals -->
-  <div style="display: flex; justify-content: flex-end; margin-bottom: 20px;">
-    <table style="width: 250px; font-size: 14px;">
-      <tr>
-        <td style="padding: 8px; text-align: right;"><strong>Subtotal:</strong></td>
-        <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">$${cotizacion.subtotal?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-      </tr>
-      <tr>
-        <td style="padding: 8px; text-align: right;"><strong>Impuestos:</strong></td>
-        <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">$${cotizacion.impuestos?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-      </tr>
-      <tr style="background: #1f2937; color: white;">
-        <td style="padding: 8px; text-align: right;"><strong>Total:</strong></td>
-        <td style="padding: 8px; text-align: right;"><strong>$${cotizacion.total?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</strong></td>
-      </tr>
-    </table>
-  </div>
-  ` : ''}
+    // Folio and date
+    doc.setTextColor(...darkColor);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Folio: ${cotizacion.folio}`, pageWidth - margin, 26, { align: "right" });
+    doc.text(`Fecha: ${fechaCreacion}`, pageWidth - margin, 31, { align: "right" });
 
-  ${notasLimpias ? `
-  <!-- Notes -->
-  <div style="border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
-    <p style="margin: 0; font-size: 12px;"><strong>Notas:</strong></p>
-    <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">${notasLimpias}</p>
-  </div>
-  ` : ''}
+    // Line under header
+    y = 35;
+    doc.setDrawColor(...primaryColor);
+    doc.setLineWidth(0.8);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 8;
 
-  <!-- Terms -->
-  <div style="border: 2px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 20px; font-size: 10px;">
-    <p style="margin: 0 0 10px 0; text-align: center; font-weight: bold;">TÉRMINOS Y CONDICIONES</p>
-    <ul style="margin: 0; padding-left: 20px;">
-      <li>Los precios están expresados en pesos mexicanos (MXN).</li>
-      <li>Esta cotización tiene vigencia hasta la fecha indicada.</li>
-      <li>Los precios pueden variar sin previo aviso después de la fecha de vigencia.</li>
-      <li>Los tiempos de entrega se confirmarán al momento de realizar el pedido.</li>
-    </ul>
-  </div>
+    // Company info
+    doc.setFontSize(8);
+    doc.setTextColor(...darkColor);
+    doc.setFont("helvetica", "bold");
+    doc.text("Dirección Fiscal:", margin, y);
+    doc.setFont("helvetica", "normal");
+    y += 4;
+    doc.text("Calle: MELCHOR OCAMPO No.Ext: 59", margin, y);
+    y += 3.5;
+    doc.text("Colonia: MAGDALENA MIXIUHCA", margin, y);
+    y += 3.5;
+    doc.text("Municipio: VENUSTIANO CARRANZA C.P.:15850", margin, y);
+    y += 3.5;
+    doc.text("Tel: (55) 56-00-77-81 / (55) 56-94-97-92", margin, y);
 
-  <!-- Footer -->
-  <div style="text-align: center; border-top: 1px solid #ddd; padding-top: 15px; font-size: 11px; color: #666;">
-    <p style="margin: 0;"><strong>ABARROTES LA MANITA S.A. DE C.V.</strong></p>
-    <p style="margin: 3px 0 0 0;">Email: 1904@almasa.com.mx | Tel: (55) 56-00-77-81</p>
-    <p style="margin: 5px 0 0 0; font-style: italic;">Gracias por su preferencia</p>
-  </div>
-</body>
-</html>`;
+    // Vigencia box
+    const vigenciaY = 43;
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...primaryColor);
+    doc.text("Vigencia de la cotización:", pageWidth / 2 + 10, vigenciaY);
+    doc.setFontSize(14);
+    doc.text(fechaVigencia, pageWidth / 2 + 10, vigenciaY + 6);
+    if (cotizacion.nombre) {
+      doc.setFontSize(8);
+      doc.setTextColor(...darkColor);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Referencia: ${cotizacion.nombre}`, pageWidth / 2 + 10, vigenciaY + 12);
+    }
+
+    y += 10;
+
+    // Client Info Box
+    doc.setFillColor(245, 245, 245);
+    doc.roundedRect(margin, y, pageWidth - margin * 2, 18, 2, 2, "F");
+    y += 5;
+    doc.setFontSize(9);
+    doc.setTextColor(...darkColor);
+    doc.setFont("helvetica", "bold");
+    doc.text("Cliente: ", margin + 3, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(cotizacion.cliente?.nombre || "", margin + 18, y);
+    y += 4;
+    doc.setFont("helvetica", "bold");
+    doc.text("Código: ", margin + 3, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(cotizacion.cliente?.codigo || "", margin + 18, y);
+
+    if (cotizacion.sucursal) {
+      doc.setFont("helvetica", "bold");
+      doc.text("Sucursal: ", pageWidth / 2, y - 4);
+      doc.setFont("helvetica", "normal");
+      doc.text(cotizacion.sucursal.nombre || "", pageWidth / 2 + 18, y - 4);
+      if (cotizacion.sucursal.direccion) {
+        doc.setFont("helvetica", "bold");
+        doc.text("Dirección: ", pageWidth / 2, y);
+        doc.setFont("helvetica", "normal");
+        const maxWidth = pageWidth - margin - pageWidth / 2 - 20;
+        const direccionLines = doc.splitTextToSize(cotizacion.sucursal.direccion, maxWidth);
+        doc.text(direccionLines[0] || "", pageWidth / 2 + 20, y);
+      }
+    }
+
+    y += 15;
+
+    // Products Table Header
+    const tableStartY = y;
+    const colWidths = soloPrecios 
+      ? { codigo: 25, producto: pageWidth - margin * 2 - 55, precio: 30 }
+      : { codigo: 22, producto: pageWidth - margin * 2 - 92, cantidad: 22, unidad: 18, precio: 25, subtotal: 25 };
+
+    doc.setFillColor(...darkColor);
+    doc.rect(margin, y, pageWidth - margin * 2, 8, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+
+    let xPos = margin + 2;
+    doc.text("Código", xPos, y + 5);
+    xPos += colWidths.codigo;
+    doc.text("Producto", xPos, y + 5);
+    
+    if (soloPrecios) {
+      doc.text("Precio", pageWidth - margin - 2, y + 5, { align: "right" });
+    } else {
+      xPos += (colWidths as any).producto;
+      doc.text("Cant.", xPos + 5, y + 5);
+      xPos += (colWidths as any).cantidad;
+      doc.text("Unidad", xPos, y + 5);
+      xPos += (colWidths as any).unidad;
+      doc.text("Precio", xPos + 10, y + 5);
+      doc.text("Subtotal", pageWidth - margin - 2, y + 5, { align: "right" });
+    }
+
+    y += 10;
+
+    // Products
+    doc.setTextColor(...darkColor);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+
+    const productos = cotizacion.detalles || [];
+    productos.forEach((d: any, index: number) => {
+      if (y > 250) {
+        doc.addPage();
+        y = 20;
+      }
+
+      // Alternating row background
+      if (index % 2 === 1) {
+        doc.setFillColor(249, 250, 251);
+        doc.rect(margin, y - 4, pageWidth - margin * 2, 7, "F");
+      }
+
+      xPos = margin + 2;
+      doc.setFont("courier", "normal");
+      doc.text(d.producto?.codigo || "-", xPos, y);
+      xPos += colWidths.codigo;
+      
+      doc.setFont("helvetica", "normal");
+      const nombreProducto = d.producto?.nombre || "Producto";
+      const maxNombreWidth = soloPrecios ? colWidths.producto - 5 : (colWidths as any).producto - 5;
+      const nombreLines = doc.splitTextToSize(nombreProducto, maxNombreWidth);
+      doc.text(nombreLines[0], xPos, y);
+
+      if (soloPrecios) {
+        doc.text(`$${d.precio_unitario?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, pageWidth - margin - 2, y, { align: "right" });
+      } else {
+        xPos += (colWidths as any).producto;
+        doc.text(String(d.cantidad || 0), xPos + 8, y, { align: "center" });
+        xPos += (colWidths as any).cantidad;
+        doc.text(d.producto?.unidad || "", xPos, y);
+        xPos += (colWidths as any).unidad;
+        doc.text(`$${d.precio_unitario?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, xPos + 20, y, { align: "right" });
+        doc.text(`$${d.subtotal?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, pageWidth - margin - 2, y, { align: "right" });
+      }
+
+      y += 7;
+    });
+
+    y += 5;
+
+    // Totals (if not solo precios)
+    if (!soloPrecios) {
+      const totalsX = pageWidth - margin - 60;
+      
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.text("Subtotal:", totalsX, y);
+      doc.setFont("helvetica", "normal");
+      doc.text(`$${cotizacion.subtotal?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, pageWidth - margin - 2, y, { align: "right" });
+      y += 5;
+
+      doc.setFont("helvetica", "bold");
+      doc.text("Impuestos:", totalsX, y);
+      doc.setFont("helvetica", "normal");
+      doc.text(`$${cotizacion.impuestos?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, pageWidth - margin - 2, y, { align: "right" });
+      y += 6;
+
+      // Total row with dark background
+      doc.setFillColor(...darkColor);
+      doc.rect(totalsX - 5, y - 4, pageWidth - margin - totalsX + 7, 8, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.text("Total:", totalsX, y);
+      doc.text(`$${cotizacion.total?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, pageWidth - margin - 2, y, { align: "right" });
+      
+      y += 12;
+    }
+
+    // Notes
+    doc.setTextColor(...darkColor);
+    if (notasLimpias) {
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.3);
+      doc.roundedRect(margin, y, pageWidth - margin * 2, 15, 2, 2, "S");
+      y += 5;
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      doc.text("Notas:", margin + 3, y);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(...grayColor);
+      const notasLines = doc.splitTextToSize(notasLimpias, pageWidth - margin * 2 - 10);
+      doc.text(notasLines.slice(0, 2), margin + 3, y + 4);
+      y += 18;
+    }
+
+    // Terms and Conditions
+    if (y > 240) {
+      doc.addPage();
+      y = 20;
+    }
+
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.5);
+    doc.roundedRect(margin, y, pageWidth - margin * 2, 28, 2, 2, "S");
+    y += 5;
+    doc.setFontSize(8);
+    doc.setTextColor(...darkColor);
+    doc.setFont("helvetica", "bold");
+    doc.text("TÉRMINOS Y CONDICIONES", pageWidth / 2, y, { align: "center" });
+    y += 5;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    const terms = [
+      "• Los precios están expresados en pesos mexicanos (MXN).",
+      "• Esta cotización tiene vigencia hasta la fecha indicada.",
+      "• Los precios pueden variar sin previo aviso después de la fecha de vigencia.",
+      "• Los tiempos de entrega se confirmarán al momento de realizar el pedido.",
+      "• Los precios incluyen impuestos cuando aplique.",
+    ];
+    terms.forEach(term => {
+      doc.text(term, margin + 5, y);
+      y += 4;
+    });
+
+    y += 8;
+
+    // Footer
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.3);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 5;
+    doc.setFontSize(8);
+    doc.setTextColor(...grayColor);
+    doc.setFont("helvetica", "bold");
+    doc.text("ABARROTES LA MANITA S.A. DE C.V.", pageWidth / 2, y, { align: "center" });
+    y += 4;
+    doc.setFont("helvetica", "normal");
+    doc.text("Email: 1904@almasa.com.mx | Tel: (55) 56-00-77-81", pageWidth / 2, y, { align: "center" });
+    y += 4;
+    doc.setFont("helvetica", "italic");
+    doc.text("Gracias por su preferencia", pageWidth / 2, y, { align: "center" });
+
+    // Return base64 PDF
+    const pdfBase64 = doc.output("datauristring").split(",")[1];
+    return pdfBase64;
   };
 
   const handleEnviar = async () => {
@@ -364,11 +502,8 @@ Tel: (55) 56-00-77-81`);
         .filter(c => selectedCorreos.includes(c.id))
         .map(c => c.email);
 
-      // Generate HTML for the quotation
-      const htmlCotizacion = await generarHTMLCotizacion();
-      
-      // Convert HTML to base64 for attachment
-      const htmlBase64 = btoa(unescape(encodeURIComponent(htmlCotizacion)));
+      // Generate PDF for the quotation
+      const pdfBase64 = await generarPDFCotizacion();
 
       // Create email body with the message
       const emailBodyHtml = `<div style="font-family: Arial, sans-serif; white-space: pre-wrap;">${mensaje.replace(/\n/g, '<br>')}</div>`;
@@ -383,9 +518,9 @@ Tel: (55) 56-00-77-81`);
           body: emailBodyHtml,
           attachments: [
             {
-              mimeType: "text/html",
-              filename: `Cotizacion_${folio}.html`,
-              content: htmlBase64,
+              mimeType: "application/pdf",
+              filename: `Cotizacion_${folio}.pdf`,
+              content: pdfBase64,
             }
           ],
         },

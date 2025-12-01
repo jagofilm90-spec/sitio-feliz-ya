@@ -340,7 +340,6 @@ export default function ProcesarPedidoDialog({
               ...suc,
               sucursal_id: matchedSucursalId,
               productos: suc.productos.map((prod: ParsedProduct) => {
-              // Primero usar el ID de producto de la cotización si la AI lo identificó
               if (prod.producto_cotizado_id) {
                 const matchedByCotizacion = productos.find(p => p.id === prod.producto_cotizado_id);
                 if (matchedByCotizacion) {
@@ -354,12 +353,39 @@ export default function ProcesarPedidoDialog({
                   const precioFinal = precioCotizacion !== undefined && precioCotizacion !== null 
                     ? precioCotizacion 
                     : matchedByCotizacion.precio_venta;
+
+                  // Ajuste frontal específico para PIÑA/MANGO en lata
+                  const isPiñaMangoLataCatalogById =
+                    /piña|pina|mango/i.test(matchedByCotizacion.nombre) &&
+                    /\d+\s*\/\s*\d+(\.|,)?\d*\s*(gr|kg)/i.test(matchedByCotizacion.nombre);
+
+                  let cantidadAjustadaId = prod.cantidad;
+                  let unidadAjustadaId = prod.unidad;
+
+                  if (isPiñaMangoLataCatalogById && matchedByCotizacion.unidad?.toLowerCase() === "caja") {
+                    const piecesMatchId = matchedByCotizacion.nombre.match(/(\d+)\s*\/\s*\d+(\.|,)?\d*\s*(gr|kg)/i);
+                    const piecesPerBoxId = piecesMatchId ? parseInt(piecesMatchId[1], 10) : null;
+                    const unidadOriginalId = (prod.unidad || "").toUpperCase();
+
+                    // Solo corregimos si todavía viene como KILOS o PIEZAS en la UI
+                    if (
+                      piecesPerBoxId &&
+                      piecesPerBoxId > 0 &&
+                      (unidadOriginalId.includes("KILO") || unidadOriginalId.includes("PIEZA"))
+                    ) {
+                      const cajasId = prod.cantidad / piecesPerBoxId;
+                      cantidadAjustadaId = Math.round(cajasId * 100) / 100;
+                      unidadAjustadaId = "caja";
+                    }
+                  }
                   
                   return {
                     ...prod,
+                    cantidad: cantidadAjustadaId,
+                    unidad: unidadAjustadaId,
                     producto_id: matchedByCotizacion.id,
                     precio_unitario: precioFinal,
-                    precio_por_kilo: matchedByCotizacion.precio_por_kilo,
+                    precio_por_kilo: isPiñaMangoLataCatalogById ? false : matchedByCotizacion.precio_por_kilo,
                     kg_por_unidad: matchedByCotizacion.kg_por_unidad,
                     aplica_iva: matchedByCotizacion.aplica_iva,
                     aplica_ieps: matchedByCotizacion.aplica_ieps,

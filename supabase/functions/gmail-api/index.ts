@@ -148,7 +148,8 @@ serve(async (req) => {
 
     // LIST - List inbox emails with optional search and pagination
     if (action === "list") {
-      let url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults || 50}&labelIds=INBOX`;
+      const limit = Math.min(maxResults || 30, 30); // Cap at 30 for performance
+      let url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${limit}&labelIds=INBOX`;
       if (searchQuery) {
         url += `&q=${encodeURIComponent(searchQuery)}`;
       }
@@ -158,39 +159,67 @@ serve(async (req) => {
 
       const listResponse = await fetchWithRetry(url, {
         headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      }, 2, 500);
 
       if (!listResponse.ok) {
+        const errorText = await listResponse.text();
+        console.error("List error:", listResponse.status, errorText);
         throw new Error("Error al listar correos");
       }
 
       const listData = await listResponse.json();
-      const messages = [];
-
-      for (const msg of (listData.messages || []).slice(0, maxResults || 50)) {
-        const msgResponse = await fetchWithRetry(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
-          {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          },
-          2 // fewer retries for individual messages
+      const messageIds = (listData.messages || []).slice(0, limit);
+      
+      // Fetch message details in parallel batches of 10
+      const messages: any[] = [];
+      const batchSize = 10;
+      
+      for (let i = 0; i < messageIds.length; i += batchSize) {
+        const batch = messageIds.slice(i, i + batchSize);
+        
+        const batchResults = await Promise.allSettled(
+          batch.map(async (msg: any) => {
+            try {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 8000);
+              
+              const msgResponse = await fetch(
+                `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
+                {
+                  headers: { Authorization: `Bearer ${accessToken}` },
+                  signal: controller.signal,
+                }
+              );
+              
+              clearTimeout(timeoutId);
+              
+              if (!msgResponse.ok) return null;
+              
+              const msgData = await msgResponse.json();
+              const headers = msgData.payload?.headers || [];
+              const labelIds = msgData.labelIds || [];
+              
+              return {
+                id: msg.id,
+                threadId: msg.threadId,
+                from: headers.find((h: any) => h.name === "From")?.value || "",
+                subject: headers.find((h: any) => h.name === "Subject")?.value || "",
+                date: headers.find((h: any) => h.name === "Date")?.value || "",
+                snippet: msgData.snippet || "",
+                isUnread: labelIds.includes("UNREAD"),
+                hasAttachments: msgData.payload?.parts?.some((p: any) => p.filename && p.body?.attachmentId) || false,
+              };
+            } catch (e) {
+              console.error(`Failed to fetch message ${msg.id}:`, e);
+              return null;
+            }
+          })
         );
-
-        if (msgResponse.ok) {
-          const msgData = await msgResponse.json();
-          const headers = msgData.payload?.headers || [];
-          const labelIds = msgData.labelIds || [];
-          
-          messages.push({
-            id: msg.id,
-            threadId: msg.threadId,
-            from: headers.find((h: any) => h.name === "From")?.value || "",
-            subject: headers.find((h: any) => h.name === "Subject")?.value || "",
-            date: headers.find((h: any) => h.name === "Date")?.value || "",
-            snippet: msgData.snippet || "",
-            isUnread: labelIds.includes("UNREAD"),
-            hasAttachments: msgData.payload?.parts?.some((p: any) => p.filename && p.body?.attachmentId) || false,
-          });
+        
+        for (const result of batchResults) {
+          if (result.status === 'fulfilled' && result.value) {
+            messages.push(result.value);
+          }
         }
       }
 
@@ -202,11 +231,11 @@ serve(async (req) => {
 
     // LIST TRASH - List emails in trash
     if (action === "listTrash") {
+      const limit = Math.min(maxResults || 30, 30);
       const listResponse = await fetchWithRetry(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults || 50}&labelIds=TRASH`,
-        {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${limit}&labelIds=TRASH`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+        2, 500
       );
 
       if (!listResponse.ok) {
@@ -214,29 +243,39 @@ serve(async (req) => {
       }
 
       const listData = await listResponse.json();
-      const messages = [];
-
-      for (const msg of (listData.messages || []).slice(0, maxResults || 50)) {
-        const msgResponse = await fetchWithRetry(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
-          {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          },
-          2
+      const messageIds = (listData.messages || []).slice(0, limit);
+      const messages: any[] = [];
+      
+      // Parallel fetch in batches of 10
+      const batchSize = 10;
+      for (let i = 0; i < messageIds.length; i += batchSize) {
+        const batch = messageIds.slice(i, i + batchSize);
+        const batchResults = await Promise.allSettled(
+          batch.map(async (msg: any) => {
+            try {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 8000);
+              const msgResponse = await fetch(
+                `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
+                { headers: { Authorization: `Bearer ${accessToken}` }, signal: controller.signal }
+              );
+              clearTimeout(timeoutId);
+              if (!msgResponse.ok) return null;
+              const msgData = await msgResponse.json();
+              const headers = msgData.payload?.headers || [];
+              return {
+                id: msg.id,
+                threadId: msg.threadId,
+                from: headers.find((h: any) => h.name === "From")?.value || "",
+                subject: headers.find((h: any) => h.name === "Subject")?.value || "",
+                date: headers.find((h: any) => h.name === "Date")?.value || "",
+                snippet: msgData.snippet || "",
+              };
+            } catch { return null; }
+          })
         );
-
-        if (msgResponse.ok) {
-          const msgData = await msgResponse.json();
-          const headers = msgData.payload?.headers || [];
-          
-          messages.push({
-            id: msg.id,
-            threadId: msg.threadId,
-            from: headers.find((h: any) => h.name === "From")?.value || "",
-            subject: headers.find((h: any) => h.name === "Subject")?.value || "",
-            date: headers.find((h: any) => h.name === "Date")?.value || "",
-            snippet: msgData.snippet || "",
-          });
+        for (const result of batchResults) {
+          if (result.status === 'fulfilled' && result.value) messages.push(result.value);
         }
       }
 

@@ -344,14 +344,16 @@ export default function ProcesarPedidoDialog({
         let subtotalNeto = 0;
 
         validProducts.forEach(p => {
+          // IMPORTANTE: Usar cantidad redondeada para todos los cálculos
+          const cantidadEntera = Math.round(p.cantidad);
           // Calcular subtotal bruto según tipo de precio
           let lineSubtotal: number;
           if (p.precio_por_kilo && p.kg_por_unidad) {
             // Producto por kg: cantidad (bultos) × kg por unidad × precio por kg
-            lineSubtotal = p.cantidad * p.kg_por_unidad * (p.precio_unitario || 0);
+            lineSubtotal = cantidadEntera * p.kg_por_unidad * (p.precio_unitario || 0);
           } else {
             // Producto por unidad: cantidad × precio unitario
-            lineSubtotal = p.cantidad * (p.precio_unitario || 0);
+            lineSubtotal = cantidadEntera * (p.precio_unitario || 0);
           }
 
           // Desagregar impuestos (precios ya incluyen impuestos)
@@ -415,16 +417,18 @@ export default function ProcesarPedidoDialog({
 
         // Create pedido detalles - calcular subtotal según tipo de producto
         const detalles = validProducts.map(p => {
+          // IMPORTANTE: Redondear cantidad a entero para la base de datos
+          const cantidadEntera = Math.round(p.cantidad);
           let lineSubtotal: number;
           if (p.precio_por_kilo && p.kg_por_unidad) {
-            lineSubtotal = p.cantidad * p.kg_por_unidad * (p.precio_unitario || 0);
+            lineSubtotal = cantidadEntera * p.kg_por_unidad * (p.precio_unitario || 0);
           } else {
-            lineSubtotal = p.cantidad * (p.precio_unitario || 0);
+            lineSubtotal = cantidadEntera * (p.precio_unitario || 0);
           }
           return {
             pedido_id: pedido.id,
             producto_id: p.producto_id!,
-            cantidad: p.cantidad,
+            cantidad: cantidadEntera,
             precio_unitario: p.precio_unitario || 0,
             subtotal: Math.round(lineSubtotal * 100) / 100,
           };

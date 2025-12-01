@@ -177,13 +177,13 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     'hoja de polipapel 25x35': ['polipapel', 'poly papel', 'polypapel', 'poli papel', 'hoja polipapel'],
     'bolsa de polipapel 26x32': ['bolsa polipapel', 'bolsa poly'],
     
-    // Frutas en lata
+    // Frutas en lata - nombres EXACTOS de la base de datos
     'pina rodaja 12/850gr (14)': ['pina en lata', 'piña en lata', 'pina lata', 'piña lata', 'pina', 'piña'],
-    'mango': ['mango en lata', 'mango lata', 'mango en almibar'],
+    'mango en rebanadas 24/800gr': ['mango en lata', 'mango lata', 'mango en almibar', 'mango'],
     'durazno': ['durazno en lata', 'durazno lata', 'durazno en almibar', 'duraznos'],
     
-    // Almendras - si existe almendra entera, usar ese nombre
-    'almendra': ['almendra entera', 'almendras', 'almendra natural'],
+    // Almendras - nombre EXACTO de la base de datos
+    'almendra non parel 27/30': ['almendra entera', 'almendras', 'almendra natural', 'almendra'],
     
     // Azúcar
     'azucar estandar': ['azucar', 'azúcar', 'azucar blanca', 'azúcar blanca', 'azucar segunda'],

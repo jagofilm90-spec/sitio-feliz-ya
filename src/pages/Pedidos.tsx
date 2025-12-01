@@ -43,7 +43,7 @@ interface PedidoConCotizacion {
   clientes: { id: string; nombre: string; email: string | null } | null;
   profiles: { full_name: string } | null;
   cotizacion_origen?: { id: string; folio: string } | null;
-  sucursal?: { email_facturacion: string | null } | null;
+  sucursal?: { nombre: string; email_facturacion: string | null } | null;
 }
 
 const Pedidos = () => {
@@ -83,7 +83,7 @@ const Pedidos = () => {
           sucursal_id,
           clientes (id, nombre, email),
           profiles:vendedor_id (full_name),
-          cliente_sucursales:sucursal_id (email_facturacion)
+          cliente_sucursales:sucursal_id (nombre, email_facturacion)
         `)
         .order("fecha_pedido", { ascending: false });
 
@@ -407,6 +407,7 @@ const Pedidos = () => {
                   <TableRow>
                     <TableHead>Folio</TableHead>
                     <TableHead>Cliente</TableHead>
+                    <TableHead>Sucursal</TableHead>
                     <TableHead>Vendedor</TableHead>
                     <TableHead>Fecha</TableHead>
                     <TableHead>Total</TableHead>
@@ -419,13 +420,13 @@ const Pedidos = () => {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center">
+                      <TableCell colSpan={10} className="text-center">
                         Cargando...
                       </TableCell>
                     </TableRow>
                   ) : filteredPedidos.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center">
+                      <TableCell colSpan={10} className="text-center">
                         No hay pedidos registrados
                       </TableCell>
                     </TableRow>
@@ -434,6 +435,7 @@ const Pedidos = () => {
                       <TableRow key={pedido.id}>
                         <TableCell className="font-medium font-mono">{pedido.folio}</TableCell>
                         <TableCell>{pedido.clientes?.nombre || "—"}</TableCell>
+                        <TableCell className="text-sm">{pedido.sucursal?.nombre || "—"}</TableCell>
                         <TableCell>{pedido.profiles?.full_name || "—"}</TableCell>
                         <TableCell>
                           {new Date(pedido.fecha_pedido).toLocaleDateString()}

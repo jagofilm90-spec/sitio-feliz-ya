@@ -385,30 +385,35 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
   const branchPattern = /^(\d{1,3})\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿa-zà-ÿ\s\(\)\-]+)$/i;
   const branchPatternPipe = /^(\d{1,3})\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿa-zà-ÿ\s\(\)\-]+?)\s*\|/i;
   
-  // Helper function to check if a name matches a registered branch
+  // Helper function to check if a name matches a registered branch - STRICT VALIDATION
+  // Only returns a match if the candidate EXACTLY matches a registered branch name
   const matchRegisteredBranch = (candidateName: string): { id: string, nombre: string } | null => {
     if (registeredBranchMap.size === 0) return null; // No registered branches to validate against
     
     const normalized = candidateName.toUpperCase().trim();
     
-    // Exact match
+    // 1. Exact match - highest priority
     if (registeredBranchMap.has(normalized)) {
       return registeredBranchMap.get(normalized)!;
     }
     
-    // Match without parenthetical content
+    // 2. Match without parenthetical content from the candidate
     const withoutParens = normalized.replace(/\([^)]*\)/g, '').trim();
-    if (registeredBranchMap.has(withoutParens)) {
+    if (withoutParens !== normalized && registeredBranchMap.has(withoutParens)) {
       return registeredBranchMap.get(withoutParens)!;
     }
     
-    // Partial match: check if any registered branch name is contained in the candidate
+    // 3. Check if a registered branch name (without parens) matches
     for (const [regName, branchData] of registeredBranchMap.entries()) {
-      if (normalized.includes(regName) || regName.includes(normalized)) {
+      const regNameClean = regName.replace(/\([^)]*\)/g, '').trim();
+      // Only match if the ENTIRE name matches (not partial)
+      if (normalized === regNameClean || withoutParens === regNameClean) {
         return branchData;
       }
     }
     
+    // NO PARTIAL MATCHING - This was causing false positives
+    // If no exact match found, return null to reject this as a branch
     return null;
   };
   
@@ -630,7 +635,11 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     }
   }
   
-  console.log("Branches:", sucursales.length);
+  // Log detected branches summary for debugging
+  console.log(`=== DETECTED BRANCHES SUMMARY ===`);
+  console.log(`Total branches detected: ${sucursales.length}`);
+  console.log(`Registered branches available: ${registeredBranchMap.size}`);
+  console.log(`Branches: ${sucursales.map(s => s.nombre_sucursal).join(", ")}`);
   
   if (sucursales.length === 0) return { sucursales: [], confianza: 0 };
   

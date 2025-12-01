@@ -168,7 +168,8 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
   
   // Product synonyms mapping
   const PRODUCT_SYNONYMS: Record<string, string[]> = {
-    'fecula de maiz': ['maizena', 'maicena'],
+    'fecula de maiz': ['maizena', 'maicena', 'fecula'],
+    'uva pasa': ['pasas', 'pasa', 'pasitas'],
   };
   
   const findProduct = (text: string): ProductInfo | null => {

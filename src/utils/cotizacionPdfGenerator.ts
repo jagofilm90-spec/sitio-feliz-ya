@@ -72,8 +72,8 @@ export const generarCotizacionPDF = (datos: DatosCotizacion): string => {
   const margin = 15;
   let y = 12;
 
-  // Professional color palette
-  const brandBlue: [number, number, number] = [0, 51, 102]; // Deep navy blue
+  // Professional color palette - Almasa brand colors
+  const brandRed: [number, number, number] = [139, 35, 50]; // Almasa burgundy/maroon
   const accentGold: [number, number, number] = [180, 142, 58]; // Elegant gold
   const darkText: [number, number, number] = [33, 37, 41];
   const mediumGray: [number, number, number] = [108, 117, 125];
@@ -82,7 +82,7 @@ export const generarCotizacionPDF = (datos: DatosCotizacion): string => {
 
   // === HEADER SECTION ===
   // Top accent line
-  doc.setFillColor(...brandBlue);
+  doc.setFillColor(...brandRed);
   doc.rect(0, 0, pageWidth, 3, "F");
 
   // Gold accent line
@@ -94,7 +94,7 @@ export const generarCotizacionPDF = (datos: DatosCotizacion): string => {
   // Company name - elegant typography
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
-  doc.setTextColor(...brandBlue);
+  doc.setTextColor(...brandRed);
   doc.text("ABARROTES LA MANITA", margin, y);
   
   y += 5;
@@ -110,7 +110,7 @@ export const generarCotizacionPDF = (datos: DatosCotizacion): string => {
   const badgeY = 10;
 
   // Badge background
-  doc.setFillColor(...brandBlue);
+  doc.setFillColor(...brandRed);
   doc.roundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 2, 2, "F");
   
   // Badge text
@@ -143,7 +143,7 @@ export const generarCotizacionPDF = (datos: DatosCotizacion): string => {
   // LEFT COLUMN - Company info
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
-  doc.setTextColor(...brandBlue);
+  doc.setTextColor(...brandRed);
   doc.text("INFORMACIÓN DE CONTACTO", margin, y);
   
   y += 5;
@@ -183,7 +183,7 @@ export const generarCotizacionPDF = (datos: DatosCotizacion): string => {
   rightY += 6;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
-  doc.setTextColor(...brandBlue);
+  doc.setTextColor(...brandRed);
   doc.text("VIGENCIA DE COTIZACIÓN", rightColX + colWidth / 2, rightY, { align: "center" });
 
   rightY += 7;
@@ -208,7 +208,7 @@ export const generarCotizacionPDF = (datos: DatosCotizacion): string => {
   const clientBoxHeight = datos.sucursal ? 20 : 14;
   
   doc.setFillColor(...lightGray);
-  doc.setDrawColor(...brandBlue);
+  doc.setDrawColor(...brandRed);
   doc.setLineWidth(0.3);
   doc.roundedRect(margin, y, pageWidth - margin * 2, clientBoxHeight, 2, 2, "FD");
 
@@ -218,7 +218,7 @@ export const generarCotizacionPDF = (datos: DatosCotizacion): string => {
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
-  doc.setTextColor(...brandBlue);
+  doc.setTextColor(...brandRed);
   doc.text("CLIENTE", clientCol1, y);
 
   doc.setTextColor(...darkText);
@@ -231,7 +231,7 @@ export const generarCotizacionPDF = (datos: DatosCotizacion): string => {
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
-  doc.setTextColor(...brandBlue);
+  doc.setTextColor(...brandRed);
   doc.text("CÓDIGO", clientCol2, y);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...darkText);
@@ -241,7 +241,7 @@ export const generarCotizacionPDF = (datos: DatosCotizacion): string => {
     y += 5;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    doc.setTextColor(...brandBlue);
+    doc.setTextColor(...brandRed);
     doc.text("SUCURSAL", clientCol1, y);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(...darkText);
@@ -253,7 +253,7 @@ export const generarCotizacionPDF = (datos: DatosCotizacion): string => {
 
     if (datos.sucursal.direccion) {
       doc.setFont("helvetica", "bold");
-      doc.setTextColor(...brandBlue);
+      doc.setTextColor(...brandRed);
       doc.text("DIRECCIÓN", clientCol2, y);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(...darkText);
@@ -286,7 +286,7 @@ export const generarCotizacionPDF = (datos: DatosCotizacion): string => {
       };
 
   // Table header
-  doc.setFillColor(...brandBlue);
+  doc.setFillColor(...brandRed);
   doc.rect(margin, y, pageWidth - margin * 2, 8, "F");
 
   doc.setTextColor(...white);
@@ -313,7 +313,7 @@ export const generarCotizacionPDF = (datos: DatosCotizacion): string => {
       y = 20;
       
       // Redraw header on new page
-      doc.setFillColor(...brandBlue);
+      doc.setFillColor(...brandRed);
       doc.rect(margin, y, pageWidth - margin * 2, 8, "F");
       doc.setTextColor(...white);
       doc.setFont("helvetica", "bold");
@@ -425,7 +425,7 @@ export const generarCotizacionPDF = (datos: DatosCotizacion): string => {
     y += 6;
 
     // Total with elegant styling
-    doc.setFillColor(...brandBlue);
+    doc.setFillColor(...brandRed);
     doc.roundedRect(totalsX - 5, y - 4, totalsWidth + 5, 10, 2, 2, "F");
     doc.setTextColor(...white);
     doc.setFont("helvetica", "bold");
@@ -446,7 +446,7 @@ export const generarCotizacionPDF = (datos: DatosCotizacion): string => {
     y += 5;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7);
-    doc.setTextColor(...brandBlue);
+    doc.setTextColor(...brandRed);
     doc.text("OBSERVACIONES:", margin + 4, y);
 
     doc.setFont("helvetica", "normal");
@@ -472,7 +472,7 @@ export const generarCotizacionPDF = (datos: DatosCotizacion): string => {
   y += 5;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
-  doc.setTextColor(...brandBlue);
+  doc.setTextColor(...brandRed);
   doc.text("TÉRMINOS Y CONDICIONES", pageWidth / 2, y, { align: "center" });
 
   y += 5;
@@ -504,7 +504,7 @@ export const generarCotizacionPDF = (datos: DatosCotizacion): string => {
   y += 5;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
-  doc.setTextColor(...brandBlue);
+  doc.setTextColor(...brandRed);
   doc.text("ABARROTES LA MANITA S.A. DE C.V.", pageWidth / 2, y, { align: "center" });
 
   y += 4;

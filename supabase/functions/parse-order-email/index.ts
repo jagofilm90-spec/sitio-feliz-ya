@@ -208,6 +208,9 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     // Girasol
     'girasol pelado': ['semilla de girasol pelado', 'semilla girasol pelado', 'girasol sin cascara'],
     
+    // Cereales
+    'fruty rueda': ['frutirueda', 'fruti rueda', 'fruty ruedas'],
+    
     // Otros
     'canela': ['canela entera', 'canela molida', 'raja de canela'],
     'ajonjoli': ['ajonjolí', 'sesamo', 'sésamo'],

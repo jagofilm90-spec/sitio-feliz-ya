@@ -118,14 +118,14 @@ function convertToSellingUnit(
     return null;
   };
   
-  // FIRST: If this is a piña/mango canned product for Lecaroz, ALWAYS treat cantidadPedida as PIEZAS
-  // Even if the unidad leída del PDF/AI dice "KILOS", Lecaroz nunca manda estas latas en kilos
-  if (forceKiloConversion && unidadVentaLower === 'caja' && esPiñaOMango(nombreProducto)) {
+  // FIRST: If this is a piña/mango canned product and la unidad leída del PDF es PIEZAS,
+  // SIEMPRE tratar cantidadPedida como PIEZAS y convertir a CAJAS usando el número antes del " / "
+  if (unidadEmailLower.includes('pieza') && esPiñaOMango(nombreProducto)) {
     const piecesPerBox = extractPiecesPerBox(nombreProducto);
     if (piecesPerBox) {
       const cajas = cantidadPedida / piecesPerBox;
-      const cajasRedondeadas = Math.round(cajas * 100) / 100; // Round to 2 decimals
-      console.log(`  -> PIÑA/MANGO (FORZADO) CONVERSION: ${cantidadPedida} piezas ÷ ${piecesPerBox} piezas/caja = ${cajasRedondeadas} cajas`);
+      const cajasRedondeadas = Math.round(cajas * 100) / 100; // Redondear a 2 decimales
+      console.log(`  -> PIÑA/MANGO (PIEZAS→CAJAS) CONVERSION: ${cantidadPedida} piezas ÷ ${piecesPerBox} piezas/caja = ${cajasRedondeadas} cajas`);
       return { cantidad: cajasRedondeadas };
     } else {
       console.log(`  -> WARNING: Piña/Mango product without X/Ygr pattern: "${nombreProducto}"`);

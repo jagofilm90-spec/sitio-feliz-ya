@@ -246,6 +246,12 @@ export default function ProcesarPedidoDialog({
         return acc;
       }, []);
 
+      // Preparar lista de sucursales registradas para validación estricta
+      const sucursalesRegistradas = (sucursales || []).map(s => ({
+        id: s.id,
+        nombre: s.nombre,
+      }));
+
       const { data, error } = await supabase.functions.invoke("parse-order-email", {
         body: {
           emailBody,
@@ -253,6 +259,7 @@ export default function ProcesarPedidoDialog({
           emailFrom,
           clienteId: selectedClienteId,
           productosCotizados: productosUnicos,
+          sucursalesRegistradas, // Send registered branches for strict validation
         },
       });
 

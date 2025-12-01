@@ -75,7 +75,8 @@ function convertToSellingUnit(
   unidadEmail: string, // KILOS, PIEZAS, CAJAS, etc.
   unidadVenta: string, // kg, bulto, caja, etc.
   kgPorUnidad: number | null,
-  forceKiloConversion: boolean = false // For Lecaroz emails, force conversion assuming KILOS
+  forceKiloConversion: boolean = false, // For Lecaroz emails, force conversion assuming KILOS
+  nombreProducto: string = '' // Product name to extract pieces per box from description
 ): { cantidad: number; cantidadOriginalKg?: number } {
   const unidadVentaLower = unidadVenta.toLowerCase();
   const unidadEmailLower = (unidadEmail || '').toLowerCase();
@@ -117,11 +118,23 @@ function convertToSellingUnit(
     return { cantidad: cantidadPedida };
   }
   
-  // If email is in PIEZAS and we have piezas_por_unidad (stored in kg_por_unidad for piece-based products)
-  if (unidadEmailLower.includes('pieza') && kgPorUnidad && kgPorUnidad > 0) {
-    const cantidadConvertida = Math.round(cantidadPedida / kgPorUnidad);
-    console.log(`  -> CONVERSION: ${cantidadPedida} piezas ÷ ${kgPorUnidad} piezas/caja = ${cantidadConvertida} ${unidadVenta}`);
-    return { cantidad: cantidadConvertida };
+  // Special case: If product name contains format "##/" (like "MANGO 24/40" or "PIÑA 12/850")
+  // Extract the number before "/" as pieces per box and convert
+  if (unidadEmailLower.includes('pieza')) {
+    const piecesPerBoxMatch = nombreProducto.match(/\b(\d+)\//);
+    if (piecesPerBoxMatch) {
+      const piecesPerBox = parseInt(piecesPerBoxMatch[1]);
+      const cantidadConvertida = Math.round(cantidadPedida / piecesPerBox);
+      console.log(`  -> CONVERSION (from product name): ${cantidadPedida} piezas ÷ ${piecesPerBox} piezas/caja (extracted from "${nombreProducto}") = ${cantidadConvertida} ${unidadVenta}`);
+      return { cantidad: cantidadConvertida };
+    }
+    
+    // Fallback: use kg_por_unidad if available
+    if (kgPorUnidad && kgPorUnidad > 0) {
+      const cantidadConvertida = Math.round(cantidadPedida / kgPorUnidad);
+      console.log(`  -> CONVERSION: ${cantidadPedida} piezas ÷ ${kgPorUnidad} piezas/caja = ${cantidadConvertida} ${unidadVenta}`);
+      return { cantidad: cantidadConvertida };
+    }
   }
   
   // Default: no conversion
@@ -516,7 +529,8 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
               emailUnit,
               match.product.unidad,
               match.product.kg_por_unidad,
-              true // forceKiloConversion for Lecaroz
+              true, // forceKiloConversion for Lecaroz
+              match.product.nombre // Product name for piece-per-box extraction
             );
             
             if (branchProducts.has(match.product.id)) {
@@ -593,7 +607,8 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
             emailUnit,
             pendingProduct.unidad,
             pendingProduct.kg_por_unidad,
-            true // forceKiloConversion for Lecaroz
+            true, // forceKiloConversion for Lecaroz
+            pendingProduct.nombre // Product name for piece-per-box extraction
           );
           
           if (branchProducts.has(pendingProduct.id)) {
@@ -735,7 +750,8 @@ function applyConversionsToAIResult(
           emailUnit,
           catalogProduct.unidad,
           catalogProduct.kg_por_unidad,
-          isLecaroz // forceKiloConversion for Lecaroz
+          isLecaroz, // forceKiloConversion for Lecaroz
+          catalogProduct.nombre // Product name for piece-per-box extraction
         );
         
         console.log(`AI CONVERSION: ${producto.nombre_producto} - ${producto.cantidad} ${emailUnit} -> ${conversion.cantidad} ${catalogProduct.unidad}`);

@@ -205,6 +205,9 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     // Avena
     'avena hojuela': ['avena', 'avena hojuelas', 'avena natural'],
     
+    // Girasol
+    'girasol pelado': ['semilla de girasol pelado', 'semilla girasol pelado', 'girasol sin cascara'],
+    
     // Otros
     'canela': ['canela entera', 'canela molida', 'raja de canela'],
     'ajonjoli': ['ajonjolí', 'sesamo', 'sésamo'],
@@ -217,8 +220,12 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
   
   // Lines to IGNORE - packaging descriptions, headers, categories (NOT products)
   const IGNORED_LINES = new Set([
+    'balon de 50 kilos',
+    'balón de 50 kilos',
     'balones de 50 kilos',
     'balones de 50',
+    'balon de 50',
+    'balón de 50',
     'sacos de 50 kilos',
     'sacos de 50',
     'costales de 50',

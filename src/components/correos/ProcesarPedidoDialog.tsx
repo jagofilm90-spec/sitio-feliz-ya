@@ -97,6 +97,7 @@ export default function ProcesarPedidoDialog({
   const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
   const [existingOrders, setExistingOrders] = useState<Map<string, { id: string; folio: string }>>(new Map());
   const [isLecarozEmail, setIsLecarozEmail] = useState(false);
+  const [acumulativoMode, setAcumulativoMode] = useState(false);
 
   // Fetch clientes
   const { data: clientes } = useQuery({
@@ -216,6 +217,7 @@ export default function ProcesarPedidoDialog({
     // Detectar si es correo de Lecaroz
     const isLecaroz = emailSubject?.toUpperCase().includes("LECAROZ") || false;
     setIsLecarozEmail(isLecaroz);
+    setAcumulativoMode(isLecaroz); // Activar modo acumulativo para Lecaroz
     
     setParsing(true);
     setError(null);
@@ -512,6 +514,183 @@ export default function ProcesarPedidoDialog({
       });
     } finally {
       setParsing(false);
+    }
+  };
+
+  const handleAddToAcumulativo = async () => {
+    if (!parsedOrder || !selectedClienteId) return;
+
+    setCreating(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error("Usuario no autenticado");
+
+      const today = new Date().toISOString().split('T')[0];
+      
+      for (const suc of parsedOrder.sucursales) {
+        const validProducts = suc.productos.filter(p => p.producto_id && p.cantidad > 0);
+        if (validProducts.length === 0) continue;
+
+        // Buscar pedido acumulativo existente para esta sucursal HOY
+        const { data: existingAcumulativo } = await supabase
+          .from("pedidos_acumulativos")
+          .select("*")
+          .eq("cliente_id", selectedClienteId)
+          .eq("sucursal_id", suc.sucursal_id || null)
+          .eq("fecha_entrega", suc.fecha_entrega_solicitada || today)
+          .eq("status", "borrador")
+          .maybeSingle();
+
+        let subtotal = 0;
+        let impuestos = 0;
+
+        // Calcular totales
+        for (const prod of validProducts) {
+          const cantidadEntera = Math.round(prod.cantidad);
+          let lineSubtotal: number;
+          if (prod.precio_por_kilo && prod.kg_por_unidad) {
+            lineSubtotal = cantidadEntera * prod.kg_por_unidad * (prod.precio_unitario || 0);
+          } else {
+            lineSubtotal = cantidadEntera * (prod.precio_unitario || 0);
+          }
+          subtotal += lineSubtotal;
+
+          // Calcular impuestos por producto
+          if (prod.aplica_iva) {
+            const baseIva = lineSubtotal / 1.16;
+            impuestos += lineSubtotal - baseIva;
+          }
+          if (prod.aplica_ieps) {
+            const baseIeps = lineSubtotal / 1.08;
+            impuestos += lineSubtotal - baseIeps;
+          }
+        }
+
+        const total = subtotal + impuestos;
+
+        if (existingAcumulativo) {
+          // ACTUALIZAR acumulativo existente
+          const updatedSubtotal = (existingAcumulativo.subtotal || 0) + subtotal;
+          const updatedImpuestos = (existingAcumulativo.impuestos || 0) + impuestos;
+          const updatedTotal = (existingAcumulativo.total || 0) + total;
+
+          // Agregar emailId al array correos_procesados
+          const correosProcesados = existingAcumulativo.correos_procesados || [];
+          if (!correosProcesados.includes(emailId)) {
+            correosProcesados.push(emailId);
+          }
+
+          await supabase
+            .from("pedidos_acumulativos")
+            .update({
+              subtotal: Math.round(updatedSubtotal * 100) / 100,
+              impuestos: Math.round(updatedImpuestos * 100) / 100,
+              total: Math.round(updatedTotal * 100) / 100,
+              correos_procesados: correosProcesados,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", existingAcumulativo.id);
+
+          // Actualizar detalles - agregar cantidades a productos existentes o insertar nuevos
+          for (const prod of validProducts) {
+            const cantidadEntera = Math.round(prod.cantidad);
+            const { data: existingDetalle } = await supabase
+              .from("pedidos_acumulativos_detalles")
+              .select("*")
+              .eq("pedido_acumulativo_id", existingAcumulativo.id)
+              .eq("producto_id", prod.producto_id!)
+              .maybeSingle();
+
+            let lineSubtotal: number;
+            if (prod.precio_por_kilo && prod.kg_por_unidad) {
+              lineSubtotal = cantidadEntera * prod.kg_por_unidad * (prod.precio_unitario || 0);
+            } else {
+              lineSubtotal = cantidadEntera * (prod.precio_unitario || 0);
+            }
+
+            if (existingDetalle) {
+              await supabase
+                .from("pedidos_acumulativos_detalles")
+                .update({
+                  cantidad: existingDetalle.cantidad + cantidadEntera,
+                  subtotal: Math.round((existingDetalle.subtotal + lineSubtotal) * 100) / 100,
+                })
+                .eq("id", existingDetalle.id);
+            } else {
+              await supabase
+                .from("pedidos_acumulativos_detalles")
+                .insert({
+                  pedido_acumulativo_id: existingAcumulativo.id,
+                  producto_id: prod.producto_id!,
+                  cantidad: cantidadEntera,
+                  precio_unitario: prod.precio_unitario || 0,
+                  subtotal: Math.round(lineSubtotal * 100) / 100,
+                });
+            }
+          }
+        } else {
+          // CREAR nuevo pedido acumulativo
+          const { data: acumulativo, error: acumulativoError } = await supabase
+            .from("pedidos_acumulativos")
+            .insert({
+              cliente_id: selectedClienteId,
+              sucursal_id: suc.sucursal_id || null,
+              fecha_entrega: suc.fecha_entrega_solicitada || today,
+              subtotal: Math.round(subtotal * 100) / 100,
+              impuestos: Math.round(impuestos * 100) / 100,
+              total: Math.round(total * 100) / 100,
+              status: "borrador",
+              correos_procesados: [emailId],
+              notas: parsedOrder.notas_generales 
+                ? `[Desde correo] ${parsedOrder.notas_generales}` 
+                : `[Procesado desde correo: ${emailSubject}]`,
+            })
+            .select()
+            .single();
+
+          if (acumulativoError) throw acumulativoError;
+
+          // Insertar detalles
+          const detalles = validProducts.map(p => {
+            const cantidadEntera = Math.round(p.cantidad);
+            let lineSubtotal: number;
+            if (p.precio_por_kilo && p.kg_por_unidad) {
+              lineSubtotal = cantidadEntera * p.kg_por_unidad * (p.precio_unitario || 0);
+            } else {
+              lineSubtotal = cantidadEntera * (p.precio_unitario || 0);
+            }
+            return {
+              pedido_acumulativo_id: acumulativo.id,
+              producto_id: p.producto_id!,
+              cantidad: cantidadEntera,
+              precio_unitario: p.precio_unitario || 0,
+              subtotal: Math.round(lineSubtotal * 100) / 100,
+            };
+          });
+
+          await supabase
+            .from("pedidos_acumulativos_detalles")
+            .insert(detalles);
+        }
+      }
+
+      toast({
+        title: "Agregado a pedidos acumulativos",
+        description: `Productos agregados exitosamente. Ve a la pestaña "Pedidos Acumulativos" para revisar.`,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["pedidos-acumulativos"] });
+      onOpenChange(false);
+      onSuccess?.();
+    } catch (err: any) {
+      console.error("Error adding to acumulativo:", err);
+      toast({
+        title: "Error",
+        description: err.message || "No se pudo agregar al pedido acumulativo",
+        variant: "destructive",
+      });
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -1119,7 +1298,25 @@ export default function ProcesarPedidoDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          {parsedOrder && (
+          {parsedOrder && acumulativoMode && (
+            <Button
+              onClick={handleAddToAcumulativo}
+              disabled={creating || !canCreateOrders}
+            >
+              {creating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Procesando...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  Agregar a Pedido Acumulativo
+                </>
+              )}
+            </Button>
+          )}
+          {parsedOrder && !acumulativoMode && (
             <Button
               onClick={handleCreateOrders}
               disabled={creating || !canCreateOrders}

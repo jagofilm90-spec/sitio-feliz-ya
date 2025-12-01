@@ -2,7 +2,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Mail, RefreshCw, Paperclip, Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Mail, RefreshCw, Paperclip, Loader2, CheckCheck } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -15,6 +16,7 @@ interface Email {
   date: string;
   isUnread: boolean;
   hasAttachments: boolean;
+  isProcesado?: boolean;
 }
 
 interface EmailListViewProps {
@@ -149,13 +151,21 @@ const EmailListView = ({
                 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <span
-                      className={`truncate ${
-                        email.isUnread ? "font-semibold" : ""
-                      }`}
-                    >
-                      {extractSenderName(email.from)}
-                    </span>
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <span
+                        className={`truncate ${
+                          email.isUnread ? "font-semibold" : ""
+                        }`}
+                      >
+                        {extractSenderName(email.from)}
+                      </span>
+                      {email.isProcesado && (
+                        <Badge variant="secondary" className="shrink-0 gap-1 text-xs">
+                          <CheckCheck className="h-3 w-3" />
+                          Procesado
+                        </Badge>
+                      )}
+                    </div>
                     <span className="text-xs text-muted-foreground whitespace-nowrap">
                       {formatEmailDate(email.date)}
                     </span>

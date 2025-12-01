@@ -167,18 +167,55 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     }
   }
   
-  // Product synonyms mapping - ONLY these explicit mappings are allowed
+  // Product synonyms mapping - comprehensive mappings for client product names
+  // Key: canonical product name (lowercase, no accents), Value: client product name variations
   const PRODUCT_SYNONYMS: Record<string, string[]> = {
-    'fecula de maiz': ['maizena', 'maicena', 'fecula'],
+    // Papeles
+    'papel para rojo': ['papel estraza', 'papel estraza cafe', 'papel estraza(cafe)', 'papel cafe', 'papel kraft', 'estraza'],
+    'papel libre': ['papel estraza', 'papel estraza cafe', 'papel estraza(cafe)', 'papel cafe', 'papel kraft', 'estraza'],
+    
+    // Frutas en lata
+    'pina': ['pina en lata', 'piña en lata', 'pina lata', 'piña lata'],
+    'pina en almíbar': ['pina en lata', 'piña en lata', 'pina lata', 'piña lata'],
+    'pina rebanadas': ['pina en lata', 'piña en lata', 'pina lata', 'piña lata'],
+    'mango': ['mango en lata', 'mango lata', 'mango en almibar'],
+    'mango en almíbar': ['mango en lata', 'mango lata', 'mango en almibar'],
+    'durazno': ['durazno en lata', 'durazno lata', 'durazno en almibar', 'duraznos'],
+    'durazno en almíbar': ['durazno en lata', 'durazno lata', 'durazno en almibar'],
+    
+    // Almendras
+    'almendra': ['almendra entera', 'almendras', 'almendra natural'],
+    'almendra entera': ['almendra', 'almendras', 'almendra natural'],
+    
+    // Azúcar
+    'azucar estandar': ['azucar', 'azúcar', 'azucar blanca', 'azúcar blanca'],
+    'azucar refinada': ['azucar', 'azúcar', 'azucar blanca', 'azúcar blanca'],
+    
+    // Sal
+    'sal de mesa': ['sal', 'sal refinada', 'sal fina'],
+    'sal refinada': ['sal', 'sal de mesa', 'sal fina'],
+    
+    // Féculas
+    'fecula de maiz': ['maizena', 'maicena', 'fecula', 'fécula'],
+    
+    // Pasas
     'uva pasa': ['pasas', 'pasa', 'pasitas', 'uva pasas'],
-    'azucar estandar': ['azucar', 'azúcar'],
-    'sal de mesa': ['sal'],
+    
+    // Otros productos comunes que clientes nombran diferente
+    'arroz': ['arroz blanco', 'arroz refinado'],
+    'frijol': ['frijol negro', 'frijoles'],
+    'avena': ['avena hojuelas', 'avena natural'],
+    'polipapel': ['poly papel', 'polypapel', 'poli papel'],
+    'canela': ['canela entera', 'canela molida', 'raja de canela'],
+    'ajonjoli': ['ajonjolí', 'sesamo', 'sésamo'],
+    'nuez': ['nuez entera', 'nueces', 'nuez de castilla'],
+    'cacahuate': ['cacahuates', 'cacahuate natural', 'mani', 'maní'],
   };
   
   // Track unmatched products for UI feedback
   const unmatchedProducts: string[] = [];
   
-  // DETERMINISTIC MATCHING - Only exact matches or configured synonyms
+  // DETERMINISTIC MATCHING - Exact matches, synonyms, or quotation-based matching
   const findProduct = (text: string): { product: ProductInfo | null; matchType: 'exact' | 'synonym' | 'none'; originalName: string } => {
     let normalized = text.toLowerCase().trim();
     let normalizedNoAccents = normalized.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -186,30 +223,67 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     
     if (normalized.length < 2) return { product: null, matchType: 'none', originalName };
     
-    // 1. Check synonyms first - ONLY explicit mappings
-    for (const [canonical, synonyms] of Object.entries(PRODUCT_SYNONYMS)) {
-      if (synonyms.some(s => normalizedNoAccents === s || normalizedNoAccents.includes(s))) {
-        // Look for the canonical product
-        if (productNoAccents.has(canonical)) {
-          console.log(`MATCH SYNONYM: "${text}" -> "${canonical}" -> ${productNoAccents.get(canonical)!.nombre}`);
-          return { product: productNoAccents.get(canonical)!, matchType: 'synonym', originalName };
-        }
-      }
-    }
+    // Clean up common suffixes/prefixes
+    normalizedNoAccents = normalizedNoAccents
+      .replace(/\(cafe\)/g, '')
+      .replace(/\(rojo\)/g, '')
+      .replace(/en lata/g, '')
+      .replace(/en almibar/g, '')
+      .replace(/de \d+ kilos?/g, '')
+      .replace(/balones? de \d+/g, '')
+      .trim();
     
-    // 2. Exact match with accents
+    // 1. Exact match with accents
     if (productExact.has(normalized)) {
       console.log(`MATCH EXACT: "${text}" -> ${productExact.get(normalized)!.nombre}`);
       return { product: productExact.get(normalized)!, matchType: 'exact', originalName };
     }
     
-    // 3. Exact match without accents
+    // 2. Exact match without accents
     if (productNoAccents.has(normalizedNoAccents)) {
       console.log(`MATCH EXACT (no accents): "${text}" -> ${productNoAccents.get(normalizedNoAccents)!.nombre}`);
       return { product: productNoAccents.get(normalizedNoAccents)!, matchType: 'exact', originalName };
     }
     
-    // 4. NO FUZZY MATCHING - If no exact match, return null and log for review
+    // 3. Check synonyms - map client names to catalog names
+    for (const [canonical, synonyms] of Object.entries(PRODUCT_SYNONYMS)) {
+      // Check if client text matches any synonym
+      if (synonyms.some(s => {
+        const sNorm = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        return normalizedNoAccents === sNorm || normalizedNoAccents.includes(sNorm) || sNorm.includes(normalizedNoAccents);
+      })) {
+        // Look for the canonical product in quotation
+        if (productNoAccents.has(canonical)) {
+          console.log(`MATCH SYNONYM: "${text}" -> "${canonical}" -> ${productNoAccents.get(canonical)!.nombre}`);
+          return { product: productNoAccents.get(canonical)!, matchType: 'synonym', originalName };
+        }
+      }
+      
+      // Also check if client text matches the canonical name
+      const canonicalNorm = canonical.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      if (normalizedNoAccents === canonicalNorm || normalizedNoAccents.includes(canonicalNorm)) {
+        if (productNoAccents.has(canonical)) {
+          console.log(`MATCH CANONICAL: "${text}" -> ${productNoAccents.get(canonical)!.nombre}`);
+          return { product: productNoAccents.get(canonical)!, matchType: 'synonym', originalName };
+        }
+      }
+    }
+    
+    // 4. Search in quotation products by keyword matching
+    // This allows matching "PIÑA EN LATA" to any product containing "piña"
+    const keywords = normalizedNoAccents.split(/\s+/).filter(w => w.length > 2 && !['con', 'sin', 'para', 'por', 'del', 'las', 'los', 'lata', 'kilo', 'kilos', 'bulto', 'caja'].includes(w));
+    
+    for (const keyword of keywords) {
+      // Find products in quotation that contain this keyword
+      for (const [key, prod] of productNoAccents.entries()) {
+        if (key.includes(keyword) || keyword.includes(key.split(' ')[0])) {
+          console.log(`MATCH KEYWORD: "${text}" keyword "${keyword}" -> ${prod.nombre}`);
+          return { product: prod, matchType: 'synonym', originalName };
+        }
+      }
+    }
+    
+    // 5. NO FUZZY MATCHING - If no match found, return null for manual selection
     console.log(`NO MATCH: "${text}" - requires manual selection`);
     if (!unmatchedProducts.includes(originalName)) {
       unmatchedProducts.push(originalName);

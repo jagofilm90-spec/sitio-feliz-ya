@@ -593,10 +593,11 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
             if (branchProducts.has(match.product.id)) {
               branchProducts.get(match.product.id)!.cantidad += conversion.cantidad;
             } else {
+              const isCannedPiñaOMango = isPiñaOMango && hasCannedPattern;
               branchProducts.set(match.product.id, {
                 nombre_producto: match.product.nombre,
                 cantidad: conversion.cantidad,
-                unidad: match.product.unidad,
+                unidad: isCannedPiñaOMango ? 'caja' : match.product.unidad,
                 precio_sugerido: null,
                 notas: conversion.cantidadOriginalKg ? `${conversion.cantidadOriginalKg} kg` : null,
                 producto_cotizado_id: match.product.id,
@@ -688,10 +689,14 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
           if (branchProducts.has(pendingProduct.id)) {
             branchProducts.get(pendingProduct.id)!.cantidad += conversion.cantidad;
           } else {
+            const productNameUpper = pendingProduct.nombre.toUpperCase();
+            const isPiñaOMangoPending = productNameUpper.includes('PIÑA') || productNameUpper.includes('PINA') || productNameUpper.includes('MANGO');
+            const hasCannedPatternPending = /(\d+)\s*\/\s*\d+(\.|,)?\d*\s*(gr|kg)/i.test(pendingProduct.nombre);
+            const isCannedPiñaOMangoPending = isPiñaOMangoPending && hasCannedPatternPending;
             branchProducts.set(pendingProduct.id, {
               nombre_producto: pendingProduct.nombre,
               cantidad: conversion.cantidad,
-              unidad: pendingProduct.unidad,
+              unidad: isCannedPiñaOMangoPending ? 'caja' : pendingProduct.unidad,
               precio_sugerido: null,
               notas: conversion.cantidadOriginalKg ? `${conversion.cantidadOriginalKg} kg` : null,
               producto_cotizado_id: pendingProduct.id,

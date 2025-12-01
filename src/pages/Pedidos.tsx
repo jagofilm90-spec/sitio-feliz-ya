@@ -47,6 +47,7 @@ interface PedidoConCotizacion {
   folio: string;
   fecha_pedido: string;
   total: number;
+  peso_total_kg: number | null;
   status: string;
   requiere_factura: boolean;
   facturado: boolean;
@@ -90,6 +91,7 @@ const Pedidos = () => {
           folio,
           fecha_pedido,
           total,
+          peso_total_kg,
           status,
           requiere_factura,
           facturado,
@@ -499,6 +501,7 @@ const Pedidos = () => {
                     <TableHead>Vendedor</TableHead>
                     <TableHead>Fecha</TableHead>
                     <TableHead>Total</TableHead>
+                    <TableHead>Peso Total</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead>Factura</TableHead>
                     <TableHead>Origen</TableHead>
@@ -508,13 +511,13 @@ const Pedidos = () => {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={11} className="text-center">
+                      <TableCell colSpan={12} className="text-center">
                         Cargando...
                       </TableCell>
                     </TableRow>
                   ) : filteredPedidos.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={11} className="text-center">
+                      <TableCell colSpan={12} className="text-center">
                         No hay pedidos registrados
                       </TableCell>
                     </TableRow>
@@ -536,6 +539,15 @@ const Pedidos = () => {
                           {new Date(pedido.fecha_pedido).toLocaleDateString()}
                         </TableCell>
                         <TableCell className="font-mono">${formatCurrency(pedido.total)}</TableCell>
+                        <TableCell className="font-mono">
+                          {pedido.peso_total_kg ? (
+                            <span className="text-sm">
+                              {formatCurrency(pedido.peso_total_kg)} kg
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </TableCell>
                         <TableCell>{getStatusBadge(pedido.status)}</TableCell>
                         <TableCell>{getFacturaBadge(pedido)}</TableCell>
                         <TableCell>

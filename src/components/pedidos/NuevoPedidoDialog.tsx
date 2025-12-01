@@ -61,6 +61,7 @@ interface Producto {
   aplica_iva: boolean;
   aplica_ieps: boolean;
   stock_actual: number;
+  kg_por_unidad: number | null;
 }
 
 interface DetallePedido {
@@ -136,7 +137,7 @@ const NuevoPedidoDialog = ({ open, onOpenChange, onPedidoCreated }: NuevoPedidoD
   const loadProductos = async () => {
     const { data, error } = await supabase
       .from("productos")
-      .select("id, codigo, nombre, precio_venta, unidad, aplica_iva, aplica_ieps, stock_actual")
+      .select("id, codigo, nombre, precio_venta, unidad, aplica_iva, aplica_ieps, stock_actual, kg_por_unidad")
       .eq("activo", true)
       .order("nombre");
 
@@ -197,6 +198,16 @@ const NuevoPedidoDialog = ({ open, onOpenChange, onPedidoCreated }: NuevoPedidoD
     };
   };
 
+  const calcularPesoTotal = () => {
+    let pesoTotal = 0;
+    detalles.forEach(d => {
+      if (d.producto.kg_por_unidad) {
+        pesoTotal += d.cantidad * d.producto.kg_por_unidad;
+      }
+    });
+    return pesoTotal;
+  };
+
   const handleCrearPedido = async () => {
     if (!selectedClienteId) {
       toast({ title: "Selecciona un cliente", variant: "destructive" });
@@ -217,6 +228,7 @@ const NuevoPedidoDialog = ({ open, onOpenChange, onPedidoCreated }: NuevoPedidoD
       if (!userData.user) throw new Error("No autenticado");
 
       const totales = calcularTotales();
+      const pesoTotal = calcularPesoTotal();
       const timestamp = Date.now();
       const folio = `PED-${timestamp}`;
 
@@ -231,6 +243,7 @@ const NuevoPedidoDialog = ({ open, onOpenChange, onPedidoCreated }: NuevoPedidoD
           subtotal: totales.subtotal,
           impuestos: totales.iva + totales.ieps,
           total: totales.total,
+          peso_total_kg: pesoTotal > 0 ? pesoTotal : null,
           requiere_factura: requiereFactura,
           notas: notas || null,
           status: "pendiente",

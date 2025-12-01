@@ -412,11 +412,19 @@ export default function ProcesarPedidoDialog({
                 }
               }
               
+              // Check if product is piña/mango in caja format - force precio_por_kilo = false
+              const isPiñaMangoCaja = prod.unidad?.toLowerCase() === 'caja' && 
+                                      matched && 
+                                      /(\d+)\s*\/\s*\d+(\.|,)?\d*\s*(gr|kg)/i.test(matched.nombre) &&
+                                      (matched.nombre.toUpperCase().includes('PIÑA') || 
+                                       matched.nombre.toUpperCase().includes('PINA') || 
+                                       matched.nombre.toUpperCase().includes('MANGO'));
+              
               return {
                 ...prod,
                 producto_id: matched?.id,
                 precio_unitario: precioCotizacionPorNombre || matched?.precio_venta || prod.precio_sugerido,
-                precio_por_kilo: matched?.precio_por_kilo,
+                precio_por_kilo: isPiñaMangoCaja ? false : matched?.precio_por_kilo,
                 kg_por_unidad: matched?.kg_por_unidad,
                 aplica_iva: matched?.aplica_iva,
                 aplica_ieps: matched?.aplica_ieps,
@@ -692,9 +700,19 @@ export default function ProcesarPedidoDialog({
     
     const producto = productos?.find(p => p.id === productoId);
     const updated = { ...parsedOrder };
+    const prod = updated.sucursales[sucIndex].productos[prodIndex];
+    
+    // Check if product is piña/mango in caja format - force precio_por_kilo = false
+    const isPiñaMangoCaja = prod.unidad?.toLowerCase() === 'caja' && 
+                            producto && 
+                            /(\d+)\s*\/\s*\d+(\.|,)?\d*\s*(gr|kg)/i.test(producto.nombre) &&
+                            (producto.nombre.toUpperCase().includes('PIÑA') || 
+                             producto.nombre.toUpperCase().includes('PINA') || 
+                             producto.nombre.toUpperCase().includes('MANGO'));
+    
     updated.sucursales[sucIndex].productos[prodIndex].producto_id = productoId;
     updated.sucursales[sucIndex].productos[prodIndex].precio_unitario = producto?.precio_venta;
-    updated.sucursales[sucIndex].productos[prodIndex].precio_por_kilo = producto?.precio_por_kilo;
+    updated.sucursales[sucIndex].productos[prodIndex].precio_por_kilo = isPiñaMangoCaja ? false : producto?.precio_por_kilo;
     updated.sucursales[sucIndex].productos[prodIndex].kg_por_unidad = producto?.kg_por_unidad;
     updated.sucursales[sucIndex].productos[prodIndex].aplica_iva = producto?.aplica_iva;
     updated.sucursales[sucIndex].productos[prodIndex].aplica_ieps = producto?.aplica_ieps;

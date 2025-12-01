@@ -96,6 +96,7 @@ export default function ProcesarPedidoDialog({
   const [error, setError] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
   const [existingOrders, setExistingOrders] = useState<Map<string, { id: string; folio: string }>>(new Map());
+  const [isLecarozEmail, setIsLecarozEmail] = useState(false);
 
   // Fetch clientes
   const { data: clientes } = useQuery({
@@ -212,6 +213,10 @@ export default function ProcesarPedidoDialog({
   }, [open, clientes, emailFrom]);
 
   const handleParse = async () => {
+    // Detectar si es correo de Lecaroz
+    const isLecaroz = emailSubject?.toUpperCase().includes("LECAROZ") || false;
+    setIsLecarozEmail(isLecaroz);
+    
     setParsing(true);
     setError(null);
     setParsedOrder(null);

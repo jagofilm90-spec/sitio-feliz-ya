@@ -1651,6 +1651,111 @@ export type Database = {
           },
         ]
       }
+      pedidos_acumulativos: {
+        Row: {
+          cliente_id: string
+          correos_procesados: string[] | null
+          created_at: string
+          fecha_entrega: string
+          id: string
+          impuestos: number | null
+          notas: string | null
+          status: string
+          subtotal: number | null
+          sucursal_id: string | null
+          total: number | null
+          updated_at: string
+        }
+        Insert: {
+          cliente_id: string
+          correos_procesados?: string[] | null
+          created_at?: string
+          fecha_entrega: string
+          id?: string
+          impuestos?: number | null
+          notas?: string | null
+          status?: string
+          subtotal?: number | null
+          sucursal_id?: string | null
+          total?: number | null
+          updated_at?: string
+        }
+        Update: {
+          cliente_id?: string
+          correos_procesados?: string[] | null
+          created_at?: string
+          fecha_entrega?: string
+          id?: string
+          impuestos?: number | null
+          notas?: string | null
+          status?: string
+          subtotal?: number | null
+          sucursal_id?: string | null
+          total?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pedidos_acumulativos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pedidos_acumulativos_sucursal_id_fkey"
+            columns: ["sucursal_id"]
+            isOneToOne: false
+            referencedRelation: "cliente_sucursales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pedidos_acumulativos_detalles: {
+        Row: {
+          cantidad: number
+          created_at: string
+          id: string
+          pedido_acumulativo_id: string
+          precio_unitario: number
+          producto_id: string
+          subtotal: number
+        }
+        Insert: {
+          cantidad: number
+          created_at?: string
+          id?: string
+          pedido_acumulativo_id: string
+          precio_unitario: number
+          producto_id: string
+          subtotal: number
+        }
+        Update: {
+          cantidad?: number
+          created_at?: string
+          id?: string
+          pedido_acumulativo_id?: string
+          precio_unitario?: number
+          producto_id?: string
+          subtotal?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pedidos_acumulativos_detalles_pedido_acumulativo_id_fkey"
+            columns: ["pedido_acumulativo_id"]
+            isOneToOne: false
+            referencedRelation: "pedidos_acumulativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pedidos_acumulativos_detalles_producto_id_fkey"
+            columns: ["producto_id"]
+            isOneToOne: false
+            referencedRelation: "productos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pedidos_detalles: {
         Row: {
           cantidad: number

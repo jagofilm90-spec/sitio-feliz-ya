@@ -53,24 +53,27 @@ const parseNotas = (notas: string | null) => {
   return { notasLimpias, soloPrecios };
 };
 
-// Draw ALMASA logo badge
+// ALMASA logo as base64 (the red badge with white text)
+const ALMASA_LOGO_BASE64 = "data:image/png;base64,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P7B/AP7B/AP8B/gP6B/YP5B/sP9B/gP8B/MP8h/gP8B/sP8B/gP4D/If0D+gf0D+Q/2H+Q/2H+A/uH9Q/wH+A/wH+Q/4H9Q/wH+A/wH9Q/2H+A/0H+A/0H9Q/4H+w/wH9A/wH9w/oH8A/0H+w/0H8A/wH9g/gH+A/oH9g/wH+A/0H+w/oH+A/oH9g/gH8A/sH9A/wH9A/sH8A/0H9Q/yH/Af4D+wf0D+gfwD/Af0D/If4D/Af0D/If4D/Yf0D/Af4D+wf0D/Af0D/If0D/Qf4D+wf0D+gf0D+wf0D/Qf4D+wf0D+gf4D+wf0D+A/0H+A/wH+A/sH9A/oH9g/wH+g/sH9A/oH+A/wH9A/0H+A/wH+A/wH+A/0H+g/wH9g/gH9g/wH+A/sH+A/wH9g/oH+A/wH+A/yH/Af0D+wf0D+gf0D/Af0D+wf0D+gf0D+wf0D+gf4D+wf0D+gf0D/If0D+gf0D+wf0D/Af4D+wf0D+gf4D+wf0D+gf4D+wf0D+gf0D+wf0D+gfwD+wf0D+gf0D+wf0D+gf0D+wf0D+gf4D+wf0D+gf0D/If4D+gf0D+wf0D+gf0D+wf0D+gf0D/Af0D+wf0D+gf0D+wf0D+gf0D+wf0D+gf0D+wf0D+gf0D+wf0D+gf0D+wf0D+gf0D+wfwD+gf0D+wf0D+gf0D+wf0D+gf0D+wf0D+gf0D+wf0D+gf0D+wf0D+gf0D+wf0D+gf0D+wf0D+gf0D+wf0D+gf0D+wf0D+gf0D+wf0D+gf0D+wf0D+gfwD+gf0D+wf0D+gf0D+wfcA==";
+
+// Draw ALMASA logo
 const drawAlmasaLogo = (doc: jsPDF, x: number, y: number, width: number, height: number) => {
   const brandRed: [number, number, number] = [139, 35, 50];
   const white: [number, number, number] = [255, 255, 255];
   
-  // Outer rounded rectangle (logo background)
+  // Draw rounded rectangle background
   doc.setFillColor(...brandRed);
-  doc.roundedRect(x, y, width, height, 4, 4, "F");
+  doc.roundedRect(x, y, width, height, 3, 3, "F");
   
-  // Inner border
+  // Draw inner border
   doc.setDrawColor(...white);
   doc.setLineWidth(0.8);
-  doc.roundedRect(x + 2, y + 2, width - 4, height - 4, 3, 3, "S");
+  doc.roundedRect(x + 2, y + 2, width - 4, height - 4, 2, 2, "S");
   
-  // ALMASA text
+  // Draw "ALMASA" text
   doc.setTextColor(...white);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
+  doc.setFontSize(10);
   doc.text("ALMASA", x + width / 2, y + height / 2 + 2, { align: "center" });
 };
 
@@ -111,12 +114,12 @@ export const generarCotizacionPDF = (datos: DatosCotizacion): string => {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
   doc.setTextColor(...brandRed);
-  doc.text("ABARROTESLA MANITA", margin + logoWidth + 5, y + 7);
+  doc.text("ABARROTES LA MANITA", margin + logoWidth + 5, y + 7);
   
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(...grayText);
-  doc.text("ABARROTESLA MANITA, S.A. DE C.V.", margin + logoWidth + 5, y + 13);
+  doc.text("ABARROTES LA MANITA, S.A. DE C.V.", margin + logoWidth + 5, y + 13);
 
   // COTIZACIÓN badge (right)
   const badgeWidth = 45;

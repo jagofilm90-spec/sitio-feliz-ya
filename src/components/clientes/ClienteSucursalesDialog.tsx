@@ -154,7 +154,7 @@ const ClienteSucursalesDialog = ({
         cliente_id: cliente.id,
         nombre: formData.nombre,
         codigo_sucursal: formData.codigo_sucursal || null,
-        direccion: formData.direccion,
+        direccion: formData.direccion || null,
         zona_id: formData.zona_id || null,
         telefono: formData.telefono || null,
         contacto: formData.contacto || null,
@@ -337,13 +337,12 @@ const ClienteSucursalesDialog = ({
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="suc_direccion">Dirección de Entrega *</Label>
+                <Label htmlFor="suc_direccion">Dirección de Entrega</Label>
                 <GoogleMapsAddressAutocomplete
                   id="suc_direccion"
                   value={formData.direccion}
                   onChange={(value) => setFormData({ ...formData, direccion: value })}
                   placeholder="Buscar dirección de entrega..."
-                  required
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">

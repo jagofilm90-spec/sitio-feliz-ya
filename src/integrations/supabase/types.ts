@@ -99,7 +99,7 @@ export type Database = {
           contacto: string | null
           created_at: string
           dias_sin_entrega: string | null
-          direccion: string
+          direccion: string | null
           direccion_fiscal: string | null
           email_facturacion: string | null
           horario_entrega: string | null
@@ -121,7 +121,7 @@ export type Database = {
           contacto?: string | null
           created_at?: string
           dias_sin_entrega?: string | null
-          direccion: string
+          direccion?: string | null
           direccion_fiscal?: string | null
           email_facturacion?: string | null
           horario_entrega?: string | null
@@ -143,7 +143,7 @@ export type Database = {
           contacto?: string | null
           created_at?: string
           dias_sin_entrega?: string | null
-          direccion?: string
+          direccion?: string | null
           direccion_fiscal?: string | null
           email_facturacion?: string | null
           horario_entrega?: string | null

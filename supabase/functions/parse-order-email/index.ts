@@ -11,6 +11,7 @@ interface ProductoCotizado {
   codigo: string;
   unidad: string;
   precio_cotizado: number;
+  kg_por_unidad: number | null;
 }
 
 interface ParseOrderRequest {
@@ -77,21 +78,33 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
   }
   
   // Build product lookup with multiple matching strategies
-  const productExact = new Map<string, { id: string, nombre: string, unidad: string }>();
-  const productWords = new Map<string, { id: string, nombre: string, unidad: string }>();
+  type ProductInfo = { id: string, nombre: string, unidad: string, kg_por_unidad: number | null };
+  const productExact = new Map<string, ProductInfo>();
+  const productWords = new Map<string, ProductInfo>();
+  const productPartial = new Map<string, ProductInfo>();
   
   for (const p of productosCotizados) {
     const key = p.nombre.toLowerCase().trim();
-    productExact.set(key, { id: p.producto_id, nombre: p.nombre, unidad: p.unidad });
-    // Also index by first significant word
-    const words = key.split(/\s+/).filter(w => w.length > 2);
-    if (words.length > 0) {
-      productWords.set(words[0], { id: p.producto_id, nombre: p.nombre, unidad: p.unidad });
+    const info: ProductInfo = { id: p.producto_id, nombre: p.nombre, unidad: p.unidad, kg_por_unidad: p.kg_por_unidad };
+    productExact.set(key, info);
+    
+    // Index by significant words (excluding common words)
+    const words = key.split(/\s+/).filter(w => w.length > 2 && !['con', 'sin', 'para', 'por'].includes(w));
+    for (const word of words) {
+      if (!productWords.has(word)) {
+        productWords.set(word, info);
+      }
     }
+    
+    // Index by partial key words for fuzzy matching
+    // e.g., "azucar" matches "azúcar refinada" or "azúcar estándar"
+    const keyNoAccents = key.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    productPartial.set(keyNoAccents, info);
   }
   
-  const findProduct = (text: string): { id: string, nombre: string, unidad: string } | null => {
+  const findProduct = (text: string): ProductInfo | null => {
     const normalized = text.toLowerCase().trim();
+    const normalizedNoAccents = normalized.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     if (normalized.length < 3) return null;
     
     // Exact match
@@ -102,10 +115,20 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
       if (key.includes(normalized) || normalized.includes(key)) return product;
     }
     
-    // Word-based match
-    const inputWords = normalized.split(/\s+/).filter(w => w.length > 2);
+    // Try without accents
+    for (const [key, product] of productPartial) {
+      if (key.includes(normalizedNoAccents) || normalizedNoAccents.includes(key)) return product;
+    }
+    
+    // Word-based match - any word matches
+    const inputWords = normalizedNoAccents.split(/\s+/).filter(w => w.length > 3);
     for (const word of inputWords) {
       if (productWords.has(word)) return productWords.get(word)!;
+    }
+    
+    // Last resort: check if any product word appears in input
+    for (const [word, product] of productWords) {
+      if (normalizedNoAccents.includes(word) && word.length > 4) return product;
     }
     
     return null;
@@ -119,7 +142,7 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
   const branchOrder: string[] = [];
   const results = new Map<string, Map<string, ParsedProduct>>();
   let currentBranch: string | null = null;
-  let pendingProduct: { id: string, nombre: string, unidad: string } | null = null;
+  let pendingProduct: ProductInfo | null = null;
   
   // Branch pattern: "1 LAGO", "3 LAFAYETTE", "12 AGRICOLA ORIENTAL"
   const branchPattern = /^(\d{1,3})\s+([A-Z][A-Z\s]*[A-Z]?)$/i;
@@ -170,10 +193,23 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     
     // Try to get quantity - number possibly followed by unit
     if (pendingProduct) {
-      const qtyMatch = line.match(/^([\d,\.]+)\s*(KILOS?|PIEZAS?|BULTOS?|CAJAS?)?$/i);
+      const qtyMatch = line.match(/^([\d,\.]+)\s*(KILOS?|PIEZAS?|BULTOS?|CAJAS?|BALONES?)?$/i);
       if (qtyMatch) {
-        const qty = parseFloat(qtyMatch[1].replace(/,/g, ''));
+        let qty = parseFloat(qtyMatch[1].replace(/,/g, ''));
+        const emailUnit = (qtyMatch[2] || '').toUpperCase();
+        
         if (qty > 0 && qty < 100000) {
+          // Convert quantity if email is in KILOS but product is sold by unit
+          // and we know kg_por_unidad
+          if (emailUnit.startsWith('KILO') && pendingProduct.kg_por_unidad && pendingProduct.kg_por_unidad > 0) {
+            const productUnit = pendingProduct.unidad.toLowerCase();
+            // Only convert if product is NOT sold by kg
+            if (productUnit !== 'kg' && productUnit !== 'kilo' && productUnit !== 'kilos') {
+              qty = Math.round(qty / pendingProduct.kg_por_unidad);
+              console.log(`Converted ${qtyMatch[1]} KILOS to ${qty} ${pendingProduct.unidad} for ${pendingProduct.nombre}`);
+            }
+          }
+          
           const branchProducts = results.get(currentBranch)!;
           if (branchProducts.has(pendingProduct.id)) {
             branchProducts.get(pendingProduct.id)!.cantidad += qty;

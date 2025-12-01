@@ -343,6 +343,8 @@ export default function ProcesarPedidoDialog({
               if (prod.producto_cotizado_id) {
                 const matchedByCotizacion = productos.find(p => p.id === prod.producto_cotizado_id);
                 if (matchedByCotizacion) {
+                  console.log('PIÑA/MANGO BY-ID BEFORE', { prod, matchedByCotizacion });
+
                   // Buscar precio de cotización si existe en las cotizaciones seleccionadas
                   const precioCotizacion = productosUnicos.find(
                     (pc: any) => pc.producto_id === prod.producto_cotizado_id
@@ -365,19 +367,19 @@ export default function ProcesarPedidoDialog({
                   if (isPiñaMangoLataCatalogById && matchedByCotizacion.unidad?.toLowerCase() === "caja") {
                     const piecesMatchId = matchedByCotizacion.nombre.match(/(\d+)\s*\/\s*\d+(\.|,)?\d*\s*(gr|kg)/i);
                     const piecesPerBoxId = piecesMatchId ? parseInt(piecesMatchId[1], 10) : null;
-                    const unidadOriginalId = (prod.unidad || "").toUpperCase();
 
-                    // Solo corregimos si todavía viene como KILOS o PIEZAS en la UI
-                    if (
-                      piecesPerBoxId &&
-                      piecesPerBoxId > 0 &&
-                      (unidadOriginalId.includes("KILO") || unidadOriginalId.includes("PIEZA"))
-                    ) {
+                    if (piecesPerBoxId && piecesPerBoxId > 0) {
                       const cajasId = prod.cantidad / piecesPerBoxId;
                       cantidadAjustadaId = Math.round(cajasId * 100) / 100;
                       unidadAjustadaId = "caja";
                     }
                   }
+
+                  console.log('PIÑA/MANGO BY-ID AFTER', {
+                    cantidadAjustadaId,
+                    unidadAjustadaId,
+                    isPiñaMangoLataCatalogById,
+                  });
                   
                   return {
                     ...prod,
@@ -450,16 +452,21 @@ export default function ProcesarPedidoDialog({
               if (isPiñaMangoLataCatalog && matched?.unidad?.toLowerCase() === 'caja') {
                 const piecesMatch = matched.nombre.match(/(\d+)\s*\/\s*\d+(\.|,)?\d*\s*(gr|kg)/i);
                 const piecesPerBox = piecesMatch ? parseInt(piecesMatch[1], 10) : null;
-                const unidadOriginal = (prod.unidad || '').toUpperCase();
 
-                // Solo corregimos si todavía viene como KILOS o PIEZAS en la UI
-                if (piecesPerBox && piecesPerBox > 0 && (unidadOriginal.includes('KILO') || unidadOriginal.includes('PIEZA'))) {
+                if (piecesPerBox && piecesPerBox > 0) {
                   const cajas = prod.cantidad / piecesPerBox;
                   cantidadAjustada = Math.round(cajas * 100) / 100;
                   unidadAjustada = 'caja';
                 }
               }
               
+              console.log('PIÑA/MANGO FRONT MATCH', {
+                original: prod,
+                matched,
+                isPiñaMangoLataCatalog,
+                cantidadAjustada,
+                unidadAjustada,
+              });
               return {
                 ...prod,
                 cantidad: cantidadAjustada,

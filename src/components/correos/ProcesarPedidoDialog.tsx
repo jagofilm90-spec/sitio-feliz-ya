@@ -48,6 +48,7 @@ interface ParsedProduct {
   kg_por_unidad?: number;
   aplica_iva?: boolean;
   aplica_ieps?: boolean;
+  match_type?: 'exact' | 'synonym' | 'none'; // Tipo de coincidencia
 }
 
 interface ParsedSucursal {
@@ -500,13 +501,26 @@ export default function ProcesarPedidoDialog({
     setParsedOrder(updated);
   };
 
-  const hasUnmatchedProducts = parsedOrder?.sucursales.some(s => 
-    s.productos.some(p => !p.producto_id)
-  );
+  // VALIDACIÓN ESTRICTA - Contar productos coincidentes vs sin resolver
+  const { matchedCount, unmatchedCount } = useMemo(() => {
+    if (!parsedOrder) return { matchedCount: 0, unmatchedCount: 0 };
+    let matched = 0;
+    let unmatched = 0;
+    for (const suc of parsedOrder.sucursales) {
+      for (const prod of suc.productos) {
+        if (prod.producto_id) {
+          matched++;
+        } else {
+          unmatched++;
+        }
+      }
+    }
+    return { matchedCount: matched, unmatchedCount: unmatched };
+  }, [parsedOrder]);
 
-  const totalProducts = parsedOrder?.sucursales.reduce((sum, s) => 
-    sum + s.productos.filter(p => p.producto_id).length, 0
-  ) || 0;
+  const hasUnmatchedProducts = unmatchedCount > 0;
+  const totalProducts = matchedCount;
+  const canCreateOrders = !hasUnmatchedProducts && totalProducts > 0;
 
   // Progressive rendering - only show visibleCount sucursales
   const visibleSucursales = useMemo(() => {
@@ -607,16 +621,31 @@ export default function ProcesarPedidoDialog({
           {parsedOrder && (
             <ScrollArea className="h-[400px] pr-4">
               <div className="space-y-4">
-                {/* Confidence badge */}
-                <div className="flex items-center gap-2">
-                  <Badge variant={parsedOrder.confianza > 0.7 ? "default" : "secondary"}>
-                    Confianza: {Math.round(parsedOrder.confianza * 100)}%
-                  </Badge>
+                {/* VALIDACIÓN DETERMINISTA - Sin porcentajes, solo estados claros */}
+                <div className="p-3 rounded-lg border space-y-2">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {matchedCount > 0 && (
+                      <Badge variant="default" className="bg-green-600">
+                        <CheckCircle2 className="h-3 w-3 mr-1" />
+                        {matchedCount} productos coinciden exactamente
+                      </Badge>
+                    )}
+                    {unmatchedCount > 0 && (
+                      <Badge variant="destructive">
+                        <AlertCircle className="h-3 w-3 mr-1" />
+                        {unmatchedCount} requieren selección manual
+                      </Badge>
+                    )}
+                  </div>
                   {hasUnmatchedProducts && (
-                    <Badge variant="destructive">
-                      <AlertCircle className="h-3 w-3 mr-1" />
-                      Productos sin coincidencia
-                    </Badge>
+                    <p className="text-sm text-destructive font-medium">
+                      ⚠️ No se puede crear el pedido hasta resolver todos los productos marcados en rojo
+                    </p>
+                  )}
+                  {!hasUnmatchedProducts && matchedCount > 0 && (
+                    <p className="text-sm text-green-600 font-medium">
+                      ✓ Todos los productos coinciden - Listo para crear pedido
+                    </p>
                   )}
                 </div>
 
@@ -651,20 +680,26 @@ export default function ProcesarPedidoDialog({
                     </CardHeader>
                     <CardContent className="py-2">
                       <div className="space-y-2">
-                        {suc.productos.map((prod, prodIndex) => (
+                        {suc.productos.map((prod, prodIndex) => {
+                          const isUnmatched = !prod.producto_id;
+                          return (
                           <div 
                             key={prodIndex} 
-                            className="flex items-center gap-2 p-2 bg-muted/50 rounded-md"
+                            className={`flex items-center gap-2 p-2 rounded-md border ${
+                              isUnmatched 
+                                ? 'bg-destructive/10 border-destructive' 
+                                : 'bg-muted/50 border-transparent'
+                            }`}
                           >
-                            <Package className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <Package className={`h-4 w-4 shrink-0 ${isUnmatched ? 'text-destructive' : 'text-muted-foreground'}`} />
                             
                             {/* Product selector */}
                             <Select
                               value={prod.producto_id || ""}
                               onValueChange={(v) => updateProductMatch(sucIndex, prodIndex, v)}
                             >
-                              <SelectTrigger className="flex-1 min-w-[200px]">
-                                <SelectValue placeholder={prod.nombre_producto} />
+                              <SelectTrigger className={`flex-1 min-w-[200px] ${isUnmatched ? 'border-destructive' : ''}`}>
+                                <SelectValue placeholder={`⚠️ ${prod.nombre_producto} - SELECCIONAR`} />
                               </SelectTrigger>
                               <SelectContent>
                                 {productos?.map(p => (
@@ -702,7 +737,7 @@ export default function ProcesarPedidoDialog({
                             {prod.producto_id ? (
                               <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
                             ) : (
-                              <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
+                              <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
                             )}
 
                             {/* Remove button */}
@@ -715,7 +750,7 @@ export default function ProcesarPedidoDialog({
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
-                        ))}
+                        )})}
                       </div>
                     </CardContent>
                   </Card>
@@ -755,12 +790,18 @@ export default function ProcesarPedidoDialog({
           {parsedOrder && (
             <Button
               onClick={handleCreateOrders}
-              disabled={creating || totalProducts === 0}
+              disabled={creating || !canCreateOrders}
+              variant={hasUnmatchedProducts ? "outline" : "default"}
             >
               {creating ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Creando pedidos...
+                </>
+              ) : hasUnmatchedProducts ? (
+                <>
+                  <AlertCircle className="h-4 w-4 mr-2" />
+                  Resolver {unmatchedCount} producto(s) primero
                 </>
               ) : (
                 <>

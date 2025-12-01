@@ -64,12 +64,21 @@ serve(async (req) => {
     }
 
     // Clean email body - strip HTML
-    const cleanEmailBody = stripHtml(emailBody);
+    let cleanEmailBody = stripHtml(emailBody);
     
     console.log("Parsing order email from:", emailFrom);
     console.log("Subject:", emailSubject);
     console.log("Productos cotizados disponibles:", productosCotizados?.length || 0);
-    console.log("Clean email length:", cleanEmailBody.length);
+    console.log("Original clean email length:", cleanEmailBody.length);
+    
+    // Truncate very long emails to prevent timeouts (max ~30K chars)
+    const MAX_EMAIL_LENGTH = 30000;
+    if (cleanEmailBody.length > MAX_EMAIL_LENGTH) {
+      console.log("Truncating email from", cleanEmailBody.length, "to", MAX_EMAIL_LENGTH);
+      cleanEmailBody = cleanEmailBody.substring(0, MAX_EMAIL_LENGTH) + "\n\n[... contenido truncado ...]";
+    }
+    
+    console.log("Final email length:", cleanEmailBody.length);
 
     // Construir contexto de productos cotizados para mejor matching
     let productosContext = "";

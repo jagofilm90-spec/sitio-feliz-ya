@@ -168,32 +168,29 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
   }
   
   // Product synonyms mapping - comprehensive mappings for client product names
-  // Key: canonical product name (lowercase, no accents), Value: client product name variations
+  // Key: canonical product name (lowercase, no accents) - MUST match database product names
+  // Value: client product name variations
   const PRODUCT_SYNONYMS: Record<string, string[]> = {
-    // Papeles
-    'papel para rojo': ['papel estraza', 'papel estraza cafe', 'papel estraza(cafe)', 'papel cafe', 'papel kraft', 'estraza'],
-    'papel libre': ['papel estraza', 'papel estraza cafe', 'papel estraza(cafe)', 'papel cafe', 'papel kraft', 'estraza'],
+    // Papeles - mapean a productos reales en la base de datos
+    'papel estraza bala rojo': ['papel estraza', 'papel estraza cafe', 'papel estraza(cafe)', 'papel cafe', 'papel kraft', 'estraza', 'papel para rojo', 'papel rojo'],
+    'papel estraza liebre': ['papel libre', 'papel liebre', 'estraza liebre'],
+    'hoja de polipapel 25x35': ['polipapel', 'poly papel', 'polypapel', 'poli papel', 'hoja polipapel'],
+    'bolsa de polipapel 26x32': ['bolsa polipapel', 'bolsa poly'],
     
     // Frutas en lata
-    'pina': ['pina en lata', 'piña en lata', 'pina lata', 'piña lata'],
-    'pina en almíbar': ['pina en lata', 'piña en lata', 'pina lata', 'piña lata'],
-    'pina rebanadas': ['pina en lata', 'piña en lata', 'pina lata', 'piña lata'],
+    'pina rodaja 12/850gr (14)': ['pina en lata', 'piña en lata', 'pina lata', 'piña lata', 'pina', 'piña'],
     'mango': ['mango en lata', 'mango lata', 'mango en almibar'],
-    'mango en almíbar': ['mango en lata', 'mango lata', 'mango en almibar'],
     'durazno': ['durazno en lata', 'durazno lata', 'durazno en almibar', 'duraznos'],
-    'durazno en almíbar': ['durazno en lata', 'durazno lata', 'durazno en almibar'],
     
-    // Almendras
+    // Almendras - si existe almendra entera, usar ese nombre
     'almendra': ['almendra entera', 'almendras', 'almendra natural'],
-    'almendra entera': ['almendra', 'almendras', 'almendra natural'],
     
     // Azúcar
-    'azucar estandar': ['azucar', 'azúcar', 'azucar blanca', 'azúcar blanca'],
-    'azucar refinada': ['azucar', 'azúcar', 'azucar blanca', 'azúcar blanca'],
-    'azucar glass': ['azucar glas', 'azúcar glas', 'azucar glass', 'azúcar glass', 'glass', 'glas'],
+    'azucar estandar': ['azucar', 'azúcar', 'azucar blanca', 'azúcar blanca', 'azucar segunda'],
+    'azucar refinada': ['azucar ref', 'azúcar ref'],
+    'azucar glass': ['azucar glas', 'azúcar glas', 'glass', 'glas'],
     
     // Sal
-    'sal de mesa': ['sal', 'sal refinada', 'sal fina'],
     'sal refinada': ['sal', 'sal de mesa', 'sal fina'],
     
     // Féculas
@@ -202,11 +199,10 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     // Pasas
     'uva pasa': ['pasas', 'pasa', 'pasitas', 'uva pasas'],
     
-    // Otros productos comunes que clientes nombran diferente
-    'arroz': ['arroz blanco', 'arroz refinado'],
-    'frijol': ['frijol negro', 'frijoles'],
-    'avena': ['avena hojuelas', 'avena natural'],
-    'polipapel': ['poly papel', 'polypapel', 'poli papel'],
+    // Avena
+    'avena hojuela': ['avena', 'avena hojuelas', 'avena natural'],
+    
+    // Otros
     'canela': ['canela entera', 'canela molida', 'raja de canela'],
     'ajonjoli': ['ajonjolí', 'sesamo', 'sésamo'],
     'nuez': ['nuez entera', 'nueces', 'nuez de castilla'],
@@ -312,19 +308,8 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
       }
     }
     
-    // 4. Search in quotation products by keyword matching
-    // This allows matching "PIÑA EN LATA" to any product containing "piña"
-    const keywords = normalizedNoAccents.split(/\s+/).filter(w => w.length > 2 && !['con', 'sin', 'para', 'por', 'del', 'las', 'los', 'lata', 'kilo', 'kilos', 'bulto', 'caja'].includes(w));
-    
-    for (const keyword of keywords) {
-      // Find products in quotation that contain this keyword
-      for (const [key, prod] of productNoAccents.entries()) {
-        if (key.includes(keyword) || keyword.includes(key.split(' ')[0])) {
-          console.log(`MATCH KEYWORD: "${text}" keyword "${keyword}" -> ${prod.nombre}`);
-          return { product: prod, matchType: 'synonym', originalName };
-        }
-      }
-    }
+    // 4. NO KEYWORD MATCHING - Disabled to prevent incorrect matches like "papel" -> "polipapel"
+    // Only exact matches and configured synonyms are allowed for deterministic parsing
     
     // 5. NO FUZZY MATCHING - If no match found, return null for manual selection
     console.log(`NO MATCH: "${text}" - requires manual selection`);

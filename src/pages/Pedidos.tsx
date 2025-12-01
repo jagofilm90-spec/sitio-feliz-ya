@@ -28,6 +28,7 @@ import CotizacionDetalleDialog from "@/components/cotizaciones/CotizacionDetalle
 import { ImprimirRemisionDialog } from "@/components/remisiones/ImprimirRemisionDialog";
 import EditarEmailClienteDialog from "@/components/pedidos/EditarEmailClienteDialog";
 import NuevoPedidoDialog from "@/components/pedidos/NuevoPedidoDialog";
+import PedidoDetalleDialog from "@/components/pedidos/PedidoDetalleDialog";
 import { formatCurrency } from "@/lib/utils";
 
 interface PedidoConCotizacion {
@@ -56,6 +57,8 @@ const Pedidos = () => {
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [selectedPedidoForEmail, setSelectedPedidoForEmail] = useState<PedidoConCotizacion | null>(null);
   const [nuevoPedidoDialogOpen, setNuevoPedidoDialogOpen] = useState(false);
+  const [selectedPedidoId, setSelectedPedidoId] = useState<string | null>(null);
+  const [pedidoDetalleOpen, setPedidoDetalleOpen] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -467,7 +470,14 @@ const Pedidos = () => {
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon"
+                                    onClick={() => {
+                                      setSelectedPedidoId(pedido.id);
+                                      setPedidoDetalleOpen(true);
+                                    }}
+                                  >
                                     <Eye className="h-4 w-4" />
                                   </Button>
                                 </TooltipTrigger>
@@ -580,6 +590,12 @@ const Pedidos = () => {
         open={nuevoPedidoDialogOpen}
         onOpenChange={setNuevoPedidoDialogOpen}
         onPedidoCreated={loadPedidos}
+      />
+
+      <PedidoDetalleDialog
+        pedidoId={selectedPedidoId}
+        open={pedidoDetalleOpen}
+        onOpenChange={setPedidoDetalleOpen}
       />
     </Layout>
   );

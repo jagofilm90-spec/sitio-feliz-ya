@@ -379,26 +379,27 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     
     // 3. Check synonyms - map client names to catalog names
     for (const [canonical, synonyms] of Object.entries(PRODUCT_SYNONYMS)) {
-      // Check if client text matches any synonym
-      if (synonyms.some(s => {
-        const sNorm = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        return normalizedNoAccents === sNorm || normalizedNoAccents.includes(sNorm) || sNorm.includes(normalizedNoAccents);
-      })) {
-        // Look for the canonical product in quotation
-        if (productNoAccents.has(canonical)) {
-          console.log(`MATCH SYNONYM: "${text}" -> "${canonical}" -> ${productNoAccents.get(canonical)!.nombre}`);
-          return { product: productNoAccents.get(canonical)!, matchType: 'synonym', originalName };
-        }
-      }
-      
-      // Also check if client text matches the canonical name
-      const canonicalNorm = canonical.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      if (normalizedNoAccents === canonicalNorm || normalizedNoAccents.includes(canonicalNorm)) {
-        if (productNoAccents.has(canonical)) {
-          console.log(`MATCH CANONICAL: "${text}" -> ${productNoAccents.get(canonical)!.nombre}`);
-          return { product: productNoAccents.get(canonical)!, matchType: 'synonym', originalName };
-        }
-      }
+       // Check if client text matches any synonym
+       if (synonyms.some(s => {
+         const sNorm = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+         return normalizedNoAccents === sNorm || normalizedNoAccents.includes(sNorm) || sNorm.includes(normalizedNoAccents);
+       })) {
+         // Look for the canonical product in quotation (normalize key without accents)
+         const canonicalNorm = canonical.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+         if (productNoAccents.has(canonicalNorm)) {
+           console.log(`MATCH SYNONYM: "${text}" -> "${canonical}" -> ${productNoAccents.get(canonicalNorm)!.nombre}`);
+           return { product: productNoAccents.get(canonicalNorm)!, matchType: 'synonym', originalName };
+         }
+       }
+       
+       // Also check if client text matches the canonical name
+       const canonicalNorm = canonical.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+       if (normalizedNoAccents === canonicalNorm || normalizedNoAccents.includes(canonicalNorm)) {
+         if (productNoAccents.has(canonicalNorm)) {
+           console.log(`MATCH CANONICAL: "${text}" -> ${productNoAccents.get(canonicalNorm)!.nombre}`);
+           return { product: productNoAccents.get(canonicalNorm)!, matchType: 'synonym', originalName };
+         }
+       }
     }
     
     // 4. NO KEYWORD MATCHING - Disabled to prevent incorrect matches like "papel" -> "polipapel"

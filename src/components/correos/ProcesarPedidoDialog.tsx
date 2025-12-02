@@ -386,7 +386,7 @@ export default function ProcesarPedidoDialog({
                     typeof kilosDelCorreo === 'number'
                   ) {
                     const unidades = kilosDelCorreo / kgPorUnidad;
-                    const unidadesRedondeadas = Math.round(unidades * 100) / 100; // 2 decimales
+                    const unidadesRedondeadas = Math.round(unidades); // Redondear a entero
                     cantidadFinal = unidadesRedondeadas;
                     notasFinal = `${kilosDelCorreo} kg`;
                   }
@@ -486,7 +486,7 @@ export default function ProcesarPedidoDialog({
                 typeof kilosDelCorreo === 'number'
               ) {
                 const unidades = kilosDelCorreo / kgPorUnidad;
-                const unidadesRedondeadas = Math.round(unidades * 100) / 100;
+                const unidadesRedondeadas = Math.round(unidades); // Redondear a entero
                 cantidadFinal = unidadesRedondeadas;
                 notasFinal = `${kilosDelCorreo} kg`;
               }

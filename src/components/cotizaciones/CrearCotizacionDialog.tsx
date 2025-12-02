@@ -74,6 +74,7 @@ interface Producto {
   stock_actual: number;
   aplica_iva: boolean;
   aplica_ieps: boolean;
+  precio_por_kilo: boolean;
 }
 
 interface CrearCotizacionDialogProps {
@@ -168,7 +169,7 @@ const CrearCotizacionDialog = ({
   const loadProductos = async () => {
     const { data, error } = await supabase
       .from("productos")
-      .select("id, nombre, codigo, unidad, marca, precio_venta, stock_actual, aplica_iva, aplica_ieps")
+      .select("id, nombre, codigo, unidad, marca, precio_venta, stock_actual, aplica_iva, aplica_ieps, precio_por_kilo")
       .eq("activo", true)
       .order("nombre");
 
@@ -458,15 +459,23 @@ const CrearCotizacionDialog = ({
         if (deleteError) throw deleteError;
 
         // Insert new detalles - si es "solo precios", guardar cantidad como 0
-        const detallesInsert = detalles.map((d) => ({
-          cotizacion_id: cotizacionId,
-          producto_id: d.producto_id,
-          cantidad: sinCantidades ? 0 : d.cantidad,
-          precio_unitario: d.precio_unitario,
-          subtotal: sinCantidades ? 0 : d.subtotal,
-          cantidad_maxima: d.cantidad_maxima || null,
-          nota_linea: d.nota_linea || null,
-        }));
+        const detallesInsert = detalles.map((d) => {
+          const producto = productos.find(p => p.id === d.producto_id);
+          const tipoPrecio = producto?.precio_por_kilo 
+            ? 'por_kilo' 
+            : `por_${(producto?.unidad || 'bulto').toLowerCase()}`;
+          
+          return {
+            cotizacion_id: cotizacionId,
+            producto_id: d.producto_id,
+            cantidad: sinCantidades ? 0 : d.cantidad,
+            precio_unitario: d.precio_unitario,
+            subtotal: sinCantidades ? 0 : d.subtotal,
+            cantidad_maxima: d.cantidad_maxima || null,
+            nota_linea: d.nota_linea || null,
+            tipo_precio: tipoPrecio,
+          };
+        });
 
         const { error: detallesError } = await supabase
           .from("cotizaciones_detalles")
@@ -513,15 +522,23 @@ const CrearCotizacionDialog = ({
         if (cotizacionError) throw cotizacionError;
 
         // Si es "solo precios", guardar cantidad como 0
-        const detallesInsert = detalles.map((d) => ({
-          cotizacion_id: cotizacion.id,
-          producto_id: d.producto_id,
-          cantidad: sinCantidades ? 0 : d.cantidad,
-          precio_unitario: d.precio_unitario,
-          subtotal: sinCantidades ? 0 : d.subtotal,
-          cantidad_maxima: d.cantidad_maxima || null,
-          nota_linea: d.nota_linea || null,
-        }));
+        const detallesInsert = detalles.map((d) => {
+          const producto = productos.find(p => p.id === d.producto_id);
+          const tipoPrecio = producto?.precio_por_kilo 
+            ? 'por_kilo' 
+            : `por_${(producto?.unidad || 'bulto').toLowerCase()}`;
+          
+          return {
+            cotizacion_id: cotizacion.id,
+            producto_id: d.producto_id,
+            cantidad: sinCantidades ? 0 : d.cantidad,
+            precio_unitario: d.precio_unitario,
+            subtotal: sinCantidades ? 0 : d.subtotal,
+            cantidad_maxima: d.cantidad_maxima || null,
+            nota_linea: d.nota_linea || null,
+            tipo_precio: tipoPrecio,
+          };
+        });
 
         const { error: detallesError } = await supabase
           .from("cotizaciones_detalles")

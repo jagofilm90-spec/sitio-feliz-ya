@@ -167,6 +167,7 @@ export default function ProcesarPedidoDialog({
             producto_id,
             cantidad,
             precio_unitario,
+            tipo_precio,
             productos (
               id,
               nombre,
@@ -303,6 +304,7 @@ export default function ProcesarPedidoDialog({
           kg_por_unidad: det.productos?.kg_por_unidad,
           aplica_iva: det.productos?.aplica_iva,
           aplica_ieps: det.productos?.aplica_ieps,
+          tipo_precio: det.tipo_precio, // "por_kilo", "por_bulto", "por_caja", etc.
         }))
       ).filter(Boolean) || [];
 

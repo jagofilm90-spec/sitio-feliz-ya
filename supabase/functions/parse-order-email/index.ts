@@ -822,25 +822,44 @@ function applyConversionsToAIResult(
       }
       
       if (catalogProduct) {
-        // Apply conversion - force for Lecaroz since they always send KILOS
-        const emailUnit = producto.unidad || 'KILOS';
-        const conversion = convertToSellingUnit(
-          producto.cantidad,
-          emailUnit,
-          catalogProduct.unidad,
-          catalogProduct.kg_por_unidad,
-          isLecaroz, // forceKiloConversion for Lecaroz
-          catalogProduct.nombre // Product name for piece-per-box extraction
-        );
-        
-        console.log(`AI CONVERSION: ${producto.nombre_producto} - ${producto.cantidad} ${emailUnit} -> ${conversion.cantidad} ${catalogProduct.unidad}`);
-        
-        producto.cantidad = conversion.cantidad;
-        producto.unidad = catalogProduct.unidad;
-        producto.producto_cotizado_id = catalogProduct.producto_id;
-        if (conversion.cantidadOriginalKg) {
-          producto.notas = `${conversion.cantidadOriginalKg} kg`;
-          producto.cantidad_original_kg = conversion.cantidadOriginalKg;
+        // REGLA DE ORO: la AI SOLO entrega la cantidad en KILOS.
+        // La unidad comercial SIEMPRE viene del catálogo y la conversión SIEMPRE usa kg_por_unidad.
+        // 1. Si el producto se vende por kg → dejar la cantidad tal cual.
+        // 2. Si el producto NO se vende por kg → unidades = kilos_del_correo / kg_por_unidad.
+        // 3. Si NO hay kg_por_unidad para un producto que no es por kg → marcar requiere_revision y NO convertir.
+
+        const unidadVenta = (catalogProduct.unidad || '').toLowerCase();
+        const kgPorUnidad = catalogProduct.kg_por_unidad;
+        const kilosDelCorreo = producto.cantidad; // La AI SIEMPRE devuelve kilos aquí
+
+        // Producto vendido realmente por kg
+        if (unidadVenta === 'kg' || unidadVenta === 'kilo' || unidadVenta === 'kilos') {
+          console.log(`AI CONVERSION (KG DIRECTO): ${producto.nombre_producto} - ${kilosDelCorreo} kg -> ${kilosDelCorreo} ${catalogProduct.unidad}`);
+          producto.cantidad = kilosDelCorreo;
+          producto.unidad = catalogProduct.unidad;
+          producto.producto_cotizado_id = catalogProduct.producto_id;
+        } else {
+          // Producto NO se vende por kg → debemos tener kg_por_unidad para convertir
+          if (!kgPorUnidad || kgPorUnidad <= 0) {
+            console.log(`AI CONVERSION ERROR: ${producto.nombre_producto} - falta kg_por_unidad para unidad ${catalogProduct.unidad}`);
+            // Marcar como requiere revisión y NO hacer conversión
+            (producto as any).requiere_revision = true;
+            const notaError = 'Falta kg_por_unidad – requiere confirmar unidad comercial';
+            producto.notas = producto.notas ? `${producto.notas} | ${notaError}` : notaError;
+            producto.unidad = catalogProduct.unidad;
+            producto.producto_cotizado_id = catalogProduct.producto_id;
+          } else {
+            const unidades = kilosDelCorreo / kgPorUnidad;
+            const unidadesRedondeadas = Math.round(unidades * 100) / 100; // 2 decimales, luego el frontend redondea a entero
+
+            console.log(`AI CONVERSION (KILOS→UNIDAD): ${producto.nombre_producto} - ${kilosDelCorreo} kg ÷ ${kgPorUnidad} kg/unidad = ${unidadesRedondeadas} ${catalogProduct.unidad}`);
+
+            producto.cantidad_original_kg = kilosDelCorreo;
+            producto.notas = `${kilosDelCorreo} kg`;
+            producto.cantidad = unidadesRedondeadas;
+            producto.unidad = catalogProduct.unidad;
+            producto.producto_cotizado_id = catalogProduct.producto_id;
+          }
         }
       }
     }

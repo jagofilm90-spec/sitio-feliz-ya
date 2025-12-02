@@ -408,6 +408,7 @@ const Pedidos = () => {
       const productos = pedido.pedidos_detalles.map((detalle: any) => {
         const producto = detalle.productos;
         const descripcion = `${producto.nombre}${producto.marca ? ` ${producto.marca}` : ''}${producto.presentacion ? ` (${producto.presentacion}KG)` : ''}`;
+        const esPiloncillo = producto.nombre.toLowerCase().includes('piloncillo');
         
         // Calcular presentación para bodegueros - SIEMPRE en unidades comerciales, nunca solo kg
         let presentacion = "";
@@ -434,6 +435,11 @@ const Pedidos = () => {
           // Producto vendido por unidad comercial directamente
           const plural = detalle.cantidad !== 1 ? 's' : '';
           presentacion = `${detalle.cantidad} ${unidadComercial}${plural}`;
+        }
+        
+        // Agregar alerta de peso variable para piloncillo
+        if (esPiloncillo) {
+          presentacion = `${presentacion} ⚠️ VERIFICAR PESO`;
         }
         
         return {

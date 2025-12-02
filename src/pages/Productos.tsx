@@ -213,7 +213,7 @@ const Productos = () => {
     marca: string;
     categoria: string;
     presentacion: string;
-    unidad: "bulto" | "caja" | "churla" | "cubeta";
+    unidad: "bulto" | "caja" | "churla" | "cubeta" | "balón";
     precio_por_kilo: boolean;
     kg_por_unidad: string;
     precio_venta: string;
@@ -634,7 +634,7 @@ const Productos = () => {
                     <Label htmlFor="unidad">Unidad *</Label>
                     <Select
                       value={formData.unidad}
-                      onValueChange={(value: "bulto" | "caja" | "churla" | "cubeta") => {
+                      onValueChange={(value: "bulto" | "caja" | "churla" | "cubeta" | "balón") => {
                         const newFormData = { ...formData, unidad: value };
                         setFormData(newFormData);
                         setDuplicateWarning(checkDuplicateProduct(newFormData.nombre, newFormData.marca, newFormData.presentacion, value));
@@ -644,6 +644,7 @@ const Productos = () => {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="balón">Balón</SelectItem>
                         <SelectItem value="bulto">Bulto</SelectItem>
                         <SelectItem value="caja">Caja</SelectItem>
                         <SelectItem value="churla">Churla</SelectItem>

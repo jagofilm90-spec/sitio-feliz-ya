@@ -21,7 +21,12 @@ import { formatCurrency } from "@/lib/utils";
 export function PedidosAcumulativosManager() {
   const [selectedPedido, setSelectedPedido] = useState<string | null>(null);
   const [selectedForBatch, setSelectedForBatch] = useState<Set<string>>(new Set());
-  const [editingDetalle, setEditingDetalle] = useState<{ id: string; cantidad: number } | null>(null);
+  const [editingDetalle, setEditingDetalle] = useState<{ 
+    id: string; 
+    cantidadKg: number; 
+    cantidadCajas: number;
+    kgPorCaja: number;
+  } | null>(null);
   const queryClient = useQueryClient();
 
   // Fetch pedidos acumulativos en borrador
@@ -590,8 +595,20 @@ export function PedidosAcumulativosManager() {
     if (!editingDetalle) return;
     updateDetalleMutation.mutate({
       detalleId: editingDetalle.id,
-      nuevaCantidad: editingDetalle.cantidad
+      nuevaCantidad: editingDetalle.cantidadKg
     });
+  };
+
+  const handleKgChange = (kg: number) => {
+    if (!editingDetalle) return;
+    const cajas = editingDetalle.kgPorCaja > 0 ? Math.ceil(kg / editingDetalle.kgPorCaja) : 1;
+    setEditingDetalle({ ...editingDetalle, cantidadKg: kg, cantidadCajas: cajas });
+  };
+
+  const handleCajasChange = (cajas: number) => {
+    if (!editingDetalle) return;
+    // Al cambiar cajas, recalcular kg (pero dejar que el usuario ajuste manualmente si quiere)
+    setEditingDetalle({ ...editingDetalle, cantidadCajas: cajas });
   };
 
   if (isLoading) {
@@ -819,23 +836,44 @@ export function PedidosAcumulativosManager() {
                             )}
                           </div>
                           {isEditing ? (
-                            <div className="flex items-center gap-2 mt-2">
-                              <Label htmlFor="edit-cantidad" className="text-sm">Peso (kg):</Label>
-                              <Input
-                                id="edit-cantidad"
-                                type="number"
-                                step="0.1"
-                                min="0.1"
-                                value={editingDetalle.cantidad}
-                                onChange={(e) => setEditingDetalle({ ...editingDetalle, cantidad: parseFloat(e.target.value) || 0 })}
-                                className="w-24 h-8"
-                              />
-                              <Button size="sm" onClick={handleSavePiloncilloWeight} disabled={updateDetalleMutation.isPending}>
-                                {updateDetalleMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Guardar"}
-                              </Button>
-                              <Button size="sm" variant="ghost" onClick={() => setEditingDetalle(null)}>
-                                Cancelar
-                              </Button>
+                            <div className="flex flex-col gap-3 mt-2 p-3 bg-amber-100/50 dark:bg-amber-900/30 rounded-lg">
+                              <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-2">
+                                  <Label htmlFor="edit-cajas" className="text-sm font-medium whitespace-nowrap">Cajas:</Label>
+                                  <Input
+                                    id="edit-cajas"
+                                    type="number"
+                                    step="1"
+                                    min="1"
+                                    value={editingDetalle.cantidadCajas}
+                                    onChange={(e) => handleCajasChange(parseInt(e.target.value) || 1)}
+                                    className="w-20 h-8"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Label htmlFor="edit-kg" className="text-sm font-medium whitespace-nowrap">Peso total (kg):</Label>
+                                  <Input
+                                    id="edit-kg"
+                                    type="number"
+                                    step="0.1"
+                                    min="0.1"
+                                    value={editingDetalle.cantidadKg}
+                                    onChange={(e) => handleKgChange(parseFloat(e.target.value) || 0)}
+                                    className="w-24 h-8"
+                                  />
+                                </div>
+                              </div>
+                              <div className="text-xs text-amber-700 dark:text-amber-300">
+                                = {editingDetalle.cantidadCajas} caja{editingDetalle.cantidadCajas !== 1 ? 's' : ''} de {editingDetalle.kgPorCaja > 0 ? (editingDetalle.cantidadKg / editingDetalle.cantidadCajas).toFixed(2) : '?'} kg c/u
+                              </div>
+                              <div className="flex gap-2">
+                                <Button size="sm" onClick={handleSavePiloncilloWeight} disabled={updateDetalleMutation.isPending}>
+                                  {updateDetalleMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Guardar"}
+                                </Button>
+                                <Button size="sm" variant="ghost" onClick={() => setEditingDetalle(null)}>
+                                  Cancelar
+                                </Button>
+                              </div>
                             </div>
                           ) : (
                             <div className="text-sm text-muted-foreground flex items-center gap-2">
@@ -845,7 +883,17 @@ export function PedidosAcumulativosManager() {
                                   size="sm" 
                                   variant="outline" 
                                   className="h-6 px-2 text-xs border-amber-400 text-amber-700 hover:bg-amber-100"
-                                  onClick={() => setEditingDetalle({ id: detalle.id, cantidad: detalle.cantidad })}
+                                  onClick={() => {
+                                    const kgPorCaja = detalle.productos?.kg_por_unidad || 10;
+                                    const cantidadKg = detalle.cantidad;
+                                    const cantidadCajas = kgPorCaja > 0 ? Math.ceil(cantidadKg / kgPorCaja) : 1;
+                                    setEditingDetalle({ 
+                                      id: detalle.id, 
+                                      cantidadKg,
+                                      cantidadCajas,
+                                      kgPorCaja
+                                    });
+                                  }}
                                 >
                                   <Edit2 className="h-3 w-3 mr-1" />
                                   Editar peso

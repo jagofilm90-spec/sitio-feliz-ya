@@ -232,13 +232,14 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
   // Track retry attempts for email list
   const emailRetryAttemptRef = useRef(0);
 
-  // Query para obtener correos procesados (de pedidos acumulativos)
+  // Query para obtener correos procesados (solo de pedidos acumulativos en borrador)
   const { data: correosProcesados } = useQuery({
     queryKey: ["correos-procesados"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pedidos_acumulativos")
-        .select("correos_procesados");
+        .select("correos_procesados")
+        .eq("status", "borrador"); // Solo pedidos en borrador, no finalizados
       
       if (error) throw error;
       

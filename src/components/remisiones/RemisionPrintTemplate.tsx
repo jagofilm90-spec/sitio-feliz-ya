@@ -3,10 +3,11 @@ import { es } from "date-fns/locale";
 
 interface ProductoRemision {
   cantidad: number;
-  unidad: string;
+  unidad: string; // Ahora contiene la presentación calculada para bodegueros
   descripcion: string;
   precio_unitario: number;
   total: number;
+  cantidadDisplay?: string; // Cantidad con unidad original (ej: "45 kg")
 }
 
 interface DatosRemision {
@@ -110,7 +111,7 @@ export const RemisionPrintTemplate = ({ datos }: RemisionPrintTemplateProps) => 
         <thead>
           <tr className="bg-gray-800 text-white">
             <th className="p-2 text-left w-16">Cantidad</th>
-            <th className="p-2 text-left w-20">Empaque</th>
+            <th className="p-2 text-left w-24 font-bold">Presentación</th>
             <th className="p-2 text-left">Descripción</th>
             <th className="p-2 text-right w-24">P.Unitario</th>
             <th className="p-2 text-right w-24">Total</th>
@@ -119,8 +120,8 @@ export const RemisionPrintTemplate = ({ datos }: RemisionPrintTemplateProps) => 
         <tbody>
           {datos.productos.map((producto, index) => (
             <tr key={index} className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-              <td className="p-2 border-b">{producto.cantidad}</td>
-              <td className="p-2 border-b">{producto.unidad}</td>
+              <td className="p-2 border-b">{producto.cantidadDisplay || producto.cantidad}</td>
+              <td className="p-2 border-b font-semibold text-primary">{producto.unidad}</td>
               <td className="p-2 border-b">{producto.descripcion}</td>
               <td className="p-2 border-b text-right">${producto.precio_unitario.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
               <td className="p-2 border-b text-right">${producto.total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>

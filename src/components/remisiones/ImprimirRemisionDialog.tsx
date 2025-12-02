@@ -9,10 +9,11 @@ import jsPDF from "jspdf";
 
 interface ProductoRemision {
   cantidad: number;
-  unidad: string;
+  unidad: string; // Presentación calculada para bodegueros
   descripcion: string;
   precio_unitario: number;
   total: number;
+  cantidadDisplay?: string; // Cantidad con unidad original (ej: "45 kg")
 }
 
 interface DatosRemision {

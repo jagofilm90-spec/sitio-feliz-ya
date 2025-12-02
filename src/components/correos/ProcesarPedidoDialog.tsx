@@ -1019,26 +1019,43 @@ export default function ProcesarPedidoDialog({
     if (!parsedOrder) return;
     
     const producto = productos?.find(p => p.id === productoId);
-    const updated = { ...parsedOrder };
-    const prod = updated.sucursales[sucIndex].productos[prodIndex];
-    
-    // Check if product is piña/mango in caja format - force precio_por_kilo = false
-    const isPiñaMangoCaja = prod.unidad?.toLowerCase() === 'caja' && 
-                            producto && 
-                            /(\d+)\s*\/\s*\d+(\.|,)?\d*\s*(gr|kg)/i.test(producto.nombre) &&
-                            (producto.nombre.toUpperCase().includes('PIÑA') || 
-                             producto.nombre.toUpperCase().includes('PINA') || 
-                             producto.nombre.toUpperCase().includes('MANGO'));
-    
-    updated.sucursales[sucIndex].productos[prodIndex].producto_id = productoId;
-    updated.sucursales[sucIndex].productos[prodIndex].precio_unitario = producto?.precio_venta;
-    updated.sucursales[sucIndex].productos[prodIndex].precio_por_kilo = isPiñaMangoCaja ? false : producto?.precio_por_kilo;
-    updated.sucursales[sucIndex].productos[prodIndex].kg_por_unidad = producto?.kg_por_unidad;
-    updated.sucursales[sucIndex].productos[prodIndex].aplica_iva = producto?.aplica_iva;
-    updated.sucursales[sucIndex].productos[prodIndex].aplica_ieps = producto?.aplica_ieps;
+    if (!producto) return;
+
+    // Nombre "cliente" que viene del correo (ej: "azucar de segunda")
+    const targetName = parsedOrder.sucursales[sucIndex].productos[prodIndex].nombre_producto;
+
+    const updated: ParsedOrder = {
+      ...parsedOrder,
+      sucursales: parsedOrder.sucursales.map((suc) => ({
+        ...suc,
+        productos: suc.productos.map((prod) => {
+          // Aplicar el mismo match a TODAS las líneas con el mismo nombre del correo
+          if (prod.nombre_producto === targetName && (!prod.producto_id || prod.producto_id === productoId)) {
+            const productoUpper = producto.nombre.toUpperCase();
+            const isPiñaMangoCaja = (prod.unidad || '').toLowerCase() === 'caja' &&
+              /(\d+)\s*\/\s*\d+(\.|,)?\d*\s*(gr|kg)/i.test(producto.nombre) &&
+              (productoUpper.includes('PIÑA') || productoUpper.includes('PINA') || productoUpper.includes('MANGO'));
+
+            return {
+              ...prod,
+              producto_id: productoId,
+              precio_unitario: producto.precio_venta,
+              precio_por_kilo: isPiñaMangoCaja ? false : producto.precio_por_kilo,
+              kg_por_unidad: producto.kg_por_unidad,
+              aplica_iva: producto.aplica_iva,
+              aplica_ieps: producto.aplica_ieps,
+              // MUY IMPORTANTE: usar siempre la unidad real del catálogo (bulto, caja, kg, etc.)
+              unidad: producto.unidad,
+            };
+          }
+
+          return prod;
+        }),
+      })),
+    };
+
     setParsedOrder(updated);
   };
-
   const updateProductQuantity = (sucIndex: number, prodIndex: number, cantidad: number) => {
     if (!parsedOrder) return;
     const updated = { ...parsedOrder };

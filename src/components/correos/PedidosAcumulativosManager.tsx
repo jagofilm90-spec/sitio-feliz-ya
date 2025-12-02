@@ -800,12 +800,17 @@ export function PedidosAcumulativosManager() {
                         {bloqueado ? "Bloqueado" : "Generar remisión"}
                       </Button>
                       <Button
-                        variant="ghost"
+                        variant="destructive"
                         size="sm"
-                        onClick={() => deleteMutation.mutate(pedido.id)}
+                        onClick={() => {
+                          if (confirm('¿Eliminar este pedido acumulativo?')) {
+                            deleteMutation.mutate(pedido.id);
+                          }
+                        }}
                         disabled={deleteMutation.isPending}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Borrar
                       </Button>
                     </div>
                   </div>

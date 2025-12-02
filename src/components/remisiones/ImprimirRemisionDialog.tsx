@@ -77,20 +77,20 @@ export const ImprimirRemisionDialog = ({ open, onOpenChange, datos }: ImprimirRe
 
       pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
       
-      // Detectar si es móvil para usar método compatible
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      // Usar método de descarga con anchor element (funciona en móvil y escritorio)
+      const pdfBlob = pdf.output('blob');
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `Remision_${datos.folio}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
       
-      if (isMobile) {
-        // En móvil, abrir en nueva ventana para que el usuario pueda guardar
-        const pdfBlob = pdf.output('blob');
-        const blobUrl = URL.createObjectURL(pdfBlob);
-        window.open(blobUrl, '_blank');
-        toast.success('PDF abierto - usa el menú del navegador para guardar');
-      } else {
-        // En escritorio, descarga directa
-        pdf.save(`Remision_${datos.folio}.pdf`);
-        toast.success('PDF descargado correctamente');
-      }
+      // Limpiar URL después de un momento
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      
+      toast.success('PDF descargado');
     } catch (error) {
       console.error('Error generating PDF:', error);
       toast.error('Error al generar el PDF');

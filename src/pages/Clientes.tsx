@@ -37,6 +37,7 @@ import GoogleMapsAddressAutocomplete from "@/components/GoogleMapsAddressAutocom
 import ClienteHistorialAnalytics from "@/components/analytics/ClienteHistorialAnalytics";
 import { ClienteUsuarioTab } from "@/components/clientes/ClienteUsuarioTab";
 import { ClienteFormContent } from "@/components/clientes/ClienteFormContent";
+import { useUserRoles } from "@/hooks/useUserRoles";
 import {
   Dialog as HistorialDialog,
   DialogContent as HistorialDialogContent,
@@ -79,6 +80,7 @@ const Clientes = () => {
   const [historialDialogOpen, setHistorialDialogOpen] = useState(false);
   const [selectedClienteForHistorial, setSelectedClienteForHistorial] = useState<{ id: string; nombre: string } | null>(null);
   const { toast } = useToast();
+  const { isAdmin } = useUserRoles();
 
   // Form state
   const [formData, setFormData] = useState<{
@@ -689,37 +691,41 @@ const Clientes = () => {
               
               {editingClient ? (
                 <Tabs defaultValue="datos" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
+                  <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-2' : 'grid-cols-1'}`}>
                     <TabsTrigger value="datos">Datos del Cliente</TabsTrigger>
-                    <TabsTrigger value="usuario" className="flex items-center gap-2">
-                      <User className="h-4 w-4" />
-                      Acceso Portal
-                      {editingClient.user_id && (
-                        <Badge variant="default" className="ml-1 h-5 bg-green-500">✓</Badge>
-                      )}
-                    </TabsTrigger>
+                    {isAdmin && (
+                      <TabsTrigger value="usuario" className="flex items-center gap-2">
+                        <User className="h-4 w-4" />
+                        Acceso Portal
+                        {editingClient.user_id && (
+                          <Badge variant="default" className="ml-1 h-5 bg-green-500">✓</Badge>
+                        )}
+                      </TabsTrigger>
+                    )}
                   </TabsList>
-                  <TabsContent value="usuario" className="mt-4">
-                    <ClienteUsuarioTab 
-                      cliente={{
-                        id: editingClient.id,
-                        nombre: editingClient.nombre,
-                        email: editingClient.email,
-                        user_id: editingClient.user_id,
-                      }}
-                      onUserCreated={() => {
-                        loadClientes();
-                        supabase
-                          .from("clientes")
-                          .select("*")
-                          .eq("id", editingClient.id)
-                          .single()
-                          .then(({ data }) => {
-                            if (data) setEditingClient(data);
-                          });
-                      }}
-                    />
-                  </TabsContent>
+                  {isAdmin && (
+                    <TabsContent value="usuario" className="mt-4">
+                      <ClienteUsuarioTab 
+                        cliente={{
+                          id: editingClient.id,
+                          nombre: editingClient.nombre,
+                          email: editingClient.email,
+                          user_id: editingClient.user_id,
+                        }}
+                        onUserCreated={() => {
+                          loadClientes();
+                          supabase
+                            .from("clientes")
+                            .select("*")
+                            .eq("id", editingClient.id)
+                            .single()
+                            .then(({ data }) => {
+                              if (data) setEditingClient(data);
+                            });
+                        }}
+                      />
+                    </TabsContent>
+                  )}
                   <TabsContent value="datos" className="mt-4">
                     <ClienteFormContent 
                       formData={formData}

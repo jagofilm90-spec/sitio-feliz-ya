@@ -220,6 +220,8 @@ export default function PedidoDetalleDialog({
                     
                     // Calcular presentación para bodegueros - SIEMPRE en unidades comerciales, nunca solo kg
                     let presentacion = "";
+                    const esPiloncillo = producto.nombre.toLowerCase().includes('piloncillo');
+                    
                     if (producto.precio_por_kilo && producto.kg_por_unidad && producto.kg_por_unidad > 0) {
                       // Producto vendido por kilo con conversión conocida
                       const unidadesComerciales = Math.ceil(detalle.cantidad / producto.kg_por_unidad);
@@ -251,7 +253,14 @@ export default function PedidoDetalleDialog({
                           )}
                         </TableCell>
                         <TableCell className="text-center font-semibold text-primary">
-                          {presentacion}
+                          <div className="flex flex-col items-center gap-1">
+                            {presentacion}
+                            {esPiloncillo && (
+                              <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-300">
+                                ⚠️ Verificar peso
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right font-mono">
                           ${formatCurrency(detalle.precio_unitario)}

@@ -207,6 +207,8 @@ export function PedidosAcumulativosManager() {
     onSuccess: () => {
       toast.success("Pedido acumulativo eliminado");
       queryClient.invalidateQueries({ queryKey: ["pedidos-acumulativos"] });
+      // Invalidar también la query de correos procesados para quitar badge "Procesado" de emails
+      queryClient.invalidateQueries({ queryKey: ["correos-procesados"] });
     },
     onError: (error: any) => {
       toast.error("Error al eliminar: " + error.message);

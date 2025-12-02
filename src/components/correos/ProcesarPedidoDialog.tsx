@@ -211,25 +211,6 @@ export default function ProcesarPedidoDialog({
     if (!emailId) return;
     
     try {
-      // Verificar en pedidos acumulativos
-      const { data: acumulativosData, error: acumulativosError } = await supabase
-        .from("pedidos_acumulativos")
-        .select("id, correos_procesados, cliente_sucursales:sucursal_id (nombre)")
-        .contains("correos_procesados", [emailId]);
-
-      if (acumulativosError) throw acumulativosError;
-
-      const processedInfo: { folio: string; tipo: string }[] = [];
-
-      if (acumulativosData && acumulativosData.length > 0) {
-        acumulativosData.forEach(acum => {
-          processedInfo.push({
-            folio: (acum as any).cliente_sucursales?.nombre || "Pedido Acumulativo",
-            tipo: "Pedido Acumulativo (Borrador)"
-          });
-        });
-      }
-
       // Verificar en pedidos finales a través de las notas
       const { data: pedidosData, error: pedidosError } = await supabase
         .from("pedidos")
@@ -238,6 +219,9 @@ export default function ProcesarPedidoDialog({
 
       if (pedidosError) throw pedidosError;
 
+      const processedInfo: { folio: string; tipo: string }[] = [];
+
+      // Solo bloquear si hay pedidos finales creados
       if (pedidosData && pedidosData.length > 0) {
         pedidosData.forEach(pedido => {
           processedInfo.push({
@@ -247,14 +231,14 @@ export default function ProcesarPedidoDialog({
         });
       }
 
-      console.log(`Email ${emailId} check:`, processedInfo.length > 0 ? "Already processed" : "Not processed");
+      console.log(`Email ${emailId} check:`, processedInfo.length > 0 ? "Final orders exist" : "No final orders");
 
-      // Solo marcar como procesado si realmente encontramos registros
+      // Solo marcar como procesado si hay pedidos finales
+      // Los pedidos acumulativos en borrador no bloquean el reprocesamiento
       if (processedInfo.length > 0) {
         setEmailAlreadyProcessed(true);
         setProcessedOrdersInfo(processedInfo);
       } else {
-        // Asegurar que está en false si no hay registros
         setEmailAlreadyProcessed(false);
         setProcessedOrdersInfo([]);
       }

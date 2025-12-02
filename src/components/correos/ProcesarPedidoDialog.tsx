@@ -98,6 +98,8 @@ export default function ProcesarPedidoDialog({
   const [error, setError] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
   const [existingOrders, setExistingOrders] = useState<Map<string, { id: string; folio: string }>>(new Map());
+  const [emailAlreadyProcessed, setEmailAlreadyProcessed] = useState<boolean>(false);
+  const [processedOrdersInfo, setProcessedOrdersInfo] = useState<{ folio: string; tipo: string }[]>([]);
   const [isLecarozEmail, setIsLecarozEmail] = useState(false);
   const [acumulativoMode, setAcumulativoMode] = useState(false);
 
@@ -192,6 +194,68 @@ export default function ProcesarPedidoDialog({
   useEffect(() => {
     setSelectedCotizacionId("__all__");
   }, [selectedClienteId]);
+
+  // Verificar si el correo ya fue procesado al abrir el diálogo
+  useEffect(() => {
+    if (open) {
+      setParsedOrder(null);
+      setError(null);
+      setVisibleCount(BATCH_SIZE);
+      setEmailAlreadyProcessed(false);
+      setProcessedOrdersInfo([]);
+      checkIfEmailAlreadyProcessed();
+    }
+  }, [open, emailId]);
+
+  const checkIfEmailAlreadyProcessed = async () => {
+    if (!emailId) return;
+    
+    try {
+      // Verificar en pedidos acumulativos
+      const { data: acumulativosData, error: acumulativosError } = await supabase
+        .from("pedidos_acumulativos")
+        .select("id, correos_procesados, cliente_sucursales:sucursal_id (nombre)")
+        .contains("correos_procesados", [emailId]);
+
+      if (acumulativosError) throw acumulativosError;
+
+      const processedInfo: { folio: string; tipo: string }[] = [];
+
+      if (acumulativosData && acumulativosData.length > 0) {
+        acumulativosData.forEach(acum => {
+          processedInfo.push({
+            folio: (acum as any).cliente_sucursales?.nombre || "Pedido Acumulativo",
+            tipo: "Pedido Acumulativo (Borrador)"
+          });
+        });
+      }
+
+      // Verificar en pedidos finales a través de las notas
+      const { data: pedidosData, error: pedidosError } = await supabase
+        .from("pedidos")
+        .select("folio, notas")
+        .ilike("notas", `%${emailId}%`);
+
+      if (pedidosError) throw pedidosError;
+
+      if (pedidosData && pedidosData.length > 0) {
+        pedidosData.forEach(pedido => {
+          processedInfo.push({
+            folio: pedido.folio,
+            tipo: "Pedido Final"
+          });
+        });
+      }
+
+      if (processedInfo.length > 0) {
+        setEmailAlreadyProcessed(true);
+        setProcessedOrdersInfo(processedInfo);
+      }
+    } catch (error) {
+      console.error("Error checking if email was processed:", error);
+    }
+  };
+
 
   // Reset visible count when new order is parsed
   useEffect(() => {
@@ -1097,16 +1161,47 @@ export default function ProcesarPedidoDialog({
           )}
 
           {/* Parse button */}
+          {/* Alerta de correo ya procesado */}
+          {emailAlreadyProcessed && (
+            <div className="p-4 bg-amber-50 border-2 border-amber-500 rounded-lg space-y-3">
+              <div className="flex items-center gap-2 text-amber-800 font-semibold">
+                <AlertCircle className="h-5 w-5" />
+                <span>⚠️ Este correo ya fue procesado</span>
+              </div>
+              <p className="text-sm text-amber-700">
+                Este correo ya generó los siguientes pedidos:
+              </p>
+              <div className="space-y-2">
+                {processedOrdersInfo.map((info, idx) => (
+                  <div key={idx} className="flex items-center gap-2 text-sm">
+                    <Badge variant="outline" className="bg-white">
+                      {info.folio}
+                    </Badge>
+                    <span className="text-amber-600">({info.tipo})</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-sm text-amber-700 font-medium">
+                Si procesas este correo nuevamente, crearás pedidos duplicados.
+              </p>
+            </div>
+          )}
+
           {!parsedOrder && (
             <Button 
               onClick={handleParse} 
-              disabled={parsing || !selectedClienteId}
+              disabled={parsing || !selectedClienteId || emailAlreadyProcessed}
               className="w-full"
             >
               {parsing ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Analizando correo con IA...
+                </>
+              ) : emailAlreadyProcessed ? (
+                <>
+                  <AlertCircle className="h-4 w-4 mr-2" />
+                  Correo Ya Procesado
                 </>
               ) : (
                 <>

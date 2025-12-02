@@ -1063,21 +1063,17 @@ export default function ProcesarPedidoDialog({
         productos: suc.productos.map((prod) => {
           // Aplicar el mismo match a TODAS las líneas con el mismo nombre del correo
           if (prod.nombre_producto === targetName && (!prod.producto_id || prod.producto_id === productoId)) {
-            const productoUpper = producto.nombre.toUpperCase();
-            const isPiñaMangoCaja = (prod.unidad || '').toLowerCase() === 'caja' &&
-              /(\d+)\s*\/\s*\d+(\.|,)?\d*\s*(gr|kg)/i.test(producto.nombre) &&
-              (productoUpper.includes('PIÑA') || productoUpper.includes('PINA') || productoUpper.includes('MANGO'));
-
             return {
               ...prod,
               producto_id: productoId,
               precio_unitario: producto.precio_venta,
-              precio_por_kilo: isPiñaMangoCaja ? false : producto.precio_por_kilo,
+              // FUENTE DE VERDAD: Base de datos
+              precio_por_kilo: producto.precio_por_kilo,
               kg_por_unidad: producto.kg_por_unidad,
               aplica_iva: producto.aplica_iva,
               aplica_ieps: producto.aplica_ieps,
-              // MUY IMPORTANTE: usar siempre la unidad real del catálogo (bulto, caja, kg, etc.)
               unidad: producto.unidad,
+              unidad_comercial: producto.unidad,
             };
           }
 
@@ -1096,24 +1092,13 @@ export default function ProcesarPedidoDialog({
   };
  
   const getDisplayUnit = (prod: ParsedProduct): string => {
-    // Si el precio es por kilo, siempre mostramos kilos
+    // FUENTE DE VERDAD: Base de datos
+    // Si el precio es por kilo, SIEMPRE mostrar kilos (sin importar la unidad comercial)
     if (prod.precio_por_kilo) return "kg";
 
+    // Si no es precio por kilo, usar la unidad comercial del catálogo
     const producto = productos?.find((p) => p.id === prod.producto_id);
-    const baseUnit = producto?.unidad || prod.unidad || "";
-
-    // Alias de presentación por código de producto
-    switch (producto?.codigo) {
-      case "PAP-002":
-        // Papel Estraza Bala Rojo: mostrar "balón" aunque la unidad interna sea "bulto"
-        return "balón";
-      case "PIÑ-TAI-004":
-      case "PIÑ-TAI-003":
-        // Piña Rodaja 12/850gr (12/14): mostrar como "caja", no "bulto"
-        return "caja";
-      default:
-        return baseUnit;
-    }
+    return producto?.unidad || prod.unidad || prod.unidad_comercial || "";
   };
  
   const updateProductPrice = (sucIndex: number, prodIndex: number, precio: number) => {

@@ -30,13 +30,13 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Edit, Trash2, MapPin, Truck, X, Mail, BarChart3, Upload, FileText, ExternalLink, Loader2, Sparkles, UserPlus, User } from "lucide-react";
+import { Plus, Search, Edit, Trash2, MapPin, X, Mail, BarChart3, Loader2, Sparkles, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import ClienteSucursalesDialog from "@/components/clientes/ClienteSucursalesDialog";
 import GoogleMapsAddressAutocomplete from "@/components/GoogleMapsAddressAutocomplete";
 import ClienteHistorialAnalytics from "@/components/analytics/ClienteHistorialAnalytics";
-import { CrearAccesoPortalDialog } from "@/components/clientes/CrearAccesoPortalDialog";
 import { ClienteUsuarioTab } from "@/components/clientes/ClienteUsuarioTab";
+import { ClienteFormContent } from "@/components/clientes/ClienteFormContent";
 import {
   Dialog as HistorialDialog,
   DialogContent as HistorialDialogContent,
@@ -50,7 +50,7 @@ interface Zona {
 }
 
 interface SucursalForm {
-  id: string; // temporal ID for UI
+  id: string;
   nombre: string;
   direccion: string;
   zona_id: string;
@@ -64,7 +64,7 @@ interface CorreoForm {
   nombre_contacto: string;
   proposito: string;
   es_principal: boolean;
-  isNew?: boolean; // to track if it's a new email or existing one
+  isNew?: boolean;
 }
 
 const Clientes = () => {
@@ -78,8 +78,6 @@ const Clientes = () => {
   const [selectedClienteForSucursales, setSelectedClienteForSucursales] = useState<{ id: string; nombre: string } | null>(null);
   const [historialDialogOpen, setHistorialDialogOpen] = useState(false);
   const [selectedClienteForHistorial, setSelectedClienteForHistorial] = useState<{ id: string; nombre: string } | null>(null);
-  const [accesoPortalDialogOpen, setAccesoPortalDialogOpen] = useState(false);
-  const [selectedClienteForAcceso, setSelectedClienteForAcceso] = useState<{ id: string; nombre: string; email?: string; user_id?: string } | null>(null);
   const { toast } = useToast();
 
   // Form state
@@ -137,16 +135,15 @@ const Clientes = () => {
   
   // CSF file upload state
   const [csfFile, setCsfFile] = useState<File | null>(null);
-  const [uploadingCsf, setUploadingCsf] = useState(false);
   const [parsingCsf, setParsingCsf] = useState(false);
 
   // Delivery options state
   const [entregarMismaDireccion, setEntregarMismaDireccion] = useState(true);
   const [sucursales, setSucursales] = useState<SucursalForm[]>([]);
 
-  // Email management state (inline like proveedores)
+  // Email management state
   const [correos, setCorreos] = useState<CorreoForm[]>([]);
-  const [originalCorreoIds, setOriginalCorreoIds] = useState<string[]>([]); // Track loaded IDs to know what to deactivate
+  const [originalCorreoIds, setOriginalCorreoIds] = useState<string[]>([]);
   const [newCorreoEmail, setNewCorreoEmail] = useState("");
   const [newCorreoNombre, setNewCorreoNombre] = useState("");
 
@@ -194,7 +191,6 @@ const Clientes = () => {
     }
   };
 
-  // Load correos for a client when editing
   const loadCorreosCliente = async (clienteId: string) => {
     try {
       const { data, error } = await supabase
@@ -214,7 +210,7 @@ const Clientes = () => {
         isNew: false,
       }));
       setCorreos(loadedCorreos);
-      setOriginalCorreoIds(loadedCorreos.map(c => c.id)); // Track original IDs for deactivation logic
+      setOriginalCorreoIds(loadedCorreos.map(c => c.id));
     } catch (error) {
       console.error("Error loading correos:", error);
       setCorreos([]);
@@ -222,7 +218,6 @@ const Clientes = () => {
     }
   };
 
-  // Email management functions (inline like proveedores)
   const handleAddCorreo = () => {
     if (!newCorreoEmail || !newCorreoEmail.includes("@")) return;
     if (correos.some(c => c.email.toLowerCase() === newCorreoEmail.toLowerCase())) {
@@ -239,7 +234,7 @@ const Clientes = () => {
       email: newCorreoEmail.trim(),
       nombre_contacto: newCorreoNombre.trim(),
       proposito: "general",
-      es_principal: correos.length === 0, // First email is principal
+      es_principal: correos.length === 0,
       isNew: true,
     };
     setCorreos([...correos, newCorreo]);
@@ -251,7 +246,6 @@ const Clientes = () => {
     const correoToRemove = correos.find(c => c.id === correoId);
     const remaining = correos.filter(c => c.id !== correoId);
     
-    // If removing the principal, make the first remaining one principal
     if (correoToRemove?.es_principal && remaining.length > 0) {
       remaining[0].es_principal = true;
     }
@@ -266,11 +260,9 @@ const Clientes = () => {
     })));
   };
 
-  // Parse CSF with AI
   const handleParseCsf = async (file: File) => {
     setParsingCsf(true);
     try {
-      // Convert file to base64
       const buffer = await file.arrayBuffer();
       const base64 = btoa(
         new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
@@ -285,7 +277,6 @@ const Clientes = () => {
 
       const parsedData = data?.data;
       if (parsedData) {
-        // Auto-fill the form with parsed data
         setFormData(prev => ({
           ...prev,
           rfc: parsedData.rfc || prev.rfc,
@@ -302,7 +293,6 @@ const Clientes = () => {
           nombre_entidad_federativa: parsedData.nombre_entidad_federativa || prev.nombre_entidad_federativa,
           entre_calle: parsedData.entre_calle || prev.entre_calle,
           y_calle: parsedData.y_calle || prev.y_calle,
-          // Auto-generate direccion from components
           direccion: [
             parsedData.tipo_vialidad,
             parsedData.nombre_vialidad,
@@ -357,16 +347,13 @@ const Clientes = () => {
     );
   };
 
-
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
       let csfUrl = formData.csf_archivo_url;
       
-      // Upload CSF file if selected
       if (csfFile) {
-        setUploadingCsf(true);
         const fileExt = csfFile.name.split('.').pop();
         const fileName = `${formData.rfc || formData.codigo}_${Date.now()}.${fileExt}`;
         const filePath = `${fileName}`;
@@ -377,7 +364,6 @@ const Clientes = () => {
         
         if (uploadError) throw uploadError;
         csfUrl = filePath;
-        setUploadingCsf(false);
       }
       
       const clientData = {
@@ -418,9 +404,7 @@ const Clientes = () => {
         if (error) throw error;
         clienteId = editingClient.id;
 
-        // Handle correos for editing - only if we had original correos loaded
         if (originalCorreoIds.length > 0) {
-          // Find which original correos were removed (not in current list)
           const currentExistingIds = correos.filter(c => !c.isNew).map(c => c.id);
           const idsToDeactivate = originalCorreoIds.filter(id => !currentExistingIds.includes(id));
           
@@ -432,7 +416,6 @@ const Clientes = () => {
           }
         }
 
-        // Update existing correos
         for (const correo of correos.filter(c => !c.isNew)) {
           await supabase
             .from("cliente_correos")
@@ -445,7 +428,6 @@ const Clientes = () => {
             .eq("id", correo.id);
         }
 
-        // Insert new correos
         const newCorreos = correos.filter(c => c.isNew);
         if (newCorreos.length > 0) {
           await supabase.from("cliente_correos").insert(
@@ -470,7 +452,6 @@ const Clientes = () => {
         if (error) throw error;
         clienteId = data.id;
 
-        // Create correos for new client
         if (correos.length > 0) {
           const correosData = correos.map(c => ({
             cliente_id: clienteId,
@@ -489,7 +470,6 @@ const Clientes = () => {
           }
         }
 
-        // Create sucursales if not delivering to fiscal address
         if (!entregarMismaDireccion && sucursales.length > 0) {
           const sucursalesValidas = sucursales.filter(s => s.nombre && s.direccion);
           
@@ -524,7 +504,6 @@ const Clientes = () => {
             toast({ title: "Cliente creado correctamente" });
           }
         } else if (entregarMismaDireccion && formData.direccion) {
-          // Create a default sucursal with the fiscal address
           const { error: sucError } = await supabase
             .from("cliente_sucursales")
             .insert([{
@@ -602,18 +581,17 @@ const Clientes = () => {
         .eq("id", id);
 
       if (error) {
-        // Check for foreign key constraint error
         if (error.message.includes("violates foreign key constraint")) {
           if (error.message.includes("cotizaciones")) {
-            throw new Error("No se puede eliminar el cliente porque tiene cotizaciones asociadas. Primero elimina las cotizaciones de este cliente.");
+            throw new Error("No se puede eliminar el cliente porque tiene cotizaciones asociadas.");
           } else if (error.message.includes("pedidos")) {
-            throw new Error("No se puede eliminar el cliente porque tiene pedidos asociados. Primero elimina los pedidos de este cliente.");
+            throw new Error("No se puede eliminar el cliente porque tiene pedidos asociados.");
           } else if (error.message.includes("facturas")) {
             throw new Error("No se puede eliminar el cliente porque tiene facturas asociadas.");
           } else if (error.message.includes("cliente_sucursales")) {
-            throw new Error("No se puede eliminar el cliente porque tiene sucursales asociadas. Primero elimina las sucursales de este cliente.");
+            throw new Error("No se puede eliminar el cliente porque tiene sucursales asociadas.");
           } else {
-            throw new Error("No se puede eliminar el cliente porque tiene registros asociados en el sistema.");
+            throw new Error("No se puede eliminar el cliente porque tiene registros asociados.");
           }
         }
         throw error;
@@ -819,384 +797,6 @@ const Clientes = () => {
           </div>
         </div>
 
-        <div className="flex gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar clientes..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-        </div>
-
-        <div className="border rounded-lg">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Código</TableHead>
-                <TableHead>Nombre</TableHead>
-                <TableHead>RFC</TableHead>
-                <TableHead>Crédito</TableHead>
-                <TableHead>Límite</TableHead>
-                <TableHead>Saldo</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-                      <Input
-                        type="file"
-                        accept=".pdf"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0] || null;
-                          setCsfFile(file);
-                        }}
-                        className="flex-1"
-                      />
-                      {csfFile && (
-                        <>
-                          <Badge variant="secondary">{csfFile.name}</Badge>
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => handleParseCsf(csfFile)}
-                            disabled={parsingCsf}
-                          >
-                            {parsingCsf ? (
-                              <>
-                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                                Analizando...
-                              </>
-                            ) : (
-                              <>
-                                <Sparkles className="h-4 w-4 mr-1" />
-                                Auto-llenar con AI
-                              </>
-                            )}
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Sube el PDF de la Constancia de Situación Fiscal del SAT. Usa "Auto-llenar con AI" para extraer los datos automáticamente.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Datos Comerciales */}
-                <div className="space-y-4">
-                  <h4 className="font-medium text-lg border-b pb-2">Datos Comerciales</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="telefono">Teléfono</Label>
-                      <Input
-                        id="telefono"
-                        value={formData.telefono}
-                        onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="email">Email</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="termino_credito">Término de Crédito *</Label>
-                      <Select
-                        value={formData.termino_credito}
-                        onValueChange={(value: "contado" | "8_dias" | "15_dias" | "30_dias") => setFormData({ ...formData, termino_credito: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="contado">Contado</SelectItem>
-                          <SelectItem value="8_dias">8 días</SelectItem>
-                          <SelectItem value="15_dias">15 días</SelectItem>
-                          <SelectItem value="30_dias">30 días</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="limite_credito">Límite de Crédito</Label>
-                      <Input
-                        id="limite_credito"
-                        type="number"
-                        step="0.01"
-                        value={formData.limite_credito}
-                        onChange={(e) => setFormData({ ...formData, limite_credito: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="preferencia_facturacion">Preferencia de Facturación</Label>
-                    <Select
-                      value={formData.preferencia_facturacion}
-                      onValueChange={(value: "siempre_factura" | "siempre_remision" | "variable") => setFormData({ ...formData, preferencia_facturacion: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="siempre_factura">Siempre factura</SelectItem>
-                        <SelectItem value="siempre_remision">Siempre remisión</SelectItem>
-                        <SelectItem value="variable">Variable (según pedido)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Define si este cliente normalmente requiere factura o remisión
-                    </p>
-                  </div>
-                </div>
-
-                {/* Sección de Correos Electrónicos */}
-                <div className="space-y-4">
-                  <h4 className="font-medium text-lg border-b pb-2 flex items-center gap-2">
-                    <Mail className="h-5 w-5" />
-                    Correos Electrónicos
-                  </h4>
-                  
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="space-y-1">
-                        <Label className="text-xs">Email *</Label>
-                        <Input
-                          type="email"
-                          placeholder="correo@cliente.com"
-                          value={newCorreoEmail}
-                          onChange={(e) => setNewCorreoEmail(e.target.value)}
-                          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddCorreo())}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Nombre contacto (opcional)</Label>
-                        <div className="flex gap-2">
-                          <Input
-                            placeholder="Juan Pérez"
-                            value={newCorreoNombre}
-                            onChange={(e) => setNewCorreoNombre(e.target.value)}
-                            className="flex-1"
-                          />
-                          <Button type="button" variant="outline" size="icon" onClick={handleAddCorreo}>
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {correos.length > 0 && (
-                      <div className="space-y-2">
-                        {correos.map((correo) => (
-                          <div 
-                            key={correo.id} 
-                            className="flex items-center gap-2 p-2 bg-muted/50 rounded-md"
-                          >
-                            <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium truncate">{correo.email}</span>
-                                {correo.es_principal && (
-                                  <Badge variant="default" className="text-xs shrink-0">Principal</Badge>
-                                )}
-                              </div>
-                              {correo.nombre_contacto && (
-                                <span className="text-xs text-muted-foreground">{correo.nombre_contacto}</span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                              {!correo.es_principal && (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-xs h-7"
-                                  onClick={() => handleSetPrincipal(correo.id)}
-                                >
-                                  Hacer principal
-                                </Button>
-                              )}
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 hover:bg-destructive/20"
-                                onClick={() => handleRemoveCorreo(correo.id)}
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {correos.length === 0 && (
-                      <p className="text-sm text-muted-foreground text-center py-2">
-                        Agrega correos para enviar cotizaciones y facturas
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Sección de Sucursales de Entrega - Solo para nuevos clientes */}
-                {!editingClient && (
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-lg border-b pb-2 flex items-center gap-2">
-                      <Truck className="h-5 w-5" />
-                      Sucursales de Entrega
-                    </h4>
-                    
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="entregarMismaDireccion"
-                        checked={entregarMismaDireccion}
-                        onCheckedChange={(checked) => {
-                          setEntregarMismaDireccion(checked === true);
-                          if (checked === true) {
-                            setSucursales([]);
-                          }
-                        }}
-                      />
-                      <Label htmlFor="entregarMismaDireccion" className="text-sm font-normal cursor-pointer">
-                        Entregar en la misma dirección fiscal (cliente simple como Pan Rol)
-                      </Label>
-                    </div>
-
-                    {!entregarMismaDireccion && (
-                      <div className="space-y-4">
-                        <p className="text-sm text-muted-foreground">
-                          Agrega las sucursales de entrega para grupos como Universal o Lecaroz
-                        </p>
-
-                        {sucursales.length === 0 ? (
-                          <div className="text-center p-6 border-2 border-dashed rounded-lg">
-                            <MapPin className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                            <p className="text-muted-foreground mb-3">No hay sucursales agregadas</p>
-                            <Button type="button" variant="outline" onClick={addSucursal}>
-                              <Plus className="h-4 w-4 mr-2" />
-                              Agregar Sucursal
-                            </Button>
-                          </div>
-                        ) : (
-                          <>
-                            {sucursales.map((sucursal, index) => (
-                              <div 
-                                key={sucursal.id} 
-                                className="p-4 bg-muted/30 rounded-lg border space-y-4"
-                              >
-                                <div className="flex justify-between items-center">
-                                  <h5 className="font-medium">Sucursal {index + 1}</h5>
-                                  <Button 
-                                    type="button" 
-                                    variant="ghost" 
-                                    size="sm"
-                                    onClick={() => removeSucursal(sucursal.id)}
-                                  >
-                                    <X className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div className="space-y-2">
-                                    <Label>Nombre de Sucursal *</Label>
-                                    <Input
-                                      value={sucursal.nombre}
-                                      onChange={(e) => updateSucursal(sucursal.id, "nombre", e.target.value)}
-                                      placeholder="Ej: Dallas, Kansas, Centro"
-                                    />
-                                  </div>
-                                  <div className="space-y-2">
-                                    <Label>Zona de Entrega</Label>
-                                    <Select
-                                      value={sucursal.zona_id}
-                                      onValueChange={(value) => updateSucursal(sucursal.id, "zona_id", value)}
-                                    >
-                                      <SelectTrigger>
-                                        <SelectValue placeholder="Selecciona zona" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {zonas.map((zona) => (
-                                          <SelectItem key={zona.id} value={zona.id}>
-                                            {zona.nombre}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                </div>
-                                <div className="space-y-2">
-                                  <Label>Dirección de Entrega *</Label>
-                                  <GoogleMapsAddressAutocomplete
-                                    value={sucursal.direccion}
-                                    onChange={(value) => updateSucursal(sucursal.id, "direccion", value)}
-                                    placeholder="Buscar dirección de entrega..."
-                                  />
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div className="space-y-2">
-                                    <Label>Contacto</Label>
-                                    <Input
-                                      value={sucursal.contacto}
-                                      onChange={(e) => updateSucursal(sucursal.id, "contacto", e.target.value)}
-                                      placeholder="Nombre del contacto"
-                                    />
-                                  </div>
-                                  <div className="space-y-2">
-                                    <Label>Teléfono</Label>
-                                    <Input
-                                      value={sucursal.telefono}
-                                      onChange={(e) => updateSucursal(sucursal.id, "telefono", e.target.value)}
-                                      placeholder="Teléfono de la sucursal"
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                            
-                            <Button type="button" variant="outline" onClick={addSucursal}>
-                              <Plus className="h-4 w-4 mr-2" />
-                              Agregar Otra Sucursal
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="flex justify-end gap-2 pt-4 border-t">
-                  <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                    Cancelar
-                  </Button>
-                  <Button type="submit">
-                    {editingClient ? "Actualizar" : "Crear Cliente"}
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
-
-        <div className="flex gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar clientes..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-        </div>
-
         <div className="border rounded-lg">
           <Table>
             <TableHeader>
@@ -1280,32 +880,8 @@ const Clientes = () => {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => {
-                            if (cliente.user_id) {
-                              toast({
-                                title: "Ya tiene acceso",
-                                description: "Este cliente ya tiene una cuenta de portal vinculada",
-                              });
-                              return;
-                            }
-                            setSelectedClienteForAcceso({ 
-                              id: cliente.id, 
-                              nombre: cliente.nombre, 
-                              email: cliente.email,
-                              user_id: cliente.user_id 
-                            });
-                            setAccesoPortalDialogOpen(true);
-                          }}
-                          title={cliente.user_id ? "Ya tiene acceso al portal" : "Crear acceso al portal"}
-                          className={cliente.user_id ? "text-green-500" : ""}
-                        >
-                          <UserPlus className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
                           onClick={() => handleEdit(cliente)}
-                          title="Editar cliente y correos"
+                          title="Editar cliente"
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
@@ -1332,7 +908,6 @@ const Clientes = () => {
         cliente={selectedClienteForSucursales}
       />
 
-      {/* Dialog para ver historial de precios y cantidades */}
       <HistorialDialog open={historialDialogOpen} onOpenChange={setHistorialDialogOpen}>
         <HistorialDialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <HistorialDialogHeader>
@@ -1348,14 +923,6 @@ const Clientes = () => {
           )}
         </HistorialDialogContent>
       </HistorialDialog>
-
-      {/* Dialog para crear acceso al portal de clientes */}
-      <CrearAccesoPortalDialog
-        open={accesoPortalDialogOpen}
-        onOpenChange={setAccesoPortalDialogOpen}
-        cliente={selectedClienteForAcceso}
-        onSuccess={loadClientes}
-      />
     </Layout>
   );
 };

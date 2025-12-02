@@ -664,23 +664,39 @@ export function PedidosAcumulativosManager() {
                 {selectedForBatch.size === pedidosAcumulativos.length ? 'Deseleccionar' : 'Seleccionar todos'}
               </Button>
               {selectedForBatch.size > 0 && (
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={handleGenerateBatch}
-                  disabled={finalizarMultipleMutation.isPending || pedidosSeleccionadosSinVerificar > 0}
-                  title={pedidosSeleccionadosSinVerificar > 0 ? `${pedidosSeleccionadosSinVerificar} pedido(s) sin verificar` : ''}
-                >
-                  {finalizarMultipleMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                  ) : pedidosSeleccionadosSinVerificar > 0 ? (
-                    <Lock className="h-4 w-4 mr-1" />
-                  ) : (
-                    <Check className="h-4 w-4 mr-1" />
-                  )}
-                  Generar {selectedForBatch.size} pedido{selectedForBatch.size > 1 ? 's' : ''}
-                  {pedidosSeleccionadosSinVerificar > 0 && ` (${pedidosSeleccionadosSinVerificar} bloqueados)`}
-                </Button>
+                <>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => {
+                      if (confirm(`¿Eliminar ${selectedForBatch.size} pedido${selectedForBatch.size > 1 ? 's' : ''} seleccionado${selectedForBatch.size > 1 ? 's' : ''}?`)) {
+                        Array.from(selectedForBatch).forEach(id => deleteMutation.mutate(id));
+                        setSelectedForBatch(new Set());
+                      }
+                    }}
+                    disabled={deleteMutation.isPending}
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Borrar {selectedForBatch.size}
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleGenerateBatch}
+                    disabled={finalizarMultipleMutation.isPending || pedidosSeleccionadosSinVerificar > 0}
+                    title={pedidosSeleccionadosSinVerificar > 0 ? `${pedidosSeleccionadosSinVerificar} pedido(s) sin verificar` : ''}
+                  >
+                    {finalizarMultipleMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                    ) : pedidosSeleccionadosSinVerificar > 0 ? (
+                      <Lock className="h-4 w-4 mr-1" />
+                    ) : (
+                      <Check className="h-4 w-4 mr-1" />
+                    )}
+                    Generar {selectedForBatch.size} pedido{selectedForBatch.size > 1 ? 's' : ''}
+                    {pedidosSeleccionadosSinVerificar > 0 && ` (${pedidosSeleccionadosSinVerificar} bloqueados)`}
+                  </Button>
+                </>
               )}
             </>
           )}

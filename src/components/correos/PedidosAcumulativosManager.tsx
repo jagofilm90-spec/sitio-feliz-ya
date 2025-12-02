@@ -58,6 +58,8 @@ export function PedidosAcumulativosManager() {
   // Mutation para recalcular todos los pedidos acumulativos
   const recalcularMutation = useMutation({
     mutationFn: async () => {
+      console.log("🔄 Iniciando recálculo de pedidos acumulativos...");
+      
       // Obtener todos los pedidos acumulativos en borrador
       const { data: pedidos, error: pedidosError } = await supabase
         .from("pedidos_acumulativos")
@@ -68,6 +70,7 @@ export function PedidosAcumulativosManager() {
       if (!pedidos || pedidos.length === 0) return { updated: 0 };
 
       let updatedCount = 0;
+      let totalLinesFixed = 0;
 
       // Procesar cada pedido
       for (const pedido of pedidos) {
@@ -86,16 +89,16 @@ export function PedidosAcumulativosManager() {
         // Recalcular subtotales de cada detalle
         const detallesUpdates = [];
         for (const detalle of detalles) {
-          const producto = detalle.productos;
+          // FÓRMULA CORRECTA: cantidad × precio_unitario (SIN kg_por_unidad)
+          const lineSubtotalCorrecto = Math.round(detalle.cantidad * detalle.precio_unitario * 100) / 100;
           
-          // Calcular subtotal correcto
-          const lineSubtotal = detalle.cantidad * detalle.precio_unitario;
-          
-          if (lineSubtotal !== detalle.subtotal) {
+          if (Math.abs(lineSubtotalCorrecto - detalle.subtotal) > 0.01) {
+            console.log(`🔧 Corrigiendo línea: ${detalle.cantidad} × ${detalle.precio_unitario} = ${lineSubtotalCorrecto} (antes: ${detalle.subtotal})`);
             detallesUpdates.push({
               id: detalle.id,
-              subtotal: lineSubtotal
+              subtotal: lineSubtotalCorrecto
             });
+            totalLinesFixed++;
           }
         }
 
@@ -109,7 +112,7 @@ export function PedidosAcumulativosManager() {
           if (error) throw error;
         }
 
-        // Recalcular totales del pedido
+        // Recalcular totales del pedido con detalles ya corregidos
         const { data: detallesActualizados, error: detallesActError } = await supabase
           .from("pedidos_acumulativos_detalles")
           .select(`
@@ -128,10 +131,10 @@ export function PedidosAcumulativosManager() {
           const producto = detalle.productos;
           const lineSubtotal = detalle.subtotal;
 
-          // Calcular base sin impuestos
+          // Calcular base sin impuestos (desagregar)
           let divisor = 1;
           if (producto.aplica_iva && producto.aplica_ieps) {
-            divisor = 1 + 0.16 + 0.08; // 1.24
+            divisor = 1.24; // 1 + 0.16 + 0.08
           } else if (producto.aplica_iva) {
             divisor = 1.16;
           } else if (producto.aplica_ieps) {
@@ -149,16 +152,19 @@ export function PedidosAcumulativosManager() {
           iepsTotal += lineIeps;
         }
 
-        const totalImpuestos = ivaTotal + iepsTotal;
-        const totalGeneral = subtotalTotal + totalImpuestos;
+        const subtotalRedondeado = Math.round(subtotalTotal * 100) / 100;
+        const impuestosRedondeado = Math.round((ivaTotal + iepsTotal) * 100) / 100;
+        const totalRedondeado = Math.round((subtotalTotal + ivaTotal + iepsTotal) * 100) / 100;
+
+        console.log(`✅ Pedido ${pedido.id}: Subtotal=${subtotalRedondeado}, Impuestos=${impuestosRedondeado}, Total=${totalRedondeado}`);
 
         // Actualizar pedido acumulativo
         const { error: updateError } = await supabase
           .from("pedidos_acumulativos")
           .update({
-            subtotal: subtotalTotal,
-            impuestos: totalImpuestos,
-            total: totalGeneral
+            subtotal: subtotalRedondeado,
+            impuestos: impuestosRedondeado,
+            total: totalRedondeado
           })
           .eq("id", pedido.id);
 
@@ -166,13 +172,15 @@ export function PedidosAcumulativosManager() {
         updatedCount++;
       }
 
-      return { updated: updatedCount };
+      console.log(`✅ Recálculo completo: ${updatedCount} pedidos actualizados, ${totalLinesFixed} líneas corregidas`);
+      return { updated: updatedCount, linesFixed: totalLinesFixed };
     },
     onSuccess: (result) => {
-      toast.success(`${result.updated} pedido${result.updated !== 1 ? 's' : ''} recalculado${result.updated !== 1 ? 's' : ''}`);
+      toast.success(`✅ ${result.updated} pedido${result.updated !== 1 ? 's' : ''} recalculado${result.updated !== 1 ? 's' : ''} • ${result.linesFixed} línea${result.linesFixed !== 1 ? 's' : ''} corregida${result.linesFixed !== 1 ? 's' : ''}`);
       queryClient.invalidateQueries({ queryKey: ["pedidos-acumulativos"] });
     },
     onError: (error: any) => {
+      console.error("❌ Error al recalcular:", error);
       toast.error("Error al recalcular: " + error.message);
     },
   });

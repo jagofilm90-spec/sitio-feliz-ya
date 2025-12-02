@@ -292,13 +292,17 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     'chocoarroz': ['chocoarroz', 'choco arroz', 'chocolate arroz'],
     // Cacahuate - precio por kilo
     'cacahuate tostado': ['cacahuate pelado sin sal', 'cacahuate pelado', 'cacahuate', 'cacahuates', 'cacahuate natural', 'mani', 'maní'],
+    // Anís - especias
+    'anis': ['anis', 'anís', 'anis estrella', 'anís estrella', 'anis entero'],
+    // Piloncillo
+    'piloncillo comercial': ['piloncillo', 'piloncillo comercial', 'piloncillo entero'],
     
     // ========== DURAZNO ==========
     'durazno': ['durazno en lata', 'durazno lata', 'durazno en almibar', 'duraznos'],
     
     // ========== OTROS ==========
     'avellana sin casacara': ['avellana entera', 'avellana', 'avellanas'],
-    'sal refinada': ['sal', 'sal de mesa', 'sal fina'],
+    'sal refinada': ['sal', 'sal de mesa', 'sal fina', 'sal cisne', 'cisne'],
     'uva pasa': ['pasas', 'pasa', 'pasitas', 'uva pasas'],
     'girasol pelado': ['semilla de girasol pelado', 'semilla girasol pelado', 'girasol sin cascara'],
     'fruty rueda': ['frutirueda', 'fruti rueda', 'fruty ruedas'],

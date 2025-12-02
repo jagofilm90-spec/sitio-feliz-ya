@@ -37,7 +37,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 interface ParsedProduct {
   nombre_producto: string;
   cantidad: number;
-  unidad: string;
+  unidad_mencionada_cliente?: string; // Unidad que menciona el cliente (KILOS, PIEZAS, etc.) - solo referencia
+  unidad?: string; // Unidad final del producto (del catálogo) - se calcula en el frontend
   precio_sugerido?: number | null;
   notas?: string;
   producto_id?: string;
@@ -49,6 +50,7 @@ interface ParsedProduct {
   aplica_iva?: boolean;
   aplica_ieps?: boolean;
   match_type?: 'exact' | 'synonym' | 'none'; // Tipo de coincidencia
+  unidad_comercial?: string; // Unidad del catálogo (bulto, caja, kg, etc.)
 }
 
 interface ParsedSucursal {
@@ -350,56 +352,44 @@ export default function ProcesarPedidoDialog({
               if (prod.producto_cotizado_id) {
                 const matchedByCotizacion = productos.find(p => p.id === prod.producto_cotizado_id);
                 if (matchedByCotizacion) {
-                  console.log('PIÑA/MANGO BY-ID BEFORE', { prod, matchedByCotizacion });
-
                   // Buscar precio de cotización si existe en las cotizaciones seleccionadas
                   const precioCotizacion = productosUnicos.find(
                     (pc: any) => pc.producto_id === prod.producto_cotizado_id
                   )?.precio_cotizado;
                   
                   // CRITICAL FIX: Si no hay precio de cotización, usar precio_venta del producto
-                  // Esto ocurre cuando se seleccionan cotizaciones específicas que no incluyen este producto
                   const precioFinal = precioCotizacion !== undefined && precioCotizacion !== null 
                     ? precioCotizacion 
                     : matchedByCotizacion.precio_venta;
 
-                  // Ajuste frontal específico para PIÑA/MANGO en lata
-                  const isPiñaMangoLataCatalogById =
-                    /piña|pina|mango/i.test(matchedByCotizacion.nombre) &&
-                    /\d+\s*\/\s*\d+(\.|,)?\d*\s*(gr|kg)/i.test(matchedByCotizacion.nombre);
+                  // CONVERSIÓN UNIVERSAL: Usar SIEMPRE la unidad_comercial del catálogo
+                  const unidadCatalogo = matchedByCotizacion.unidad;
+                  const unidadCliente = (prod.unidad_mencionada_cliente || prod.unidad || "").toLowerCase();
+                  let cantidadFinal = prod.cantidad;
 
-                  let cantidadAjustadaId = prod.cantidad;
-                  let unidadAjustadaId = prod.unidad;
-
-                  // Solo convertir si VIENE en piezas/kilos y el catálogo NO está ya en CAJA
-                  if (
-                    isPiñaMangoLataCatalogById &&
-                    matchedByCotizacion.unidad?.toLowerCase() === "caja" &&
-                    prod.unidad.toLowerCase() !== "caja"
-                  ) {
-                    const piecesMatchId = matchedByCotizacion.nombre.match(/(\d+)\s*\/\s*\d+(\.|,)?\d*\s*(gr|kg)/i);
-                    const piecesPerBoxId = piecesMatchId ? parseInt(piecesMatchId[1], 10) : null;
-
-                    if (piecesPerBoxId && piecesPerBoxId > 0) {
-                      const cajasId = prod.cantidad / piecesPerBoxId;
-                      cantidadAjustadaId = Math.round(cajasId * 100) / 100;
-                      unidadAjustadaId = "caja";
-                    }
+                  // Si cliente pidió en KILOS y producto tiene kg_por_unidad, convertir
+                  if (unidadCliente === "kilos" && matchedByCotizacion.kg_por_unidad && matchedByCotizacion.kg_por_unidad > 0) {
+                    cantidadFinal = prod.cantidad / matchedByCotizacion.kg_por_unidad;
+                    cantidadFinal = Math.round(cantidadFinal * 100) / 100;
                   }
 
-                  console.log('PIÑA/MANGO BY-ID AFTER', {
-                    cantidadAjustadaId,
-                    unidadAjustadaId,
-                    isPiñaMangoLataCatalogById,
+                  console.log('CONVERSIÓN UNIVERSAL BY-ID', {
+                    producto: matchedByCotizacion.nombre,
+                    cantidad_cliente: prod.cantidad,
+                    unidad_cliente: unidadCliente,
+                    unidad_catalogo: unidadCatalogo,
+                    kg_por_unidad: matchedByCotizacion.kg_por_unidad,
+                    cantidad_final: cantidadFinal,
                   });
                   
                   return {
                     ...prod,
-                    cantidad: cantidadAjustadaId,
-                    unidad: unidadAjustadaId,
+                    cantidad: cantidadFinal,
+                    unidad: unidadCatalogo, // SIEMPRE usar unidad del catálogo
+                    unidad_comercial: unidadCatalogo,
                     producto_id: matchedByCotizacion.id,
                     precio_unitario: precioFinal,
-                    precio_por_kilo: isPiñaMangoLataCatalogById ? false : matchedByCotizacion.precio_por_kilo,
+                    precio_por_kilo: matchedByCotizacion.precio_por_kilo,
                     kg_por_unidad: matchedByCotizacion.kg_por_unidad,
                     aplica_iva: matchedByCotizacion.aplica_iva,
                     aplica_ieps: matchedByCotizacion.aplica_ieps,
@@ -452,44 +442,34 @@ export default function ProcesarPedidoDialog({
                 }
               }
               
-              // Check if product is piña/mango en lata con formato X/xxxgr o X/xxkg
-              const isPiñaMangoLataCatalog = matched &&
-                /piña|pina|mango/i.test(matched.nombre) &&
-                /\d+\s*\/\s*\d+(\.|,)?\d*\s*(gr|kg)/i.test(matched.nombre);
+              // CONVERSIÓN UNIVERSAL: Usar SIEMPRE la unidad_comercial del catálogo
+              const unidadCatalogo = matched?.unidad;
+              const unidadCliente = (prod.unidad_mencionada_cliente || prod.unidad || "").toLowerCase();
+              let cantidadFinal = prod.cantidad;
 
-              // Ajuste frontal de conversión PIEZAS/KILOS → CAJAS usando el número antes del "/"
-              let cantidadAjustada = prod.cantidad;
-              let unidadAjustada = prod.unidad;
-
-              if (
-                isPiñaMangoLataCatalog &&
-                matched?.unidad?.toLowerCase() === 'caja' &&
-                prod.unidad.toLowerCase() !== 'caja'
-              ) {
-                const piecesMatch = matched.nombre.match(/(\d+)\s*\/\s*\d+(\.|,)?\d*\s*(gr|kg)/i);
-                const piecesPerBox = piecesMatch ? parseInt(piecesMatch[1], 10) : null;
-
-                if (piecesPerBox && piecesPerBox > 0) {
-                  const cajas = prod.cantidad / piecesPerBox;
-                  cantidadAjustada = Math.round(cajas * 100) / 100;
-                  unidadAjustada = 'caja';
-                }
+              // Si cliente pidió en KILOS y producto tiene kg_por_unidad, convertir
+              if (matched && unidadCliente === "kilos" && matched.kg_por_unidad && matched.kg_por_unidad > 0) {
+                cantidadFinal = prod.cantidad / matched.kg_por_unidad;
+                cantidadFinal = Math.round(cantidadFinal * 100) / 100;
               }
-              
-              console.log('PIÑA/MANGO FRONT MATCH', {
-                original: prod,
-                matched,
-                isPiñaMangoLataCatalog,
-                cantidadAjustada,
-                unidadAjustada,
+
+              console.log('CONVERSIÓN UNIVERSAL BY-NAME', {
+                producto: matched?.nombre,
+                cantidad_cliente: prod.cantidad,
+                unidad_cliente: unidadCliente,
+                unidad_catalogo: unidadCatalogo,
+                kg_por_unidad: matched?.kg_por_unidad,
+                cantidad_final: cantidadFinal,
               });
+
               return {
                 ...prod,
-                cantidad: cantidadAjustada,
-                unidad: unidadAjustada,
+                cantidad: cantidadFinal,
+                unidad: unidadCatalogo, // SIEMPRE usar unidad del catálogo
+                unidad_comercial: unidadCatalogo,
                 producto_id: matched?.id,
                 precio_unitario: precioCotizacionPorNombre || matched?.precio_venta || prod.precio_sugerido,
-                precio_por_kilo: isPiñaMangoLataCatalog ? false : matched?.precio_por_kilo,
+                precio_por_kilo: matched?.precio_por_kilo,
                 kg_por_unidad: matched?.kg_por_unidad,
                 aplica_iva: matched?.aplica_iva,
                 aplica_ieps: matched?.aplica_ieps,

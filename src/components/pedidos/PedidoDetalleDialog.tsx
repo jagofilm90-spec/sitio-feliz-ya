@@ -22,6 +22,10 @@ interface PedidoDetalleDialogProps {
   pedidoId: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onNavigateNext?: () => void;
+  onNavigatePrevious?: () => void;
+  canNavigateNext?: boolean;
+  canNavigatePrevious?: boolean;
 }
 
 interface PedidoDetalle {
@@ -56,6 +60,10 @@ export default function PedidoDetalleDialog({
   pedidoId,
   open,
   onOpenChange,
+  onNavigateNext,
+  onNavigatePrevious,
+  canNavigateNext = false,
+  canNavigatePrevious = false,
 }: PedidoDetalleDialogProps) {
   const [pedido, setPedido] = useState<PedidoDetalle | null>(null);
   const [loading, setLoading] = useState(false);
@@ -65,6 +73,24 @@ export default function PedidoDetalleDialog({
       loadPedido();
     }
   }, [pedidoId, open]);
+
+  // Navegación con teclado: Flecha derecha = siguiente, Flecha izquierda = anterior
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight" && canNavigateNext && onNavigateNext) {
+        e.preventDefault();
+        onNavigateNext();
+      } else if (e.key === "ArrowLeft" && canNavigatePrevious && onNavigatePrevious) {
+        e.preventDefault();
+        onNavigatePrevious();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, canNavigateNext, canNavigatePrevious, onNavigateNext, onNavigatePrevious]);
 
   const loadPedido = async () => {
     if (!pedidoId) return;

@@ -55,6 +55,128 @@ export function PedidosAcumulativosManager() {
     },
   });
 
+  // Mutation para recalcular todos los pedidos acumulativos
+  const recalcularMutation = useMutation({
+    mutationFn: async () => {
+      // Obtener todos los pedidos acumulativos en borrador
+      const { data: pedidos, error: pedidosError } = await supabase
+        .from("pedidos_acumulativos")
+        .select("id")
+        .eq("status", "borrador");
+
+      if (pedidosError) throw pedidosError;
+      if (!pedidos || pedidos.length === 0) return { updated: 0 };
+
+      let updatedCount = 0;
+
+      // Procesar cada pedido
+      for (const pedido of pedidos) {
+        // Obtener detalles del pedido
+        const { data: detalles, error: detallesError } = await supabase
+          .from("pedidos_acumulativos_detalles")
+          .select(`
+            *,
+            productos:producto_id(precio_por_kilo, aplica_iva, aplica_ieps)
+          `)
+          .eq("pedido_acumulativo_id", pedido.id);
+
+        if (detallesError) throw detallesError;
+        if (!detalles || detalles.length === 0) continue;
+
+        // Recalcular subtotales de cada detalle
+        const detallesUpdates = [];
+        for (const detalle of detalles) {
+          const producto = detalle.productos;
+          
+          // Calcular subtotal correcto
+          const lineSubtotal = detalle.cantidad * detalle.precio_unitario;
+          
+          if (lineSubtotal !== detalle.subtotal) {
+            detallesUpdates.push({
+              id: detalle.id,
+              subtotal: lineSubtotal
+            });
+          }
+        }
+
+        // Actualizar detalles si hay cambios
+        for (const update of detallesUpdates) {
+          const { error } = await supabase
+            .from("pedidos_acumulativos_detalles")
+            .update({ subtotal: update.subtotal })
+            .eq("id", update.id);
+          
+          if (error) throw error;
+        }
+
+        // Recalcular totales del pedido
+        const { data: detallesActualizados, error: detallesActError } = await supabase
+          .from("pedidos_acumulativos_detalles")
+          .select(`
+            *,
+            productos:producto_id(aplica_iva, aplica_ieps)
+          `)
+          .eq("pedido_acumulativo_id", pedido.id);
+
+        if (detallesActError) throw detallesActError;
+
+        let subtotalTotal = 0;
+        let ivaTotal = 0;
+        let iepsTotal = 0;
+
+        for (const detalle of detallesActualizados) {
+          const producto = detalle.productos;
+          const lineSubtotal = detalle.subtotal;
+
+          // Calcular base sin impuestos
+          let divisor = 1;
+          if (producto.aplica_iva && producto.aplica_ieps) {
+            divisor = 1 + 0.16 + 0.08; // 1.24
+          } else if (producto.aplica_iva) {
+            divisor = 1.16;
+          } else if (producto.aplica_ieps) {
+            divisor = 1.08;
+          }
+
+          const baseAmount = lineSubtotal / divisor;
+
+          // Calcular impuestos sobre la base
+          const lineIva = producto.aplica_iva ? baseAmount * 0.16 : 0;
+          const lineIeps = producto.aplica_ieps ? baseAmount * 0.08 : 0;
+
+          subtotalTotal += baseAmount;
+          ivaTotal += lineIva;
+          iepsTotal += lineIeps;
+        }
+
+        const totalImpuestos = ivaTotal + iepsTotal;
+        const totalGeneral = subtotalTotal + totalImpuestos;
+
+        // Actualizar pedido acumulativo
+        const { error: updateError } = await supabase
+          .from("pedidos_acumulativos")
+          .update({
+            subtotal: subtotalTotal,
+            impuestos: totalImpuestos,
+            total: totalGeneral
+          })
+          .eq("id", pedido.id);
+
+        if (updateError) throw updateError;
+        updatedCount++;
+      }
+
+      return { updated: updatedCount };
+    },
+    onSuccess: (result) => {
+      toast.success(`${result.updated} pedido${result.updated !== 1 ? 's' : ''} recalculado${result.updated !== 1 ? 's' : ''}`);
+      queryClient.invalidateQueries({ queryKey: ["pedidos-acumulativos"] });
+    },
+    onError: (error: any) => {
+      toast.error("Error al recalcular: " + error.message);
+    },
+  });
+
   // Mutation para eliminar pedido acumulativo
   const deleteMutation = useMutation({
     mutationFn: async (pedidoId: string) => {
@@ -330,6 +452,19 @@ export function PedidosAcumulativosManager() {
         <div className="flex gap-2 items-center">
           {pedidosAcumulativos && pedidosAcumulativos.length > 0 && (
             <>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => recalcularMutation.mutate()}
+                disabled={recalcularMutation.isPending}
+              >
+                {recalcularMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                ) : (
+                  <Check className="h-4 w-4 mr-1" />
+                )}
+                Recalcular todos
+              </Button>
               <Button
                 variant="outline"
                 size="sm"

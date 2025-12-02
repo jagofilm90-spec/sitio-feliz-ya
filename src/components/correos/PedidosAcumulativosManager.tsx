@@ -1,10 +1,10 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Package, MapPin, Calendar, Trash2, Check, CheckSquare, Square, AlertTriangle, Edit2 } from "lucide-react";
+import { Loader2, Package, MapPin, Calendar, Trash2, Check, CheckSquare, Square, AlertTriangle, Edit2, Save, X, Lock, Unlock } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -18,32 +18,59 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { calcularSubtotal, calcularDesgloseImpuestos as calcularDesgloseImpuestosNuevo, redondear } from "@/lib/calculos";
 import { formatCurrency } from "@/lib/utils";
 
-// Helper para detectar productos que requieren verificación manual
+// Productos que SIEMPRE requieren verificación manual obligatoria
+const PRODUCTOS_VERIFICACION_OBLIGATORIA = [
+  'piloncillo',
+  'canela molida',
+  'anís',
+  'anis',
+  'bicarbonato'
+];
+
+// Helper para detectar productos que requieren verificación manual obligatoria
 const esProductoVerificable = (nombre: string) => {
   const nombreLower = nombre?.toLowerCase() || '';
-  return nombreLower.includes('piloncillo') || 
-         nombreLower.includes('canela molida') || 
-         nombreLower.includes('anís') ||
-         nombreLower.includes('anis');
+  return PRODUCTOS_VERIFICACION_OBLIGATORIA.some(p => nombreLower.includes(p));
 };
 
+// Determinar tipo de unidad según producto
 const getTipoUnidad = (nombre: string): 'caja' | 'bolsa' => {
   const nombreLower = nombre?.toLowerCase() || '';
-  if (nombreLower.includes('canela molida') || nombreLower.includes('anís') || nombreLower.includes('anis')) {
-    return 'bolsa';
+  // Piloncillo = cajas, todo lo demás = bolsas
+  if (nombreLower.includes('piloncillo')) {
+    return 'caja';
   }
-  return 'caja';
+  return 'bolsa';
 };
+
+// Obtener nombre amigable del producto para verificación
+const getNombreProductoVerificacion = (nombre: string): string => {
+  const nombreLower = nombre?.toLowerCase() || '';
+  if (nombreLower.includes('piloncillo')) return 'Piloncillo';
+  if (nombreLower.includes('canela molida')) return 'Canela Molida';
+  if (nombreLower.includes('anís') || nombreLower.includes('anis')) return 'Anís';
+  if (nombreLower.includes('bicarbonato')) return 'Bicarbonato';
+  return nombre;
+};
+
+// Tipo para el estado de verificación de productos
+interface VerificacionProducto {
+  detalleId: string;
+  verificado: boolean;
+  cantidadUnidades: number;
+  cantidadKg: number;
+  tipoUnidad: 'caja' | 'bolsa';
+}
 
 export function PedidosAcumulativosManager() {
   const [selectedPedido, setSelectedPedido] = useState<string | null>(null);
   const [selectedForBatch, setSelectedForBatch] = useState<Set<string>>(new Set());
-  const [editingDetalle, setEditingDetalle] = useState<{ 
-    id: string; 
-    cantidadKg: number; 
-    cantidadUnidades: number;
-    tipoUnidad: 'caja' | 'bolsa';
-  } | null>(null);
+  const [editingDetalle, setEditingDetalle] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<{ cantidadKg: number; cantidadUnidades: number }>({ cantidadKg: 0, cantidadUnidades: 1 });
+  
+  // Estado para rastrear verificaciones de productos especiales por pedido
+  const [verificaciones, setVerificaciones] = useState<Record<string, Record<string, VerificacionProducto>>>({});
+  
   const queryClient = useQueryClient();
 
   // Fetch pedidos acumulativos en borrador
@@ -61,11 +88,9 @@ export function PedidosAcumulativosManager() {
 
       if (error) throw error;
       
-      // Ordenar por código de sucursal (número)
       return data?.sort((a: any, b: any) => {
         const codigoA = a.cliente_sucursales?.codigo_sucursal || '';
         const codigoB = b.cliente_sucursales?.codigo_sucursal || '';
-        // Intentar ordenar numéricamente si son números
         const numA = parseInt(codigoA);
         const numB = parseInt(codigoB);
         if (!isNaN(numA) && !isNaN(numB)) {
@@ -76,7 +101,7 @@ export function PedidosAcumulativosManager() {
     },
   });
 
-  // Fetch detalles del pedido seleccionado con info de producto completa
+  // Fetch detalles del pedido seleccionado
   const { data: detalles, refetch: refetchDetalles } = useQuery({
     queryKey: ["pedidos-acumulativos-detalles", selectedPedido],
     enabled: !!selectedPedido,
@@ -94,18 +119,9 @@ export function PedidosAcumulativosManager() {
     },
   });
 
-  // Detectar pedidos con piloncillo
-  const pedidosConPiloncillo = useMemo(() => {
-    if (!pedidosAcumulativos) return [];
-    return pedidosAcumulativos.filter((pedido: any) => {
-      // Need to check if any detail has piloncillo - for now we mark all and check details when viewing
-      return true; // Will be filtered more accurately when we have all details
-    });
-  }, [pedidosAcumulativos]);
-
-  // Fetch all details for piloncillo detection
-  const { data: allDetallesForPiloncillo } = useQuery({
-    queryKey: ["pedidos-acumulativos-all-detalles-piloncillo"],
+  // Fetch all details for verification detection
+  const { data: allDetallesForVerificacion } = useQuery({
+    queryKey: ["pedidos-acumulativos-all-detalles-verificacion"],
     enabled: !!pedidosAcumulativos && pedidosAcumulativos.length > 0,
     queryFn: async () => {
       const pedidoIds = pedidosAcumulativos?.map((p: any) => p.id) || [];
@@ -114,7 +130,9 @@ export function PedidosAcumulativosManager() {
       const { data, error } = await supabase
         .from("pedidos_acumulativos_detalles")
         .select(`
+          id,
           pedido_acumulativo_id,
+          cantidad,
           productos:producto_id(nombre)
         `)
         .in("pedido_acumulativo_id", pedidoIds);
@@ -124,32 +142,83 @@ export function PedidosAcumulativosManager() {
     },
   });
 
-  // Contar pedidos que tienen productos verificables (piloncillo, canela, anís)
-  const pedidosConVerificacionCount = useMemo(() => {
-    if (!allDetallesForPiloncillo) return 0;
-    const pedidoIdsConVerificacion = new Set<string>();
-    allDetallesForPiloncillo.forEach((det: any) => {
-      if (esProductoVerificable(det.productos?.nombre)) {
-        pedidoIdsConVerificacion.add(det.pedido_acumulativo_id);
-      }
-    });
-    return pedidoIdsConVerificacion.size;
-  }, [allDetallesForPiloncillo]);
+  // Inicializar estado de verificaciones cuando se cargan los detalles
+  useEffect(() => {
+    if (allDetallesForVerificacion) {
+      const nuevasVerificaciones: Record<string, Record<string, VerificacionProducto>> = {};
+      
+      allDetallesForVerificacion.forEach((det: any) => {
+        if (esProductoVerificable(det.productos?.nombre)) {
+          if (!nuevasVerificaciones[det.pedido_acumulativo_id]) {
+            nuevasVerificaciones[det.pedido_acumulativo_id] = {};
+          }
+          // Solo inicializar si no existe ya
+          if (!verificaciones[det.pedido_acumulativo_id]?.[det.id]) {
+            nuevasVerificaciones[det.pedido_acumulativo_id][det.id] = {
+              detalleId: det.id,
+              verificado: false,
+              cantidadUnidades: 1,
+              cantidadKg: det.cantidad || 0,
+              tipoUnidad: getTipoUnidad(det.productos?.nombre)
+            };
+          } else {
+            nuevasVerificaciones[det.pedido_acumulativo_id][det.id] = verificaciones[det.pedido_acumulativo_id][det.id];
+          }
+        }
+      });
+      
+      setVerificaciones(prev => ({ ...prev, ...nuevasVerificaciones }));
+    }
+  }, [allDetallesForVerificacion]);
 
-  // Detectar si el detalle actual tiene productos verificables
+  // Calcular pedidos que requieren verificación y cuáles están completos
+  const pedidosVerificacionStatus = useMemo(() => {
+    const status: Record<string, { requiere: boolean; completo: boolean; pendientes: number }> = {};
+    
+    if (!allDetallesForVerificacion) return status;
+    
+    pedidosAcumulativos?.forEach((pedido: any) => {
+      const detallesDelPedido = allDetallesForVerificacion.filter(
+        (det: any) => det.pedido_acumulativo_id === pedido.id && esProductoVerificable(det.productos?.nombre)
+      );
+      
+      const requiere = detallesDelPedido.length > 0;
+      const verificados = detallesDelPedido.filter(
+        (det: any) => verificaciones[pedido.id]?.[det.id]?.verificado
+      ).length;
+      
+      status[pedido.id] = {
+        requiere,
+        completo: requiere ? verificados === detallesDelPedido.length : true,
+        pendientes: detallesDelPedido.length - verificados
+      };
+    });
+    
+    return status;
+  }, [allDetallesForVerificacion, verificaciones, pedidosAcumulativos]);
+
+  // Contar pedidos que requieren verificación
+  const pedidosConVerificacionCount = useMemo(() => {
+    return Object.values(pedidosVerificacionStatus).filter(s => s.requiere && !s.completo).length;
+  }, [pedidosVerificacionStatus]);
+
+  // Detectar productos verificables en el pedido actual
   const detallesConVerificacion = useMemo(() => {
     if (!detalles) return [];
-    return detalles.filter((det: any) => 
-      esProductoVerificable(det.productos?.nombre)
-    );
+    return detalles.filter((det: any) => esProductoVerificable(det.productos?.nombre));
   }, [detalles]);
 
-  // Mutation para recalcular todos los pedidos acumulativos
+  // Verificar si el pedido actual tiene todas las verificaciones completas
+  const pedidoActualVerificado = useMemo(() => {
+    if (!selectedPedido || !detallesConVerificacion.length) return true;
+    return detallesConVerificacion.every((det: any) => 
+      verificaciones[selectedPedido]?.[det.id]?.verificado
+    );
+  }, [selectedPedido, detallesConVerificacion, verificaciones]);
+
+  // Mutation para recalcular todos los pedidos
   const recalcularMutation = useMutation({
     mutationFn: async () => {
-      console.log("🔄 Iniciando recálculo de pedidos acumulativos...");
-      
-      // Obtener todos los pedidos acumulativos en borrador
       const { data: pedidos, error: pedidosError } = await supabase
         .from("pedidos_acumulativos")
         .select("id")
@@ -161,140 +230,83 @@ export function PedidosAcumulativosManager() {
       let updatedCount = 0;
       let totalLinesFixed = 0;
 
-      // Procesar cada pedido
       for (const pedido of pedidos) {
-        // Obtener detalles del pedido
         const { data: detalles, error: detallesError } = await supabase
           .from("pedidos_acumulativos_detalles")
-          .select(`
-            *,
-            productos:producto_id(nombre, precio_por_kilo, aplica_iva, aplica_ieps)
-          `)
+          .select(`*, productos:producto_id(nombre, precio_por_kilo, aplica_iva, aplica_ieps)`)
           .eq("pedido_acumulativo_id", pedido.id);
 
         if (detallesError) throw detallesError;
         if (!detalles || detalles.length === 0) continue;
 
-        // Recalcular subtotales de cada detalle usando sistema centralizado
         const detallesUpdates = [];
         for (const detalle of detalles) {
-          // USAR SISTEMA CENTRALIZADO: calcularSubtotal con validación
           const resultado = calcularSubtotal({
             cantidad: detalle.cantidad,
             precio_unitario: detalle.precio_unitario,
             nombre_producto: detalle.productos?.nombre || 'Producto desconocido'
           });
 
-          if (!resultado.valido) {
-            console.error(`❌ Error al calcular subtotal:`, resultado.error);
-            continue;
-          }
+          if (!resultado.valido) continue;
 
-          const lineSubtotalCorrecto = resultado.subtotal;
-          
-          if (Math.abs(lineSubtotalCorrecto - detalle.subtotal) > 0.01) {
-            console.log(`🔧 Corrigiendo línea: ${detalle.cantidad} × ${detalle.precio_unitario} = ${lineSubtotalCorrecto} (antes: ${detalle.subtotal})`);
-            detallesUpdates.push({
-              id: detalle.id,
-              subtotal: lineSubtotalCorrecto
-            });
+          if (Math.abs(resultado.subtotal - detalle.subtotal) > 0.01) {
+            detallesUpdates.push({ id: detalle.id, subtotal: resultado.subtotal });
             totalLinesFixed++;
           }
         }
 
-        // Actualizar detalles si hay cambios
         for (const update of detallesUpdates) {
-          const { error } = await supabase
-            .from("pedidos_acumulativos_detalles")
-            .update({ subtotal: update.subtotal })
-            .eq("id", update.id);
-          
-          if (error) throw error;
+          await supabase.from("pedidos_acumulativos_detalles").update({ subtotal: update.subtotal }).eq("id", update.id);
         }
 
-        // Recalcular totales del pedido usando sistema centralizado
-        const { data: detallesActualizados, error: detallesActError } = await supabase
+        const { data: detallesActualizados } = await supabase
           .from("pedidos_acumulativos_detalles")
-          .select(`
-            *,
-            productos:producto_id(nombre, aplica_iva, aplica_ieps)
-          `)
+          .select(`*, productos:producto_id(nombre, aplica_iva, aplica_ieps)`)
           .eq("pedido_acumulativo_id", pedido.id);
 
-        if (detallesActError) throw detallesActError;
+        let subtotalTotal = 0, ivaTotal = 0, iepsTotal = 0;
 
-        let subtotalTotal = 0;
-        let ivaTotal = 0;
-        let iepsTotal = 0;
-
-        for (const detalle of detallesActualizados) {
-          const producto = detalle.productos;
-          const lineSubtotal = detalle.subtotal;
-
-          // Usar sistema centralizado para desagregar impuestos
+        for (const detalle of detallesActualizados || []) {
           const desglose = calcularDesgloseImpuestosNuevo({
-            precio_con_impuestos: lineSubtotal,
-            aplica_iva: producto.aplica_iva,
-            aplica_ieps: producto.aplica_ieps,
-            nombre_producto: producto.nombre
+            precio_con_impuestos: detalle.subtotal,
+            aplica_iva: detalle.productos?.aplica_iva || false,
+            aplica_ieps: detalle.productos?.aplica_ieps || false,
+            nombre_producto: detalle.productos?.nombre || ''
           });
-
-          if (!desglose.valido) {
-            console.error(`❌ Error al calcular impuestos:`, desglose.error);
-          }
-
           subtotalTotal += desglose.base;
           ivaTotal += desglose.iva;
           iepsTotal += desglose.ieps;
         }
 
-        const subtotalRedondeado = redondear(subtotalTotal);
-        const impuestosRedondeado = redondear(ivaTotal + iepsTotal);
-        const totalRedondeado = redondear(subtotalTotal + ivaTotal + iepsTotal);
+        await supabase.from("pedidos_acumulativos").update({
+          subtotal: redondear(subtotalTotal),
+          impuestos: redondear(ivaTotal + iepsTotal),
+          total: redondear(subtotalTotal + ivaTotal + iepsTotal)
+        }).eq("id", pedido.id);
 
-        console.log(`✅ Pedido ${pedido.id}: Subtotal=${subtotalRedondeado}, Impuestos=${impuestosRedondeado}, Total=${totalRedondeado}`);
-
-        // Actualizar pedido acumulativo
-        const { error: updateError } = await supabase
-          .from("pedidos_acumulativos")
-          .update({
-            subtotal: subtotalRedondeado,
-            impuestos: impuestosRedondeado,
-            total: totalRedondeado
-          })
-          .eq("id", pedido.id);
-
-        if (updateError) throw updateError;
         updatedCount++;
       }
 
-      console.log(`✅ Recálculo completo: ${updatedCount} pedidos actualizados, ${totalLinesFixed} líneas corregidas`);
       return { updated: updatedCount, linesFixed: totalLinesFixed };
     },
     onSuccess: (result) => {
-      toast.success(`✅ ${result.updated} pedido${result.updated !== 1 ? 's' : ''} recalculado${result.updated !== 1 ? 's' : ''} • ${result.linesFixed} línea${result.linesFixed !== 1 ? 's' : ''} corregida${result.linesFixed !== 1 ? 's' : ''}`);
+      toast.success(`${result.updated} pedidos recalculados • ${result.linesFixed} líneas corregidas`);
       queryClient.invalidateQueries({ queryKey: ["pedidos-acumulativos"] });
     },
     onError: (error: any) => {
-      console.error("❌ Error al recalcular:", error);
       toast.error("Error al recalcular: " + error.message);
     },
   });
 
-  // Mutation para eliminar pedido acumulativo
+  // Mutation para eliminar pedido
   const deleteMutation = useMutation({
     mutationFn: async (pedidoId: string) => {
-      const { error } = await supabase
-        .from("pedidos_acumulativos")
-        .delete()
-        .eq("id", pedidoId);
-
+      const { error } = await supabase.from("pedidos_acumulativos").delete().eq("id", pedidoId);
       if (error) throw error;
     },
     onSuccess: () => {
       toast.success("Pedido acumulativo eliminado");
       queryClient.invalidateQueries({ queryKey: ["pedidos-acumulativos"] });
-      // Invalidar también la query de correos procesados para quitar badge "Procesado" de emails
       queryClient.invalidateQueries({ queryKey: ["correos-procesados"] });
     },
     onError: (error: any) => {
@@ -302,125 +314,82 @@ export function PedidosAcumulativosManager() {
     },
   });
 
-  // Mutation para generar múltiples pedidos
-  const finalizarMultipleMutation = useMutation({
-    mutationFn: async (pedidoIds: string[]) => {
-      // Obtener ID del usuario actual
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("No authenticated user");
-
-      // Obtener todos los pedidos acumulativos
-      const { data: pedidosAcumulativos, error: fetchError } = await supabase
-        .from("pedidos_acumulativos")
-        .select("*, pedidos_acumulativos_detalles(*)")
-        .in("id", pedidoIds);
+  // Mutation para actualizar cantidad de un detalle
+  const updateDetalleMutation = useMutation({
+    mutationFn: async ({ detalleId, nuevaCantidad }: { detalleId: string; nuevaCantidad: number }) => {
+      const { data: detalle, error: fetchError } = await supabase
+        .from("pedidos_acumulativos_detalles")
+        .select(`*, productos:producto_id(aplica_iva, aplica_ieps, nombre)`)
+        .eq("id", detalleId)
+        .single();
 
       if (fetchError) throw fetchError;
 
-      // Generar folios secuencialmente para evitar duplicados
-      const currentDate = new Date();
-      const yearMonth = `${currentDate.getFullYear()}${String(currentDate.getMonth() + 1).padStart(2, "0")}`;
-      const { data: lastPedido } = await supabase
-        .from("pedidos")
-        .select("folio")
-        .like("folio", `PED-${yearMonth}-%`)
-        .order("folio", { ascending: false })
-        .limit(1)
-        .single();
+      const nuevoSubtotal = nuevaCantidad * detalle.precio_unitario;
 
-      let nextFolioNumber = 1;
-      if (lastPedido?.folio) {
-        const match = lastPedido.folio.match(/PED-\d{6}-(\d{4})/);
-        if (match) {
-          nextFolioNumber = parseInt(match[1]) + 1;
-        }
+      await supabase.from("pedidos_acumulativos_detalles")
+        .update({ cantidad: nuevaCantidad, subtotal: nuevoSubtotal })
+        .eq("id", detalleId);
+
+      const { data: todosDetalles } = await supabase
+        .from("pedidos_acumulativos_detalles")
+        .select(`*, productos:producto_id(aplica_iva, aplica_ieps, nombre)`)
+        .eq("pedido_acumulativo_id", detalle.pedido_acumulativo_id);
+
+      let subtotalTotal = 0, ivaTotal = 0, iepsTotal = 0;
+
+      for (const det of todosDetalles || []) {
+        const desglose = calcularDesgloseImpuestosNuevo({
+          precio_con_impuestos: det.subtotal,
+          aplica_iva: det.productos?.aplica_iva || false,
+          aplica_ieps: det.productos?.aplica_ieps || false,
+          nombre_producto: det.productos?.nombre || ''
+        });
+        subtotalTotal += desglose.base;
+        ivaTotal += desglose.iva;
+        iepsTotal += desglose.ieps;
       }
 
-      // Asignar folios únicos a cada pedido
-      const pedidosConFolio = pedidosAcumulativos?.map((pedidoAcum) => ({
-        pedidoAcum,
-        folio: `PED-${yearMonth}-${String(nextFolioNumber++).padStart(4, "0")}`,
-      })) || [];
+      await supabase.from("pedidos_acumulativos").update({
+        subtotal: redondear(subtotalTotal),
+        impuestos: redondear(ivaTotal + iepsTotal),
+        total: redondear(subtotalTotal + ivaTotal + iepsTotal)
+      }).eq("id", detalle.pedido_acumulativo_id);
 
-      // Procesar cada pedido con su folio pre-asignado
-      const results = [];
-      for (const { pedidoAcum, folio } of pedidosConFolio) {
-        try {
-          // Crear pedido final
-          const { data: newPedido, error: pedidoInsertError } = await supabase
-            .from("pedidos")
-            .insert({
-              folio,
-              cliente_id: pedidoAcum.cliente_id,
-              sucursal_id: pedidoAcum.sucursal_id,
-              vendedor_id: user.id,
-              fecha_pedido: new Date().toISOString(),
-              fecha_entrega_estimada: pedidoAcum.fecha_entrega,
-              subtotal: pedidoAcum.subtotal,
-              impuestos: pedidoAcum.impuestos,
-              total: pedidoAcum.total,
-              notas: pedidoAcum.notas || "Pedido consolidado de Lecaroz",
-              status: "pendiente",
-            })
-            .select()
-            .single();
-
-          if (pedidoInsertError) throw pedidoInsertError;
-
-          // Insertar detalles del pedido
-          const detallesInsert = pedidoAcum.pedidos_acumulativos_detalles.map((det: any) => ({
-            pedido_id: newPedido.id,
-            producto_id: det.producto_id,
-            cantidad: det.cantidad,
-            precio_unitario: det.precio_unitario,
-            subtotal: det.subtotal,
-          }));
-
-          const { error: detallesError } = await supabase
-            .from("pedidos_detalles")
-            .insert(detallesInsert);
-
-          if (detallesError) throw detallesError;
-
-          // Marcar pedido acumulativo como finalizado
-          const { error: updateError } = await supabase
-            .from("pedidos_acumulativos")
-            .update({ status: "finalizado" })
-            .eq("id", pedidoAcum.id);
-
-          if (updateError) throw updateError;
-
-          results.push({ success: true, pedido: newPedido });
-        } catch (error: any) {
-          results.push({ success: false, error: error.message });
-        }
-      }
-
-      return results;
+      return { pedidoId: detalle.pedido_acumulativo_id, detalleId };
     },
-    onSuccess: (results) => {
-      const successCount = results.filter(r => r.success).length;
-      const failCount = results.filter(r => !r.success).length;
-      
-      if (failCount === 0) {
-        toast.success(`${successCount} pedido${successCount > 1 ? 's' : ''} generado${successCount > 1 ? 's' : ''} exitosamente`);
-      } else {
-        toast.warning(`${successCount} exitosos, ${failCount} fallidos`);
-      }
-      
+    onSuccess: (data) => {
+      toast.success("Cantidad actualizada");
+      setEditingDetalle(null);
+      refetchDetalles();
       queryClient.invalidateQueries({ queryKey: ["pedidos-acumulativos"] });
-      queryClient.invalidateQueries({ queryKey: ["pedidos"] });
-      setSelectedForBatch(new Set());
+      
+      // Marcar como verificado
+      setVerificaciones(prev => ({
+        ...prev,
+        [data.pedidoId]: {
+          ...prev[data.pedidoId],
+          [data.detalleId]: {
+            ...prev[data.pedidoId]?.[data.detalleId],
+            verificado: true
+          }
+        }
+      }));
     },
     onError: (error: any) => {
-      toast.error("Error al generar pedidos: " + error.message);
-    },
+      toast.error("Error al actualizar: " + error.message);
+    }
   });
 
-  // Mutation para generar pedido final
+  // Mutation para generar pedido final (solo si está verificado)
   const finalizarMutation = useMutation({
     mutationFn: async (pedidoAcumulativoId: string) => {
-      // Obtener pedido acumulativo y sus detalles
+      // Verificar que todos los productos especiales estén verificados
+      const status = pedidosVerificacionStatus[pedidoAcumulativoId];
+      if (status?.requiere && !status?.completo) {
+        throw new Error("Debes verificar todos los productos especiales antes de generar la remisión");
+      }
+
       const { data: pedidoAcum, error: pedidoError } = await supabase
         .from("pedidos_acumulativos")
         .select("*, pedidos_acumulativos_detalles(*)")
@@ -429,11 +398,9 @@ export function PedidosAcumulativosManager() {
 
       if (pedidoError) throw pedidoError;
 
-      // Obtener ID del usuario actual
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No authenticated user");
 
-      // Generar folio para el pedido
       const currentDate = new Date();
       const yearMonth = `${currentDate.getFullYear()}${String(currentDate.getMonth() + 1).padStart(2, "0")}`;
       const { data: lastPedido } = await supabase
@@ -447,13 +414,10 @@ export function PedidosAcumulativosManager() {
       let newFolioNumber = 1;
       if (lastPedido?.folio) {
         const match = lastPedido.folio.match(/PED-\d{6}-(\d{4})/);
-        if (match) {
-          newFolioNumber = parseInt(match[1]) + 1;
-        }
+        if (match) newFolioNumber = parseInt(match[1]) + 1;
       }
       const folio = `PED-${yearMonth}-${String(newFolioNumber).padStart(4, "0")}`;
 
-      // Crear pedido final
       const { data: newPedido, error: pedidoInsertError } = await supabase
         .from("pedidos")
         .insert({
@@ -474,7 +438,6 @@ export function PedidosAcumulativosManager() {
 
       if (pedidoInsertError) throw pedidoInsertError;
 
-      // Insertar detalles del pedido
       const detallesInsert = pedidoAcum.pedidos_acumulativos_detalles.map((det: any) => ({
         pedido_id: newPedido.id,
         producto_id: det.producto_id,
@@ -483,19 +446,10 @@ export function PedidosAcumulativosManager() {
         subtotal: det.subtotal,
       }));
 
-      const { error: detallesError } = await supabase
-        .from("pedidos_detalles")
-        .insert(detallesInsert);
-
+      const { error: detallesError } = await supabase.from("pedidos_detalles").insert(detallesInsert);
       if (detallesError) throw detallesError;
 
-      // Marcar pedido acumulativo como finalizado
-      const { error: updateError } = await supabase
-        .from("pedidos_acumulativos")
-        .update({ status: "finalizado" })
-        .eq("id", pedidoAcumulativoId);
-
-      if (updateError) throw updateError;
+      await supabase.from("pedidos_acumulativos").update({ status: "finalizado" }).eq("id", pedidoAcumulativoId);
 
       return { pedido: newPedido };
     },
@@ -506,78 +460,110 @@ export function PedidosAcumulativosManager() {
       setSelectedPedido(null);
     },
     onError: (error: any) => {
-      toast.error("Error al generar pedido: " + error.message);
+      toast.error(error.message);
     },
   });
 
-  // Mutation para actualizar cantidad de un detalle (piloncillo)
-  const updateDetalleMutation = useMutation({
-    mutationFn: async ({ detalleId, nuevaCantidad }: { detalleId: string; nuevaCantidad: number }) => {
-      // Obtener detalle actual para recalcular
-      const { data: detalle, error: fetchError } = await supabase
-        .from("pedidos_acumulativos_detalles")
-        .select(`*, productos:producto_id(aplica_iva, aplica_ieps, nombre)`)
-        .eq("id", detalleId)
-        .single();
+  // Mutation para generar múltiples pedidos
+  const finalizarMultipleMutation = useMutation({
+    mutationFn: async (pedidoIds: string[]) => {
+      // Verificar que todos los pedidos seleccionados estén verificados
+      const noVerificados = pedidoIds.filter(id => {
+        const status = pedidosVerificacionStatus[id];
+        return status?.requiere && !status?.completo;
+      });
+
+      if (noVerificados.length > 0) {
+        throw new Error(`${noVerificados.length} pedido(s) requieren verificación de productos especiales`);
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("No authenticated user");
+
+      const { data: pedidosAcumulativos, error: fetchError } = await supabase
+        .from("pedidos_acumulativos")
+        .select("*, pedidos_acumulativos_detalles(*)")
+        .in("id", pedidoIds);
 
       if (fetchError) throw fetchError;
 
-      const nuevoSubtotal = nuevaCantidad * detalle.precio_unitario;
+      const currentDate = new Date();
+      const yearMonth = `${currentDate.getFullYear()}${String(currentDate.getMonth() + 1).padStart(2, "0")}`;
+      const { data: lastPedido } = await supabase
+        .from("pedidos")
+        .select("folio")
+        .like("folio", `PED-${yearMonth}-%`)
+        .order("folio", { ascending: false })
+        .limit(1)
+        .single();
 
-      // Actualizar detalle
-      const { error: updateError } = await supabase
-        .from("pedidos_acumulativos_detalles")
-        .update({ cantidad: nuevaCantidad, subtotal: nuevoSubtotal })
-        .eq("id", detalleId);
-
-      if (updateError) throw updateError;
-
-      // Recalcular totales del pedido
-      const { data: todosDetalles, error: detallesError } = await supabase
-        .from("pedidos_acumulativos_detalles")
-        .select(`*, productos:producto_id(aplica_iva, aplica_ieps, nombre)`)
-        .eq("pedido_acumulativo_id", detalle.pedido_acumulativo_id);
-
-      if (detallesError) throw detallesError;
-
-      let subtotalTotal = 0;
-      let ivaTotal = 0;
-      let iepsTotal = 0;
-
-      for (const det of todosDetalles) {
-        const desglose = calcularDesgloseImpuestosNuevo({
-          precio_con_impuestos: det.subtotal,
-          aplica_iva: det.productos?.aplica_iva || false,
-          aplica_ieps: det.productos?.aplica_ieps || false,
-          nombre_producto: det.productos?.nombre || ''
-        });
-        subtotalTotal += desglose.base;
-        ivaTotal += desglose.iva;
-        iepsTotal += desglose.ieps;
+      let nextFolioNumber = 1;
+      if (lastPedido?.folio) {
+        const match = lastPedido.folio.match(/PED-\d{6}-(\d{4})/);
+        if (match) nextFolioNumber = parseInt(match[1]) + 1;
       }
 
-      const { error: pedidoError } = await supabase
-        .from("pedidos_acumulativos")
-        .update({
-          subtotal: redondear(subtotalTotal),
-          impuestos: redondear(ivaTotal + iepsTotal),
-          total: redondear(subtotalTotal + ivaTotal + iepsTotal)
-        })
-        .eq("id", detalle.pedido_acumulativo_id);
+      const results = [];
+      for (const pedidoAcum of pedidosAcumulativos || []) {
+        const folio = `PED-${yearMonth}-${String(nextFolioNumber++).padStart(4, "0")}`;
+        
+        try {
+          const { data: newPedido, error: pedidoInsertError } = await supabase
+            .from("pedidos")
+            .insert({
+              folio,
+              cliente_id: pedidoAcum.cliente_id,
+              sucursal_id: pedidoAcum.sucursal_id,
+              vendedor_id: user.id,
+              fecha_pedido: new Date().toISOString(),
+              fecha_entrega_estimada: pedidoAcum.fecha_entrega,
+              subtotal: pedidoAcum.subtotal,
+              impuestos: pedidoAcum.impuestos,
+              total: pedidoAcum.total,
+              notas: pedidoAcum.notas || "Pedido consolidado de Lecaroz",
+              status: "pendiente",
+            })
+            .select()
+            .single();
 
-      if (pedidoError) throw pedidoError;
+          if (pedidoInsertError) throw pedidoInsertError;
 
-      return { success: true };
+          const detallesInsert = pedidoAcum.pedidos_acumulativos_detalles.map((det: any) => ({
+            pedido_id: newPedido.id,
+            producto_id: det.producto_id,
+            cantidad: det.cantidad,
+            precio_unitario: det.precio_unitario,
+            subtotal: det.subtotal,
+          }));
+
+          await supabase.from("pedidos_detalles").insert(detallesInsert);
+          await supabase.from("pedidos_acumulativos").update({ status: "finalizado" }).eq("id", pedidoAcum.id);
+
+          results.push({ success: true, pedido: newPedido });
+        } catch (error: any) {
+          results.push({ success: false, error: error.message });
+        }
+      }
+
+      return results;
     },
-    onSuccess: () => {
-      toast.success("Peso actualizado correctamente");
-      setEditingDetalle(null);
-      refetchDetalles();
+    onSuccess: (results) => {
+      const successCount = results.filter(r => r.success).length;
+      const failCount = results.filter(r => !r.success).length;
+      
+      if (failCount === 0) {
+        toast.success(`${successCount} pedido${successCount > 1 ? 's' : ''} generado${successCount > 1 ? 's' : ''}`);
+      } else {
+        toast.warning(`${successCount} exitosos, ${failCount} fallidos`);
+      }
+      
       queryClient.invalidateQueries({ queryKey: ["pedidos-acumulativos"] });
+      queryClient.invalidateQueries({ queryKey: ["pedidos"] });
+      setSelectedForBatch(new Set());
     },
     onError: (error: any) => {
-      toast.error("Error al actualizar: " + error.message);
-    }
+      toast.error(error.message);
+    },
   });
 
   const toggleSelection = (pedidoId: string) => {
@@ -608,25 +594,33 @@ export function PedidosAcumulativosManager() {
     finalizarMultipleMutation.mutate(Array.from(selectedForBatch));
   };
 
-  const handleSavePiloncilloWeight = () => {
-    if (!editingDetalle) return;
-    updateDetalleMutation.mutate({
-      detalleId: editingDetalle.id,
-      nuevaCantidad: editingDetalle.cantidadKg
+  const startEditing = (detalle: any) => {
+    setEditingDetalle(detalle.id);
+    setEditValues({
+      cantidadKg: detalle.cantidad || 0,
+      cantidadUnidades: 1
     });
   };
 
-  const handleKgChange = (kg: number) => {
-    if (!editingDetalle) return;
-    // Sin autocorrección - el usuario pone lo que quiere
-    setEditingDetalle({ ...editingDetalle, cantidadKg: kg });
+  const cancelEditing = () => {
+    setEditingDetalle(null);
+    setEditValues({ cantidadKg: 0, cantidadUnidades: 1 });
   };
 
-  const handleUnidadesChange = (unidades: number) => {
-    if (!editingDetalle) return;
-    // Sin autocorrección - el usuario pone lo que quiere
-    setEditingDetalle({ ...editingDetalle, cantidadUnidades: unidades });
+  const saveEditing = (detalleId: string) => {
+    updateDetalleMutation.mutate({
+      detalleId,
+      nuevaCantidad: editValues.cantidadKg
+    });
   };
+
+  // Los pedidos seleccionados sin verificar
+  const pedidosSeleccionadosSinVerificar = useMemo(() => {
+    return Array.from(selectedForBatch).filter(id => {
+      const status = pedidosVerificacionStatus[id];
+      return status?.requiere && !status?.completo;
+    }).length;
+  }, [selectedForBatch, pedidosVerificacionStatus]);
 
   if (isLoading) {
     return (
@@ -661,31 +655,31 @@ export function PedidosAcumulativosManager() {
                 )}
                 Recalcular todos
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={toggleSelectAll}
-              >
+              <Button variant="outline" size="sm" onClick={toggleSelectAll}>
                 {selectedForBatch.size === pedidosAcumulativos.length ? (
                   <CheckSquare className="h-4 w-4 mr-1" />
                 ) : (
                   <Square className="h-4 w-4 mr-1" />
                 )}
-                Seleccionar {selectedForBatch.size === pedidosAcumulativos.length ? 'ninguno' : 'todos'}
+                {selectedForBatch.size === pedidosAcumulativos.length ? 'Deseleccionar' : 'Seleccionar todos'}
               </Button>
               {selectedForBatch.size > 0 && (
                 <Button
                   variant="default"
                   size="sm"
                   onClick={handleGenerateBatch}
-                  disabled={finalizarMultipleMutation.isPending}
+                  disabled={finalizarMultipleMutation.isPending || pedidosSeleccionadosSinVerificar > 0}
+                  title={pedidosSeleccionadosSinVerificar > 0 ? `${pedidosSeleccionadosSinVerificar} pedido(s) sin verificar` : ''}
                 >
                   {finalizarMultipleMutation.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  ) : pedidosSeleccionadosSinVerificar > 0 ? (
+                    <Lock className="h-4 w-4 mr-1" />
                   ) : (
                     <Check className="h-4 w-4 mr-1" />
                   )}
                   Generar {selectedForBatch.size} pedido{selectedForBatch.size > 1 ? 's' : ''}
+                  {pedidosSeleccionadosSinVerificar > 0 && ` (${pedidosSeleccionadosSinVerificar} bloqueados)`}
                 </Button>
               )}
             </>
@@ -696,15 +690,17 @@ export function PedidosAcumulativosManager() {
         </div>
       </div>
 
-      {/* Alerta de pedidos que requieren verificación */}
+      {/* Alerta de verificación obligatoria */}
       {pedidosConVerificacionCount > 0 && (
-        <Alert variant="default" className="border-amber-500 bg-amber-50 dark:bg-amber-950/30">
-          <AlertTriangle className="h-4 w-4 text-amber-600" />
-          <AlertTitle className="text-amber-800 dark:text-amber-200">
-            ⚠️ {pedidosConVerificacionCount} pedido{pedidosConVerificacionCount > 1 ? 's' : ''} requiere{pedidosConVerificacionCount > 1 ? 'n' : ''} verificación de peso
+        <Alert variant="destructive" className="border-red-500 bg-red-50 dark:bg-red-950/30">
+          <Lock className="h-4 w-4" />
+          <AlertTitle className="text-red-800 dark:text-red-200">
+            🔒 {pedidosConVerificacionCount} pedido{pedidosConVerificacionCount > 1 ? 's' : ''} BLOQUEADO{pedidosConVerificacionCount > 1 ? 'S' : ''}
           </AlertTitle>
-          <AlertDescription className="text-amber-700 dark:text-amber-300">
-            Antes de generar los pedidos finales, revisa y ajusta el peso de piloncillo, canela molida o anís.
+          <AlertDescription className="text-red-700 dark:text-red-300">
+            <strong>No puedes generar remisiones</strong> hasta que verifiques manualmente: Piloncillo, Canela Molida, Anís y/o Bicarbonato.
+            <br />
+            Haz clic en "Editar" para ajustar cajas/bolsas y kilos de cada producto.
           </AlertDescription>
         </Alert>
       )}
@@ -718,14 +714,14 @@ export function PedidosAcumulativosManager() {
       ) : (
         <div className="grid gap-4">
           {pedidosAcumulativos.map((pedido: any) => {
-            // Verificar si este pedido tiene productos que requieren verificación
-            const tieneVerificacion = allDetallesForPiloncillo?.some(
-              (det: any) => det.pedido_acumulativo_id === pedido.id && 
-                esProductoVerificable(det.productos?.nombre)
-            );
+            const status = pedidosVerificacionStatus[pedido.id];
+            const bloqueado = status?.requiere && !status?.completo;
             
             return (
-              <Card key={pedido.id} className={`${selectedForBatch.has(pedido.id) ? "border-primary" : ""} ${tieneVerificacion ? "border-l-4 border-l-amber-500" : ""}`}>
+              <Card key={pedido.id} className={`
+                ${selectedForBatch.has(pedido.id) ? "border-primary" : ""} 
+                ${bloqueado ? "border-l-4 border-l-red-500" : status?.requiere && status?.completo ? "border-l-4 border-l-green-500" : ""}
+              `}>
                 <CardHeader>
                   <div className="flex justify-between items-start">
                     <div className="flex items-start gap-3 flex-1">
@@ -737,23 +733,35 @@ export function PedidosAcumulativosManager() {
                       <div>
                         <CardTitle className="text-lg flex items-center gap-2">
                           <Package className="h-4 w-4" />
-                          {pedido.clientes?.nombre || "Cliente desconocido"}
-                          {tieneVerificacion && (
-                            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 text-xs">
-                              ⚠️ Verificar
+                          {pedido.cliente_sucursales?.codigo_sucursal && (
+                            <Badge variant="outline" className="mr-1">
+                              #{pedido.cliente_sucursales.codigo_sucursal}
+                            </Badge>
+                          )}
+                          {pedido.cliente_sucursales?.nombre || "Sin sucursal"}
+                          {bloqueado && (
+                            <Badge variant="destructive" className="text-xs">
+                              <Lock className="h-3 w-3 mr-1" />
+                              {status.pendientes} verificación{status.pendientes > 1 ? 'es' : ''} pendiente{status.pendientes > 1 ? 's' : ''}
+                            </Badge>
+                          )}
+                          {status?.requiere && status?.completo && (
+                            <Badge variant="default" className="bg-green-600 text-xs">
+                              <Unlock className="h-3 w-3 mr-1" />
+                              Verificado
                             </Badge>
                           )}
                         </CardTitle>
-                      <CardDescription className="flex items-center gap-4 mt-2">
-                        <span className="flex items-center gap-1">
-                          <MapPin className="h-3 w-3" />
-                          {pedido.cliente_sucursales?.nombre || "Sin sucursal"}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {format(new Date(pedido.fecha_entrega), "dd MMM yyyy", { locale: es })}
-                        </span>
-                      </CardDescription>
+                        <CardDescription className="flex items-center gap-4 mt-2">
+                          <span className="flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {pedido.clientes?.nombre || "Cliente"}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {format(new Date(pedido.fecha_entrega), "dd MMM yyyy", { locale: es })}
+                          </span>
+                        </CardDescription>
                       </div>
                     </div>
                     <Badge variant="outline">
@@ -764,41 +772,40 @@ export function PedidosAcumulativosManager() {
                 <CardContent>
                   <div className="flex justify-between items-center">
                     <div className="text-2xl font-bold">
-                      ${pedido.total?.toFixed(2) || "0.00"}
+                      {formatCurrency(pedido.total || 0)}
                     </div>
                     <div className="flex gap-2">
                       <Button
-                        variant={tieneVerificacion ? "default" : "outline"}
+                        variant={bloqueado ? "destructive" : "outline"}
                         size="sm"
                         onClick={() => setSelectedPedido(pedido.id)}
-                        className={tieneVerificacion ? "bg-amber-600 hover:bg-amber-700" : ""}
                       >
-                        {tieneVerificacion ? "⚠️ Verificar peso" : "Ver detalles"}
+                        <Edit2 className="h-4 w-4 mr-1" />
+                        {bloqueado ? "⚠️ Editar (obligatorio)" : "Editar"}
                       </Button>
                       <Button
                         variant="default"
                         size="sm"
                         onClick={() => finalizarMutation.mutate(pedido.id)}
-                        disabled={finalizarMutation.isPending}
+                        disabled={finalizarMutation.isPending || bloqueado}
+                        title={bloqueado ? "Verifica los productos especiales primero" : ""}
                       >
                         {finalizarMutation.isPending ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : bloqueado ? (
+                          <Lock className="h-4 w-4 mr-1" />
                         ) : (
                           <Check className="h-4 w-4 mr-1" />
                         )}
-                        Generar pedido final
+                        {bloqueado ? "Bloqueado" : "Generar remisión"}
                       </Button>
                       <Button
-                        variant="destructive"
+                        variant="ghost"
                         size="sm"
                         onClick={() => deleteMutation.mutate(pedido.id)}
                         disabled={deleteMutation.isPending}
                       >
-                        {deleteMutation.isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
@@ -809,121 +816,173 @@ export function PedidosAcumulativosManager() {
         </div>
       )}
 
-      {/* Dialog para ver detalles con edición */}
+      {/* Dialog para editar pedido */}
       <Dialog open={!!selectedPedido} onOpenChange={() => { setSelectedPedido(null); setEditingDetalle(null); }}>
-        <DialogContent className="max-w-3xl max-h-[80vh]">
+        <DialogContent className="max-w-4xl max-h-[85vh]">
           <DialogHeader>
-            <DialogTitle>Detalles del Pedido Acumulativo</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              Editar Pedido Acumulativo
+              {!pedidoActualVerificado && (
+                <Badge variant="destructive">
+                  <Lock className="h-3 w-3 mr-1" />
+                  Verificación pendiente
+                </Badge>
+              )}
+            </DialogTitle>
             <DialogDescription>
               {detallesConVerificacion.length > 0 
-                ? "⚠️ Este pedido contiene productos que requieren verificación de peso."
-                : "Productos incluidos en este pedido"
+                ? "🔒 Debes verificar y ajustar los productos marcados antes de generar la remisión."
+                : "Revisa los productos del pedido"
               }
             </DialogDescription>
           </DialogHeader>
           
-          {/* Alerta de verificación en el dialog */}
-          {detallesConVerificacion.length > 0 && (
-            <Alert variant="default" className="border-amber-500 bg-amber-50 dark:bg-amber-950/30">
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
-              <AlertDescription className="text-amber-700 dark:text-amber-300">
-                Haz clic en el botón de editar para ajustar las cantidades y el peso.
+          {/* Alerta de verificación obligatoria */}
+          {detallesConVerificacion.length > 0 && !pedidoActualVerificado && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>⚠️ Verificación obligatoria</AlertTitle>
+              <AlertDescription>
+                Este pedido contiene productos que requieren verificación manual:
+                <ul className="list-disc ml-4 mt-1">
+                  {detallesConVerificacion.map((det: any) => (
+                    <li key={det.id}>
+                      <strong>{getNombreProductoVerificacion(det.productos?.nombre)}</strong>: 
+                      {verificaciones[selectedPedido!]?.[det.id]?.verificado 
+                        ? " ✅ Verificado" 
+                        : " ❌ Pendiente de verificar"
+                      }
+                    </li>
+                  ))}
+                </ul>
               </AlertDescription>
             </Alert>
           )}
           
-          <ScrollArea className="h-[400px] pr-4">
+          <ScrollArea className="h-[450px] pr-4">
             {detalles && detalles.length > 0 ? (
               <div className="space-y-2">
                 {detalles.map((detalle: any, idx: number) => {
                   const requiereVerificacion = esProductoVerificable(detalle.productos?.nombre);
                   const tipoUnidadProducto = getTipoUnidad(detalle.productos?.nombre);
-                  const isEditing = editingDetalle?.id === detalle.id;
+                  const isEditing = editingDetalle === detalle.id;
+                  const estaVerificado = verificaciones[selectedPedido!]?.[detalle.id]?.verificado;
                   
                   return (
                     <div key={detalle.id}>
                       {idx > 0 && <Separator className="my-2" />}
-                      <div className={`flex justify-between items-start p-3 rounded-lg ${requiereVerificacion ? 'bg-amber-50 dark:bg-amber-950/30 border border-amber-300' : 'bg-muted/50'}`}>
-                        <div className="flex-1">
-                          <div className="font-medium flex items-center gap-2">
-                            {detalle.productos?.codigo} - {detalle.productos?.nombre}
-                            {requiereVerificacion && (
-                              <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-400 text-xs">
-                                ⚠️ Verificar peso
-                              </Badge>
-                            )}
-                          </div>
-                          {isEditing ? (
-                            <div className="flex flex-col gap-3 mt-2 p-3 bg-amber-100/50 dark:bg-amber-900/30 rounded-lg">
-                              <div className="flex items-center gap-4">
-                                <div className="flex items-center gap-2">
-                                  <Label htmlFor="edit-unidades" className="text-sm font-medium whitespace-nowrap">
-                                    {editingDetalle.tipoUnidad === 'bolsa' ? 'Bolsas:' : 'Cajas:'}
-                                  </Label>
-                                  <Input
-                                    id="edit-unidades"
-                                    type="number"
-                                    step="1"
-                                    min="1"
-                                    value={editingDetalle.cantidadUnidades}
-                                    onChange={(e) => handleUnidadesChange(parseInt(e.target.value) || 1)}
-                                    className="w-20 h-8"
-                                  />
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Label htmlFor="edit-kg" className="text-sm font-medium whitespace-nowrap">Peso total (kg):</Label>
-                                  <Input
-                                    id="edit-kg"
-                                    type="number"
-                                    step="0.1"
-                                    min="0.1"
-                                    value={editingDetalle.cantidadKg}
-                                    onChange={(e) => handleKgChange(parseFloat(e.target.value) || 0)}
-                                    className="w-24 h-8"
-                                  />
-                                </div>
-                              </div>
-                              <div className="text-xs text-amber-700 dark:text-amber-300">
-                                = {editingDetalle.cantidadUnidades} {editingDetalle.tipoUnidad}{editingDetalle.cantidadUnidades !== 1 ? 's' : ''} de {editingDetalle.cantidadUnidades > 0 ? (editingDetalle.cantidadKg / editingDetalle.cantidadUnidades).toFixed(2) : '?'} kg c/u
-                              </div>
-                              <div className="flex gap-2">
-                                <Button size="sm" onClick={handleSavePiloncilloWeight} disabled={updateDetalleMutation.isPending}>
-                                  {updateDetalleMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Guardar"}
-                                </Button>
-                                <Button size="sm" variant="ghost" onClick={() => setEditingDetalle(null)}>
-                                  Cancelar
-                                </Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="text-sm text-muted-foreground flex items-center gap-2">
-                              {detalle.cantidad} {detalle.productos?.unidad} × ${detalle.precio_unitario.toFixed(2)}
+                      <div className={`p-3 rounded-lg ${
+                        requiereVerificacion 
+                          ? estaVerificado 
+                            ? 'bg-green-50 dark:bg-green-950/30 border border-green-300' 
+                            : 'bg-red-50 dark:bg-red-950/30 border border-red-400 border-2'
+                          : 'bg-muted/50'
+                      }`}>
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="font-medium flex items-center gap-2 flex-wrap">
+                              <span className="text-muted-foreground text-sm">{detalle.productos?.codigo}</span>
+                              {detalle.productos?.nombre}
                               {requiereVerificacion && (
-                                <Button 
-                                  size="sm" 
-                                  variant="outline" 
-                                  className="h-6 px-2 text-xs border-amber-400 text-amber-700 hover:bg-amber-100"
-                                  onClick={() => {
-                                    const kgPorUnidad = detalle.productos?.kg_por_unidad || 10;
-                                    const cantidadKg = detalle.cantidad;
-                                    const cantidadUnidades = kgPorUnidad > 0 ? Math.ceil(cantidadKg / kgPorUnidad) : 1;
-                                    setEditingDetalle({ 
-                                      id: detalle.id, 
-                                      cantidadKg,
-                                      cantidadUnidades,
-                                      tipoUnidad: tipoUnidadProducto
-                                    });
-                                  }}
-                                >
-                                  <Edit2 className="h-3 w-3 mr-1" />
-                                  Editar peso
-                                </Button>
+                                estaVerificado ? (
+                                  <Badge variant="default" className="bg-green-600 text-xs">
+                                    <Check className="h-3 w-3 mr-1" />
+                                    Verificado
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="destructive" className="text-xs animate-pulse">
+                                    <AlertTriangle className="h-3 w-3 mr-1" />
+                                    ¡Verificar {tipoUnidadProducto === 'caja' ? 'cajas' : 'bolsas'} y kg!
+                                  </Badge>
+                                )
                               )}
                             </div>
+                            
+                            {isEditing ? (
+                              <div className="mt-3 p-4 bg-amber-100/80 dark:bg-amber-900/40 rounded-lg border border-amber-300">
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <Label className="text-sm font-medium">
+                                      {tipoUnidadProducto === 'caja' ? 'Número de CAJAS:' : 'Número de BOLSAS:'}
+                                    </Label>
+                                    <Input
+                                      type="number"
+                                      step="1"
+                                      min="1"
+                                      value={editValues.cantidadUnidades}
+                                      onChange={(e) => setEditValues(prev => ({ 
+                                        ...prev, 
+                                        cantidadUnidades: parseInt(e.target.value) || 1 
+                                      }))}
+                                      className="mt-1 h-10 text-lg font-bold"
+                                    />
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      Ingresa la cantidad exacta de {tipoUnidadProducto === 'caja' ? 'cajas' : 'bolsas'}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <Label className="text-sm font-medium">Peso total en KG:</Label>
+                                    <Input
+                                      type="number"
+                                      step="0.1"
+                                      min="0.1"
+                                      value={editValues.cantidadKg}
+                                      onChange={(e) => setEditValues(prev => ({ 
+                                        ...prev, 
+                                        cantidadKg: parseFloat(e.target.value) || 0 
+                                      }))}
+                                      className="mt-1 h-10 text-lg font-bold"
+                                    />
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      Ingresa el peso real verificado
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex gap-2 mt-3">
+                                  <Button
+                                    size="sm"
+                                    onClick={() => saveEditing(detalle.id)}
+                                    disabled={updateDetalleMutation.isPending}
+                                    className="bg-green-600 hover:bg-green-700"
+                                  >
+                                    {updateDetalleMutation.isPending ? (
+                                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                                    ) : (
+                                      <Save className="h-4 w-4 mr-1" />
+                                    )}
+                                    Guardar y verificar
+                                  </Button>
+                                  <Button size="sm" variant="outline" onClick={cancelEditing}>
+                                    <X className="h-4 w-4 mr-1" />
+                                    Cancelar
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-sm text-muted-foreground mt-1 flex items-center gap-4">
+                                <span><strong>{detalle.cantidad}</strong> kg</span>
+                                <span>× ${detalle.precio_unitario?.toFixed(2)}</span>
+                                <span>= <strong>{formatCurrency(detalle.subtotal)}</strong></span>
+                                {requiereVerificacion && verificaciones[selectedPedido!]?.[detalle.id] && (
+                                  <span className="text-xs">
+                                    ({verificaciones[selectedPedido!][detalle.id].cantidadUnidades} {tipoUnidadProducto === 'caja' ? 'cajas' : 'bolsas'})
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          
+                          {!isEditing && (
+                            <Button
+                              size="sm"
+                              variant={requiereVerificacion && !estaVerificado ? "destructive" : "outline"}
+                              onClick={() => startEditing(detalle)}
+                              className={requiereVerificacion && !estaVerificado ? "animate-pulse" : ""}
+                            >
+                              <Edit2 className="h-4 w-4 mr-1" />
+                              {requiereVerificacion && !estaVerificado ? "¡Verificar!" : "Editar"}
+                            </Button>
                           )}
-                        </div>
-                        <div className="text-right font-semibold">
-                          ${detalle.subtotal.toFixed(2)}
                         </div>
                       </div>
                     </div>
@@ -931,28 +990,41 @@ export function PedidosAcumulativosManager() {
                 })}
               </div>
             ) : (
-              <div className="text-center text-muted-foreground p-8">
+              <p className="text-center text-muted-foreground py-8">
                 No hay productos en este pedido
-              </div>
+              </p>
             )}
           </ScrollArea>
           
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSelectedPedido(null)}>
-              Cerrar
-            </Button>
-            {selectedPedido && (
-              <Button 
-                onClick={() => {
-                  finalizarMutation.mutate(selectedPedido);
-                  setSelectedPedido(null);
-                }}
-                disabled={finalizarMutation.isPending}
-              >
-                {finalizarMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
-                Generar pedido final
+          <DialogFooter className="flex justify-between items-center">
+            <div className="text-sm text-muted-foreground">
+              {detallesConVerificacion.length > 0 && (
+                <span className={pedidoActualVerificado ? "text-green-600" : "text-red-600"}>
+                  {pedidoActualVerificado 
+                    ? "✅ Todos los productos verificados" 
+                    : `❌ ${detallesConVerificacion.filter((d: any) => !verificaciones[selectedPedido!]?.[d.id]?.verificado).length} producto(s) pendiente(s)`
+                  }
+                </span>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setSelectedPedido(null)}>
+                Cerrar
               </Button>
-            )}
+              <Button
+                onClick={() => selectedPedido && finalizarMutation.mutate(selectedPedido)}
+                disabled={finalizarMutation.isPending || !pedidoActualVerificado}
+              >
+                {finalizarMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                ) : !pedidoActualVerificado ? (
+                  <Lock className="h-4 w-4 mr-1" />
+                ) : (
+                  <Check className="h-4 w-4 mr-1" />
+                )}
+                {pedidoActualVerificado ? "Generar remisión" : "Verificación pendiente"}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

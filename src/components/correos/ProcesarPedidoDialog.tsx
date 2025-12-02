@@ -362,16 +362,42 @@ export default function ProcesarPedidoDialog({
                     ? precioCotizacion 
                     : matchedByCotizacion.precio_venta;
 
-                  // REGLA: el backend ya convirtió de KILOS a unidad_comercial usando kg_por_unidad.
-                  // Aquí SOLO respetamos la cantidad que viene del backend y usamos la unidad del catálogo.
                   const unidadCatalogo = matchedByCotizacion.unidad;
-                  const cantidadFinal = prod.cantidad;
+                  const kgPorUnidad = matchedByCotizacion.kg_por_unidad;
+                  const unidadVentaLower = (unidadCatalogo || '').toLowerCase();
 
-                  console.log('CONVERSIÓN FINAL BY-ID (SIN ADIVINAR UNIDADES)', {
+                  // Determinar cuántos KILOS pidió el cliente
+                  const kilosDelCorreo = typeof (prod as any).cantidad_original_kg === 'number'
+                    ? (prod as any).cantidad_original_kg
+                    : prod.unidad_mencionada_cliente?.toLowerCase().startsWith('kilo')
+                      ? prod.cantidad
+                      : undefined;
+
+                  let cantidadFinal = prod.cantidad;
+                  let notasFinal = prod.notas;
+
+                  // Si el producto NO se vende por kg pero el cliente mandó kilos y tenemos kg_por_unidad → convertir
+                  if (
+                    unidadVentaLower !== 'kg' &&
+                    unidadVentaLower !== 'kilo' &&
+                    unidadVentaLower !== 'kilos' &&
+                    kgPorUnidad &&
+                    kgPorUnidad > 0 &&
+                    typeof kilosDelCorreo === 'number'
+                  ) {
+                    const unidades = kilosDelCorreo / kgPorUnidad;
+                    const unidadesRedondeadas = Math.round(unidades * 100) / 100; // 2 decimales
+                    cantidadFinal = unidadesRedondeadas;
+                    notasFinal = `${kilosDelCorreo} kg`;
+                  }
+
+                  console.log('CONVERSIÓN FINAL BY-ID (RESPETANDO CATÁLOGO)', {
                     producto: matchedByCotizacion.nombre,
+                    cantidad_original_ai: prod.cantidad,
+                    kilos_del_correo: kilosDelCorreo,
                     cantidad_final: cantidadFinal,
                     unidad_catalogo: unidadCatalogo,
-                    kg_por_unidad: matchedByCotizacion.kg_por_unidad,
+                    kg_por_unidad: kgPorUnidad,
                   });
                   
                   return {
@@ -382,9 +408,11 @@ export default function ProcesarPedidoDialog({
                     producto_id: matchedByCotizacion.id,
                     precio_unitario: precioFinal,
                     precio_por_kilo: matchedByCotizacion.precio_por_kilo,
-                    kg_por_unidad: matchedByCotizacion.kg_por_unidad,
+                    kg_por_unidad: kgPorUnidad,
                     aplica_iva: matchedByCotizacion.aplica_iva,
                     aplica_ieps: matchedByCotizacion.aplica_ieps,
+                    cantidad_original_kg: typeof kilosDelCorreo === 'number' ? kilosDelCorreo : (prod as any).cantidad_original_kg,
+                    notas: notasFinal,
                   };
                 }
               }
@@ -434,16 +462,42 @@ export default function ProcesarPedidoDialog({
                 }
               }
               
-              // REGLA: el backend ya convirtió de KILOS a unidad_comercial usando kg_por_unidad.
-              // Aquí SOLO respetamos la cantidad que viene del backend y usamos la unidad del catálogo.
+              // REGLA: la unidad SIEMPRE viene del catálogo.
               const unidadCatalogo = matched?.unidad;
-              const cantidadFinal = prod.cantidad;
+              const kgPorUnidad = matched?.kg_por_unidad;
+              const unidadVentaLower = (unidadCatalogo || '').toLowerCase();
 
-              console.log('CONVERSIÓN FINAL BY-NAME (SIN ADIVINAR UNIDADES)', {
+              // Determinar cuántos KILOS pidió el cliente
+              const kilosDelCorreo = typeof (prod as any).cantidad_original_kg === 'number'
+                ? (prod as any).cantidad_original_kg
+                : prod.unidad_mencionada_cliente?.toLowerCase().startsWith('kilo')
+                  ? prod.cantidad
+                  : undefined;
+
+              let cantidadFinal = prod.cantidad;
+              let notasFinal = prod.notas;
+
+              if (
+                unidadVentaLower !== 'kg' &&
+                unidadVentaLower !== 'kilo' &&
+                unidadVentaLower !== 'kilos' &&
+                kgPorUnidad &&
+                kgPorUnidad > 0 &&
+                typeof kilosDelCorreo === 'number'
+              ) {
+                const unidades = kilosDelCorreo / kgPorUnidad;
+                const unidadesRedondeadas = Math.round(unidades * 100) / 100;
+                cantidadFinal = unidadesRedondeadas;
+                notasFinal = `${kilosDelCorreo} kg`;
+              }
+
+              console.log('CONVERSIÓN FINAL BY-NAME (RESPETANDO CATÁLOGO)', {
                 producto: matched?.nombre,
+                cantidad_original_ai: prod.cantidad,
+                kilos_del_correo: kilosDelCorreo,
                 cantidad_final: cantidadFinal,
                 unidad_catalogo: unidadCatalogo,
-                kg_por_unidad: matched?.kg_por_unidad,
+                kg_por_unidad: kgPorUnidad,
               });
 
               return {
@@ -454,9 +508,11 @@ export default function ProcesarPedidoDialog({
                 producto_id: matched?.id,
                 precio_unitario: precioCotizacionPorNombre || matched?.precio_venta || prod.precio_sugerido,
                 precio_por_kilo: matched?.precio_por_kilo,
-                kg_por_unidad: matched?.kg_por_unidad,
+                kg_por_unidad: kgPorUnidad,
                 aplica_iva: matched?.aplica_iva,
                 aplica_ieps: matched?.aplica_ieps,
+                cantidad_original_kg: typeof kilosDelCorreo === 'number' ? kilosDelCorreo : (prod as any).cantidad_original_kg,
+                notas: notasFinal,
               };
             }),
           };

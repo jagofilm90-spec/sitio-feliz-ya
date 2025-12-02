@@ -4,16 +4,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Package, MapPin, Calendar, Trash2, Check } from "lucide-react";
+import { Loader2, Package, MapPin, Calendar, Trash2, Check, CheckSquare, Square } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export function PedidosAcumulativosManager() {
   const [selectedPedido, setSelectedPedido] = useState<string | null>(null);
+  const [selectedForBatch, setSelectedForBatch] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
 
   // Fetch pedidos acumulativos en borrador
@@ -72,6 +74,117 @@ export function PedidosAcumulativosManager() {
     },
   });
 
+  // Mutation para generar múltiples pedidos
+  const finalizarMultipleMutation = useMutation({
+    mutationFn: async (pedidoIds: string[]) => {
+      const results = [];
+      
+      for (const pedidoAcumulativoId of pedidoIds) {
+        try {
+          // Obtener pedido acumulativo y sus detalles
+          const { data: pedidoAcum, error: pedidoError } = await supabase
+            .from("pedidos_acumulativos")
+            .select("*, pedidos_acumulativos_detalles(*)")
+            .eq("id", pedidoAcumulativoId)
+            .single();
+
+          if (pedidoError) throw pedidoError;
+
+          // Obtener ID del usuario actual
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) throw new Error("No authenticated user");
+
+          // Generar folio para el pedido
+          const currentDate = new Date();
+          const yearMonth = `${currentDate.getFullYear()}${String(currentDate.getMonth() + 1).padStart(2, "0")}`;
+          const { data: lastPedido } = await supabase
+            .from("pedidos")
+            .select("folio")
+            .like("folio", `PED-${yearMonth}-%`)
+            .order("folio", { ascending: false })
+            .limit(1)
+            .single();
+
+          let newFolioNumber = 1;
+          if (lastPedido?.folio) {
+            const match = lastPedido.folio.match(/PED-\d{6}-(\d{4})/);
+            if (match) {
+              newFolioNumber = parseInt(match[1]) + 1;
+            }
+          }
+          const folio = `PED-${yearMonth}-${String(newFolioNumber).padStart(4, "0")}`;
+
+          // Crear pedido final
+          const { data: newPedido, error: pedidoInsertError } = await supabase
+            .from("pedidos")
+            .insert({
+              folio,
+              cliente_id: pedidoAcum.cliente_id,
+              sucursal_id: pedidoAcum.sucursal_id,
+              vendedor_id: user.id,
+              fecha_pedido: new Date().toISOString(),
+              fecha_entrega_estimada: pedidoAcum.fecha_entrega,
+              subtotal: pedidoAcum.subtotal,
+              impuestos: pedidoAcum.impuestos,
+              total: pedidoAcum.total,
+              notas: pedidoAcum.notas || "Pedido consolidado de Lecaroz",
+              status: "pendiente",
+            })
+            .select()
+            .single();
+
+          if (pedidoInsertError) throw pedidoInsertError;
+
+          // Insertar detalles del pedido
+          const detallesInsert = pedidoAcum.pedidos_acumulativos_detalles.map((det: any) => ({
+            pedido_id: newPedido.id,
+            producto_id: det.producto_id,
+            cantidad: det.cantidad,
+            precio_unitario: det.precio_unitario,
+            subtotal: det.subtotal,
+          }));
+
+          const { error: detallesError } = await supabase
+            .from("pedidos_detalles")
+            .insert(detallesInsert);
+
+          if (detallesError) throw detallesError;
+
+          // Marcar pedido acumulativo como finalizado
+          const { error: updateError } = await supabase
+            .from("pedidos_acumulativos")
+            .update({ status: "finalizado" })
+            .eq("id", pedidoAcumulativoId);
+
+          if (updateError) throw updateError;
+
+          results.push({ success: true, pedido: newPedido });
+        } catch (error: any) {
+          results.push({ success: false, error: error.message });
+        }
+      }
+
+      return results;
+    },
+    onSuccess: (results) => {
+      const successCount = results.filter(r => r.success).length;
+      const failCount = results.filter(r => !r.success).length;
+      
+      if (failCount === 0) {
+        toast.success(`${successCount} pedido${successCount > 1 ? 's' : ''} generado${successCount > 1 ? 's' : ''} exitosamente`);
+      } else {
+        toast.warning(`${successCount} exitosos, ${failCount} fallidos`);
+      }
+      
+      queryClient.invalidateQueries({ queryKey: ["pedidos-acumulativos"] });
+      queryClient.invalidateQueries({ queryKey: ["pedidos"] });
+      setSelectedForBatch(new Set());
+    },
+    onError: (error: any) => {
+      toast.error("Error al generar pedidos: " + error.message);
+    },
+  });
+
   // Mutation para generar pedido final
   const finalizarMutation = useMutation({
     mutationFn: async (pedidoAcumulativoId: string) => {
@@ -89,21 +202,24 @@ export function PedidosAcumulativosManager() {
       if (!user) throw new Error("No authenticated user");
 
       // Generar folio para el pedido
+      const currentDate = new Date();
+      const yearMonth = `${currentDate.getFullYear()}${String(currentDate.getMonth() + 1).padStart(2, "0")}`;
       const { data: lastPedido } = await supabase
         .from("pedidos")
         .select("folio")
-        .order("created_at", { ascending: false })
+        .like("folio", `PED-${yearMonth}-%`)
+        .order("folio", { ascending: false })
         .limit(1)
         .single();
 
       let newFolioNumber = 1;
       if (lastPedido?.folio) {
-        const match = lastPedido.folio.match(/PED-(\d+)/);
+        const match = lastPedido.folio.match(/PED-\d{6}-(\d{4})/);
         if (match) {
           newFolioNumber = parseInt(match[1]) + 1;
         }
       }
-      const folio = `PED-${String(newFolioNumber).padStart(6, "0")}`;
+      const folio = `PED-${yearMonth}-${String(newFolioNumber).padStart(4, "0")}`;
 
       // Crear pedido final
       const { data: newPedido, error: pedidoInsertError } = await supabase
@@ -162,6 +278,34 @@ export function PedidosAcumulativosManager() {
     },
   });
 
+  const toggleSelection = (pedidoId: string) => {
+    setSelectedForBatch(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(pedidoId)) {
+        newSet.delete(pedidoId);
+      } else {
+        newSet.add(pedidoId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedForBatch.size === pedidosAcumulativos?.length) {
+      setSelectedForBatch(new Set());
+    } else {
+      setSelectedForBatch(new Set(pedidosAcumulativos?.map((p: any) => p.id) || []));
+    }
+  };
+
+  const handleGenerateBatch = () => {
+    if (selectedForBatch.size === 0) {
+      toast.error("Selecciona al menos un pedido");
+      return;
+    }
+    finalizarMultipleMutation.mutate(Array.from(selectedForBatch));
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center p-8">
@@ -179,9 +323,42 @@ export function PedidosAcumulativosManager() {
             Gestiona pedidos en borrador por sucursal
           </p>
         </div>
-        <Badge variant="secondary">
-          {pedidosAcumulativos?.length || 0} en borrador
-        </Badge>
+        <div className="flex gap-2 items-center">
+          {pedidosAcumulativos && pedidosAcumulativos.length > 0 && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={toggleSelectAll}
+              >
+                {selectedForBatch.size === pedidosAcumulativos.length ? (
+                  <CheckSquare className="h-4 w-4 mr-1" />
+                ) : (
+                  <Square className="h-4 w-4 mr-1" />
+                )}
+                Seleccionar {selectedForBatch.size === pedidosAcumulativos.length ? 'ninguno' : 'todos'}
+              </Button>
+              {selectedForBatch.size > 0 && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleGenerateBatch}
+                  disabled={finalizarMultipleMutation.isPending}
+                >
+                  {finalizarMultipleMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  ) : (
+                    <Check className="h-4 w-4 mr-1" />
+                  )}
+                  Generar {selectedForBatch.size} pedido{selectedForBatch.size > 1 ? 's' : ''}
+                </Button>
+              )}
+            </>
+          )}
+          <Badge variant="secondary">
+            {pedidosAcumulativos?.length || 0} en borrador
+          </Badge>
+        </div>
       </div>
 
       {!pedidosAcumulativos || pedidosAcumulativos.length === 0 ? (
@@ -193,14 +370,20 @@ export function PedidosAcumulativosManager() {
       ) : (
         <div className="grid gap-4">
           {pedidosAcumulativos.map((pedido: any) => (
-            <Card key={pedido.id}>
+            <Card key={pedido.id} className={selectedForBatch.has(pedido.id) ? "border-primary" : ""}>
               <CardHeader>
                 <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Package className="h-4 w-4" />
-                      {pedido.clientes?.nombre || "Cliente desconocido"}
-                    </CardTitle>
+                  <div className="flex items-start gap-3 flex-1">
+                    <Checkbox
+                      checked={selectedForBatch.has(pedido.id)}
+                      onCheckedChange={() => toggleSelection(pedido.id)}
+                      className="mt-1"
+                    />
+                    <div>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Package className="h-4 w-4" />
+                        {pedido.clientes?.nombre || "Cliente desconocido"}
+                      </CardTitle>
                     <CardDescription className="flex items-center gap-4 mt-2">
                       <span className="flex items-center gap-1">
                         <MapPin className="h-3 w-3" />
@@ -211,6 +394,7 @@ export function PedidosAcumulativosManager() {
                         {format(new Date(pedido.fecha_entrega), "dd MMM yyyy", { locale: es })}
                       </span>
                     </CardDescription>
+                    </div>
                   </div>
                   <Badge variant="outline">
                     {pedido.correos_procesados?.length || 0} correos

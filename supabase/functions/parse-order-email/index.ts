@@ -960,9 +960,9 @@ RECUERDA: Tu trabajo es SOLO extraer números y encontrar el producto correcto. 
                               type: "number", 
                               description: "SOLO el número puro de cantidad mencionado en el email. Ejemplos: '100 kilos' → 100, '50 bultos' → 50, '96 piezas' → 96. NO hagas conversiones, el sistema las hace automáticamente." 
                             }, 
-                            unidad: { 
+                            unidad_mencionada_cliente: { 
                               type: "string", 
-                              description: "Unidad que menciona el cliente en el email: KILOS, PIEZAS, CAJAS, BULTOS, etc. Solo para referencia." 
+                              description: "Unidad que menciona el cliente en el email: KILOS, PIEZAS, CAJAS, BULTOS, etc. Solo como REFERENCIA para el sistema. NO es la unidad final del producto." 
                             }, 
                             precio_sugerido: { type: "number" }, 
                             notas: { type: "string" }, 
@@ -975,7 +975,7 @@ RECUERDA: Tu trabajo es SOLO extraer números y encontrar el producto correcto. 
                               description: "Marca como true si el producto NO tiene kg_por_unidad o unidad clara en el catálogo"
                             }
                           }, 
-                          required: ["nombre_producto", "cantidad", "unidad"] 
+                          required: ["nombre_producto", "cantidad", "unidad_mencionada_cliente"]
                         } 
                       } 
                     }, 

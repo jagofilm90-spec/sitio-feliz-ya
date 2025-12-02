@@ -77,43 +77,47 @@ export function PedidosAcumulativosManager() {
   // Mutation para generar múltiples pedidos
   const finalizarMultipleMutation = useMutation({
     mutationFn: async (pedidoIds: string[]) => {
+      // Obtener ID del usuario actual
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("No authenticated user");
+
+      // Obtener todos los pedidos acumulativos
+      const { data: pedidosAcumulativos, error: fetchError } = await supabase
+        .from("pedidos_acumulativos")
+        .select("*, pedidos_acumulativos_detalles(*)")
+        .in("id", pedidoIds);
+
+      if (fetchError) throw fetchError;
+
+      // Generar folios secuencialmente para evitar duplicados
+      const currentDate = new Date();
+      const yearMonth = `${currentDate.getFullYear()}${String(currentDate.getMonth() + 1).padStart(2, "0")}`;
+      const { data: lastPedido } = await supabase
+        .from("pedidos")
+        .select("folio")
+        .like("folio", `PED-${yearMonth}-%`)
+        .order("folio", { ascending: false })
+        .limit(1)
+        .single();
+
+      let nextFolioNumber = 1;
+      if (lastPedido?.folio) {
+        const match = lastPedido.folio.match(/PED-\d{6}-(\d{4})/);
+        if (match) {
+          nextFolioNumber = parseInt(match[1]) + 1;
+        }
+      }
+
+      // Asignar folios únicos a cada pedido
+      const pedidosConFolio = pedidosAcumulativos?.map((pedidoAcum) => ({
+        pedidoAcum,
+        folio: `PED-${yearMonth}-${String(nextFolioNumber++).padStart(4, "0")}`,
+      })) || [];
+
+      // Procesar cada pedido con su folio pre-asignado
       const results = [];
-      
-      for (const pedidoAcumulativoId of pedidoIds) {
+      for (const { pedidoAcum, folio } of pedidosConFolio) {
         try {
-          // Obtener pedido acumulativo y sus detalles
-          const { data: pedidoAcum, error: pedidoError } = await supabase
-            .from("pedidos_acumulativos")
-            .select("*, pedidos_acumulativos_detalles(*)")
-            .eq("id", pedidoAcumulativoId)
-            .single();
-
-          if (pedidoError) throw pedidoError;
-
-          // Obtener ID del usuario actual
-          const { data: { user } } = await supabase.auth.getUser();
-          if (!user) throw new Error("No authenticated user");
-
-          // Generar folio para el pedido
-          const currentDate = new Date();
-          const yearMonth = `${currentDate.getFullYear()}${String(currentDate.getMonth() + 1).padStart(2, "0")}`;
-          const { data: lastPedido } = await supabase
-            .from("pedidos")
-            .select("folio")
-            .like("folio", `PED-${yearMonth}-%`)
-            .order("folio", { ascending: false })
-            .limit(1)
-            .single();
-
-          let newFolioNumber = 1;
-          if (lastPedido?.folio) {
-            const match = lastPedido.folio.match(/PED-\d{6}-(\d{4})/);
-            if (match) {
-              newFolioNumber = parseInt(match[1]) + 1;
-            }
-          }
-          const folio = `PED-${yearMonth}-${String(newFolioNumber).padStart(4, "0")}`;
-
           // Crear pedido final
           const { data: newPedido, error: pedidoInsertError } = await supabase
             .from("pedidos")
@@ -154,7 +158,7 @@ export function PedidosAcumulativosManager() {
           const { error: updateError } = await supabase
             .from("pedidos_acumulativos")
             .update({ status: "finalizado" })
-            .eq("id", pedidoAcumulativoId);
+            .eq("id", pedidoAcum.id);
 
           if (updateError) throw updateError;
 

@@ -362,24 +362,16 @@ export default function ProcesarPedidoDialog({
                     ? precioCotizacion 
                     : matchedByCotizacion.precio_venta;
 
-                  // CONVERSIÓN UNIVERSAL: Usar SIEMPRE la unidad_comercial del catálogo
+                  // REGLA: el backend ya convirtió de KILOS a unidad_comercial usando kg_por_unidad.
+                  // Aquí SOLO respetamos la cantidad que viene del backend y usamos la unidad del catálogo.
                   const unidadCatalogo = matchedByCotizacion.unidad;
-                  const unidadCliente = (prod.unidad_mencionada_cliente || prod.unidad || "").toLowerCase();
-                  let cantidadFinal = prod.cantidad;
+                  const cantidadFinal = prod.cantidad;
 
-                  // Si cliente pidió en KILOS y producto tiene kg_por_unidad, convertir
-                  if (unidadCliente === "kilos" && matchedByCotizacion.kg_por_unidad && matchedByCotizacion.kg_por_unidad > 0) {
-                    cantidadFinal = prod.cantidad / matchedByCotizacion.kg_por_unidad;
-                    cantidadFinal = Math.round(cantidadFinal * 100) / 100;
-                  }
-
-                  console.log('CONVERSIÓN UNIVERSAL BY-ID', {
+                  console.log('CONVERSIÓN FINAL BY-ID (SIN ADIVINAR UNIDADES)', {
                     producto: matchedByCotizacion.nombre,
-                    cantidad_cliente: prod.cantidad,
-                    unidad_cliente: unidadCliente,
+                    cantidad_final: cantidadFinal,
                     unidad_catalogo: unidadCatalogo,
                     kg_por_unidad: matchedByCotizacion.kg_por_unidad,
-                    cantidad_final: cantidadFinal,
                   });
                   
                   return {
@@ -442,24 +434,16 @@ export default function ProcesarPedidoDialog({
                 }
               }
               
-              // CONVERSIÓN UNIVERSAL: Usar SIEMPRE la unidad_comercial del catálogo
+              // REGLA: el backend ya convirtió de KILOS a unidad_comercial usando kg_por_unidad.
+              // Aquí SOLO respetamos la cantidad que viene del backend y usamos la unidad del catálogo.
               const unidadCatalogo = matched?.unidad;
-              const unidadCliente = (prod.unidad_mencionada_cliente || prod.unidad || "").toLowerCase();
-              let cantidadFinal = prod.cantidad;
+              const cantidadFinal = prod.cantidad;
 
-              // Si cliente pidió en KILOS y producto tiene kg_por_unidad, convertir
-              if (matched && unidadCliente === "kilos" && matched.kg_por_unidad && matched.kg_por_unidad > 0) {
-                cantidadFinal = prod.cantidad / matched.kg_por_unidad;
-                cantidadFinal = Math.round(cantidadFinal * 100) / 100;
-              }
-
-              console.log('CONVERSIÓN UNIVERSAL BY-NAME', {
+              console.log('CONVERSIÓN FINAL BY-NAME (SIN ADIVINAR UNIDADES)', {
                 producto: matched?.nombre,
-                cantidad_cliente: prod.cantidad,
-                unidad_cliente: unidadCliente,
+                cantidad_final: cantidadFinal,
                 unidad_catalogo: unidadCatalogo,
                 kg_por_unidad: matched?.kg_por_unidad,
-                cantidad_final: cantidadFinal,
               });
 
               return {

@@ -31,16 +31,15 @@ Deno.serve(async (req) => {
       throw new Error('Unauthorized')
     }
 
-    // Verificar que el usuario tiene rol de admin
+    // Verificar que el usuario tiene rol de admin o secretaria
     const { data: roles, error: rolesError } = await supabaseAdmin
       .from('user_roles')
       .select('role')
       .eq('user_id', user.id)
-      .eq('role', 'admin')
-      .single()
+      .in('role', ['admin', 'secretaria'])
 
-    if (rolesError || !roles) {
-      throw new Error('User is not an admin')
+    if (rolesError || !roles || roles.length === 0) {
+      throw new Error('User is not authorized')
     }
 
     // Obtener datos

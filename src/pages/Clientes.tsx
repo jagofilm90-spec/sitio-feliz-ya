@@ -27,14 +27,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Edit, Trash2, MapPin, Truck, X, Mail, BarChart3, Upload, FileText, ExternalLink, Loader2, Sparkles, UserPlus } from "lucide-react";
+import { Plus, Search, Edit, Trash2, MapPin, Truck, X, Mail, BarChart3, Upload, FileText, ExternalLink, Loader2, Sparkles, UserPlus, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import ClienteSucursalesDialog from "@/components/clientes/ClienteSucursalesDialog";
 import GoogleMapsAddressAutocomplete from "@/components/GoogleMapsAddressAutocomplete";
 import ClienteHistorialAnalytics from "@/components/analytics/ClienteHistorialAnalytics";
 import { CrearAccesoPortalDialog } from "@/components/clientes/CrearAccesoPortalDialog";
+import { ClienteUsuarioTab } from "@/components/clientes/ClienteUsuarioTab";
 import {
   Dialog as HistorialDialog,
   DialogContent as HistorialDialogContent,
@@ -706,271 +708,144 @@ const Clientes = () => {
                     : "Completa la información del cliente y sus sucursales de entrega"}
                 </DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleSave} className="space-y-6">
-                {/* Datos Fiscales del Cliente */}
-                <div className="space-y-4">
-                  <h4 className="font-medium text-lg border-b pb-2">Datos Fiscales</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="codigo">Código *</Label>
-                      <Input
-                        id="codigo"
-                        value={formData.codigo}
-                        onChange={(e) => setFormData({ ...formData, codigo: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="nombre">Nombre del Cliente/Grupo *</Label>
-                      <Input
-                        id="nombre"
-                        value={formData.nombre}
-                        onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                        placeholder="Ej: Universal, Lecaroz, Pan Rol"
-                        required
-                      />
-                    </div>
-                  </div>
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="razon_social">Denominación/Razón Social</Label>
-                      <Input
-                        id="razon_social"
-                        value={formData.razon_social}
-                        onChange={(e) => setFormData({ ...formData, razon_social: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="rfc">RFC</Label>
-                      <Input
-                        id="rfc"
-                        value={formData.rfc}
-                        onChange={(e) => setFormData({ ...formData, rfc: e.target.value.toUpperCase() })}
-                        placeholder="PDI000309CR3"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="regimen_capital">Régimen Capital</Label>
-                    <Select
-                      value={formData.regimen_capital}
-                      onValueChange={(value) => setFormData({ ...formData, regimen_capital: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar régimen" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="SOCIEDAD ANONIMA DE CAPITAL VARIABLE">S.A. de C.V.</SelectItem>
-                        <SelectItem value="SOCIEDAD DE RESPONSABILIDAD LIMITADA">S. de R.L.</SelectItem>
-                        <SelectItem value="PERSONA FISICA CON ACTIVIDAD EMPRESARIAL">Persona Física con Actividad Empresarial</SelectItem>
-                        <SelectItem value="PERSONA FISICA">Persona Física</SelectItem>
-                        <SelectItem value="SOCIEDAD CIVIL">S.C.</SelectItem>
-                        <SelectItem value="ASOCIACION CIVIL">A.C.</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Dirección Fiscal Detallada (CSF) */}
-                <div className="space-y-4">
-                  <h4 className="font-medium text-lg border-b pb-2 flex items-center gap-2">
-                    <MapPin className="h-5 w-5" />
-                    Domicilio Fiscal (según CSF)
-                  </h4>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="codigo_postal">Código Postal</Label>
-                      <Input
-                        id="codigo_postal"
-                        value={formData.codigo_postal}
-                        onChange={(e) => setFormData({ ...formData, codigo_postal: e.target.value })}
-                        placeholder="01000"
-                        maxLength={5}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="tipo_vialidad">Tipo de Vialidad</Label>
-                      <Select
-                        value={formData.tipo_vialidad}
-                        onValueChange={(value) => setFormData({ ...formData, tipo_vialidad: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="CALLE">Calle</SelectItem>
-                          <SelectItem value="AVENIDA">Avenida</SelectItem>
-                          <SelectItem value="BOULEVARD">Boulevard</SelectItem>
-                          <SelectItem value="CALZADA">Calzada</SelectItem>
-                          <SelectItem value="CERRADA">Cerrada</SelectItem>
-                          <SelectItem value="PRIVADA">Privada</SelectItem>
-                          <SelectItem value="CARRETERA">Carretera</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="nombre_vialidad">Nombre de Vialidad</Label>
-                      <Input
-                        id="nombre_vialidad"
-                        value={formData.nombre_vialidad}
-                        onChange={(e) => setFormData({ ...formData, nombre_vialidad: e.target.value })}
-                        placeholder="DESIERTO DE LOS LEONES"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-4 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="numero_exterior">Número Exterior</Label>
-                      <Input
-                        id="numero_exterior"
-                        value={formData.numero_exterior}
-                        onChange={(e) => setFormData({ ...formData, numero_exterior: e.target.value })}
-                        placeholder="67"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="numero_interior">Número Interior</Label>
-                      <Input
-                        id="numero_interior"
-                        value={formData.numero_interior}
-                        onChange={(e) => setFormData({ ...formData, numero_interior: e.target.value })}
-                        placeholder="(opcional)"
-                      />
-                    </div>
-                    <div className="col-span-2 space-y-2">
-                      <Label htmlFor="nombre_colonia">Nombre de la Colonia</Label>
-                      <Input
-                        id="nombre_colonia"
-                        value={formData.nombre_colonia}
-                        onChange={(e) => setFormData({ ...formData, nombre_colonia: e.target.value })}
-                        placeholder="SAN ANGEL"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="nombre_localidad">Nombre de Localidad</Label>
-                      <Input
-                        id="nombre_localidad"
-                        value={formData.nombre_localidad}
-                        onChange={(e) => setFormData({ ...formData, nombre_localidad: e.target.value })}
-                        placeholder="ALVARO OBREGON"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="nombre_municipio">Municipio/Demarcación Territorial</Label>
-                      <Input
-                        id="nombre_municipio"
-                        value={formData.nombre_municipio}
-                        onChange={(e) => setFormData({ ...formData, nombre_municipio: e.target.value })}
-                        placeholder="ALVARO OBREGON"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="nombre_entidad_federativa">Entidad Federativa</Label>
-                    <Select
-                      value={formData.nombre_entidad_federativa}
-                      onValueChange={(value) => setFormData({ ...formData, nombre_entidad_federativa: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar estado" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="AGUASCALIENTES">Aguascalientes</SelectItem>
-                        <SelectItem value="BAJA CALIFORNIA">Baja California</SelectItem>
-                        <SelectItem value="BAJA CALIFORNIA SUR">Baja California Sur</SelectItem>
-                        <SelectItem value="CAMPECHE">Campeche</SelectItem>
-                        <SelectItem value="CHIAPAS">Chiapas</SelectItem>
-                        <SelectItem value="CHIHUAHUA">Chihuahua</SelectItem>
-                        <SelectItem value="CIUDAD DE MEXICO">Ciudad de México</SelectItem>
-                        <SelectItem value="COAHUILA">Coahuila</SelectItem>
-                        <SelectItem value="COLIMA">Colima</SelectItem>
-                        <SelectItem value="DURANGO">Durango</SelectItem>
-                        <SelectItem value="GUANAJUATO">Guanajuato</SelectItem>
-                        <SelectItem value="GUERRERO">Guerrero</SelectItem>
-                        <SelectItem value="HIDALGO">Hidalgo</SelectItem>
-                        <SelectItem value="JALISCO">Jalisco</SelectItem>
-                        <SelectItem value="MEXICO">Estado de México</SelectItem>
-                        <SelectItem value="MICHOACAN">Michoacán</SelectItem>
-                        <SelectItem value="MORELOS">Morelos</SelectItem>
-                        <SelectItem value="NAYARIT">Nayarit</SelectItem>
-                        <SelectItem value="NUEVO LEON">Nuevo León</SelectItem>
-                        <SelectItem value="OAXACA">Oaxaca</SelectItem>
-                        <SelectItem value="PUEBLA">Puebla</SelectItem>
-                        <SelectItem value="QUERETARO">Querétaro</SelectItem>
-                        <SelectItem value="QUINTANA ROO">Quintana Roo</SelectItem>
-                        <SelectItem value="SAN LUIS POTOSI">San Luis Potosí</SelectItem>
-                        <SelectItem value="SINALOA">Sinaloa</SelectItem>
-                        <SelectItem value="SONORA">Sonora</SelectItem>
-                        <SelectItem value="TABASCO">Tabasco</SelectItem>
-                        <SelectItem value="TAMAULIPAS">Tamaulipas</SelectItem>
-                        <SelectItem value="TLAXCALA">Tlaxcala</SelectItem>
-                        <SelectItem value="VERACRUZ">Veracruz</SelectItem>
-                        <SelectItem value="YUCATAN">Yucatán</SelectItem>
-                        <SelectItem value="ZACATECAS">Zacatecas</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="entre_calle">Entre Calle</Label>
-                      <Input
-                        id="entre_calle"
-                        value={formData.entre_calle}
-                        onChange={(e) => setFormData({ ...formData, entre_calle: e.target.value })}
-                        placeholder="AV INSURGENTES"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="y_calle">Y Calle</Label>
-                      <Input
-                        id="y_calle"
-                        value={formData.y_calle}
-                        onChange={(e) => setFormData({ ...formData, y_calle: e.target.value })}
-                        placeholder="AV REVOLUCION"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="direccion">Dirección Completa (referencia rápida)</Label>
-                    <Input
-                      id="direccion"
-                      value={formData.direccion}
-                      onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
-                      placeholder="Se autogenera con los campos anteriores"
+              
+              {editingClient ? (
+                <Tabs defaultValue="datos" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="datos">Datos del Cliente</TabsTrigger>
+                    <TabsTrigger value="usuario" className="flex items-center gap-2">
+                      <User className="h-4 w-4" />
+                      Acceso Portal
+                      {editingClient.user_id && (
+                        <Badge variant="default" className="ml-1 h-5 bg-green-500">✓</Badge>
+                      )}
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="usuario" className="mt-4">
+                    <ClienteUsuarioTab 
+                      cliente={{
+                        id: editingClient.id,
+                        nombre: editingClient.nombre,
+                        email: editingClient.email,
+                        user_id: editingClient.user_id,
+                      }}
+                      onUserCreated={() => {
+                        loadClientes();
+                        supabase
+                          .from("clientes")
+                          .select("*")
+                          .eq("id", editingClient.id)
+                          .single()
+                          .then(({ data }) => {
+                            if (data) setEditingClient(data);
+                          });
+                      }}
                     />
-                  </div>
-                </div>
+                  </TabsContent>
+                  <TabsContent value="datos" className="mt-4">
+                    <ClienteFormContent 
+                      formData={formData}
+                      setFormData={setFormData}
+                      zonas={zonas}
+                      handleSave={handleSave}
+                      editingClient={editingClient}
+                      setDialogOpen={setDialogOpen}
+                      csfFile={csfFile}
+                      setCsfFile={setCsfFile}
+                      parsingCsf={parsingCsf}
+                      handleParseCsf={handleParseCsf}
+                      entregarMismaDireccion={entregarMismaDireccion}
+                      setEntregarMismaDireccion={setEntregarMismaDireccion}
+                      sucursales={sucursales}
+                      setSucursales={setSucursales}
+                      addSucursal={addSucursal}
+                      removeSucursal={removeSucursal}
+                      updateSucursal={updateSucursal}
+                      correos={correos}
+                      setCorreos={setCorreos}
+                      newCorreoEmail={newCorreoEmail}
+                      setNewCorreoEmail={setNewCorreoEmail}
+                      newCorreoNombre={newCorreoNombre}
+                      setNewCorreoNombre={setNewCorreoNombre}
+                      handleAddCorreo={handleAddCorreo}
+                      handleRemoveCorreo={handleRemoveCorreo}
+                      handleSetPrincipal={handleSetPrincipal}
+                    />
+                  </TabsContent>
+                </Tabs>
+              ) : (
+                <ClienteFormContent 
+                  formData={formData}
+                  setFormData={setFormData}
+                  zonas={zonas}
+                  handleSave={handleSave}
+                  editingClient={editingClient}
+                  setDialogOpen={setDialogOpen}
+                  csfFile={csfFile}
+                  setCsfFile={setCsfFile}
+                  parsingCsf={parsingCsf}
+                  handleParseCsf={handleParseCsf}
+                  entregarMismaDireccion={entregarMismaDireccion}
+                  setEntregarMismaDireccion={setEntregarMismaDireccion}
+                  sucursales={sucursales}
+                  setSucursales={setSucursales}
+                  addSucursal={addSucursal}
+                  removeSucursal={removeSucursal}
+                  updateSucursal={updateSucursal}
+                  correos={correos}
+                  setCorreos={setCorreos}
+                  newCorreoEmail={newCorreoEmail}
+                  setNewCorreoEmail={setNewCorreoEmail}
+                  newCorreoNombre={newCorreoNombre}
+                  setNewCorreoNombre={setNewCorreoNombre}
+                  handleAddCorreo={handleAddCorreo}
+                  handleRemoveCorreo={handleRemoveCorreo}
+                  handleSetPrincipal={handleSetPrincipal}
+                />
+              )}
+            </DialogContent>
+          </Dialog>
+        </div>
 
-                {/* Archivo CSF */}
-                <div className="space-y-4">
-                  <h4 className="font-medium text-lg border-b pb-2 flex items-center gap-2">
-                    <FileText className="h-5 w-5" />
-                    Constancia de Situación Fiscal (PDF)
-                  </h4>
-                  <div className="space-y-3">
-                    {formData.csf_archivo_url && (
-                      <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-md">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm flex-1">CSF cargada</span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={async () => {
-                            const { data } = await supabase.storage
-                              .from('clientes-csf')
-                              .createSignedUrl(formData.csf_archivo_url, 3600);
-                            if (data?.signedUrl) window.open(data.signedUrl, '_blank');
-                          }}
-                        >
-                          <ExternalLink className="h-4 w-4 mr-1" />
-                          Ver
-                        </Button>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2">
+        <div className="flex gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar clientes..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar clientes..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </div>
+
+        <div className="border rounded-lg">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Código</TableHead>
+                <TableHead>Nombre</TableHead>
+                <TableHead>RFC</TableHead>
+                <TableHead>Crédito</TableHead>
+                <TableHead>Límite</TableHead>
+                <TableHead>Saldo</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
                       <Input
                         type="file"
                         accept=".pdf"

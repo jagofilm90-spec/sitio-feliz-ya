@@ -218,17 +218,21 @@ export default function PedidoDetalleDialog({
                     const producto = detalle.productos;
                     const unidadComercial = producto.unidad || "pza";
                     
-                    // Calcular presentación para bodegueros
+                    // Calcular presentación para bodegueros - SIEMPRE en unidades comerciales, nunca solo kg
                     let presentacion = "";
                     if (producto.precio_por_kilo && producto.kg_por_unidad && producto.kg_por_unidad > 0) {
-                      // Si se vende por kilo, calcular cuántas unidades comerciales son
+                      // Producto vendido por kilo con conversión conocida
                       const unidadesComerciales = Math.ceil(detalle.cantidad / producto.kg_por_unidad);
-                      presentacion = `${unidadesComerciales} ${unidadComercial}${unidadesComerciales !== 1 ? 's' : ''}`;
-                    } else if (!producto.precio_por_kilo) {
-                      // Si se vende por unidad comercial, mostrar directamente
-                      presentacion = `${detalle.cantidad} ${unidadComercial}${detalle.cantidad !== 1 ? 's' : ''}`;
+                      const plural = unidadesComerciales !== 1 ? 's' : '';
+                      presentacion = `${unidadesComerciales} ${unidadComercial}${plural}`;
+                    } else if (producto.precio_por_kilo && (!producto.kg_por_unidad || producto.kg_por_unidad === 0)) {
+                      // Producto vendido por kilo sin conversión fija (ej: bolsa pesada, piloncillo)
+                      // Mostrar como "1 {unidad} de X kg"
+                      presentacion = `1 ${unidadComercial} de ${detalle.cantidad} kg`;
                     } else {
-                      presentacion = `${detalle.cantidad} kg`;
+                      // Producto vendido por unidad comercial directamente
+                      const plural = detalle.cantidad !== 1 ? 's' : '';
+                      presentacion = `${detalle.cantidad} ${unidadComercial}${plural}`;
                     }
                     
                     return (

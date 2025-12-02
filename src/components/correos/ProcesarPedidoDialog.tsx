@@ -879,41 +879,43 @@ export default function ProcesarPedidoDialog({
           }
         }
 
-        // Calculate totals - handling precio_por_kilo and tax-inclusive prices
+        // Calculate totals - usando sistema centralizado de cálculos
         let totalIva = 0;
         let totalIeps = 0;
         let subtotalNeto = 0;
 
-        validProducts.forEach(p => {
-          // IMPORTANTE: Usar cantidad redondeada para todos los cálculos
+        for (const p of validProducts) {
           const cantidadEntera = Math.round(p.cantidad);
-          // Calcular subtotal bruto según tipo de precio
-          let lineSubtotal: number;
-          if (p.precio_por_kilo) {
-            // Productos precio por kilo: cantidad SIEMPRE en kilos
-            lineSubtotal = cantidadEntera * (p.precio_unitario || 0);
-          } else {
-            // Productos por bulto/caja/pieza: precio ya está en la unidad comercial
-            lineSubtotal = cantidadEntera * (p.precio_unitario || 0);
+          
+          // USAR SISTEMA CENTRALIZADO
+          const resultadoSubtotal = calcularSubtotal({
+            cantidad: cantidadEntera,
+            precio_unitario: p.precio_unitario || 0,
+            nombre_producto: p.nombre_producto
+          });
+
+          if (!resultadoSubtotal.valido) {
+            throw new Error(`Error en cálculo: ${resultadoSubtotal.error}`);
           }
 
-          // Desagregar impuestos (precios ya incluyen impuestos)
-          let divisor = 1;
-          if (p.aplica_iva) divisor += 0.16;
-          if (p.aplica_ieps) divisor += 0.08;
-          
-          const baseNeto = lineSubtotal / divisor;
-          const ivaLinea = p.aplica_iva ? baseNeto * 0.16 : 0;
-          const iepsLinea = p.aplica_ieps ? baseNeto * 0.08 : 0;
+          const lineSubtotal = resultadoSubtotal.subtotal;
 
-          subtotalNeto += baseNeto;
-          totalIva += ivaLinea;
-          totalIeps += iepsLinea;
-        });
+          // Desagregar impuestos usando sistema centralizado
+          const desglose = calcularDesgloseImpuestosNuevo({
+            precio_con_impuestos: lineSubtotal,
+            aplica_iva: p.aplica_iva || false,
+            aplica_ieps: p.aplica_ieps || false,
+            nombre_producto: p.nombre_producto
+          });
 
-        const subtotal = Math.round(subtotalNeto * 100) / 100;
-        const impuestos = Math.round((totalIva + totalIeps) * 100) / 100;
-        const total = subtotal + impuestos;
+          subtotalNeto += desglose.base;
+          totalIva += desglose.iva;
+          totalIeps += desglose.ieps;
+        }
+
+        const subtotal = redondear(subtotalNeto);
+        const impuestos = redondear(totalIva + totalIeps);
+        const total = redondear(subtotal + impuestos);
 
         if (existingPedido) {
           // UPDATE EXISTING ORDER - Add/update products
@@ -928,12 +930,14 @@ export default function ProcesarPedidoDialog({
           // Merge products: update quantities if product exists, add if new
           for (const newProd of validProducts) {
             const cantidadEntera = Math.round(newProd.cantidad);
-            let lineSubtotal: number;
-            if (newProd.precio_por_kilo) {
-              lineSubtotal = cantidadEntera * (newProd.precio_unitario || 0);
-            } else {
-              lineSubtotal = cantidadEntera * (newProd.precio_unitario || 0);
-            }
+            
+            // USAR SISTEMA CENTRALIZADO
+            const resultadoSubtotal = calcularSubtotal({
+              cantidad: cantidadEntera,
+              precio_unitario: newProd.precio_unitario || 0,
+              nombre_producto: newProd.nombre_producto
+            });
+            const lineSubtotal = resultadoSubtotal.subtotal;
 
             const existingDetalle = existingDetalles?.find(d => d.producto_id === newProd.producto_id);
             
@@ -1030,24 +1034,20 @@ export default function ProcesarPedidoDialog({
 
           if (pedidoError) throw pedidoError;
 
-          // Create pedido detalles - calcular subtotal según tipo de producto
+          // Create pedido detalles - usando sistema centralizado
           const detalles = validProducts.map(p => {
-            // IMPORTANTE: Redondear cantidad a entero para la base de datos
             const cantidadEntera = Math.round(p.cantidad);
-            let lineSubtotal: number;
-            if (p.precio_por_kilo) {
-              // Precio por kilo: cantidad en kg × precio por kg
-              lineSubtotal = cantidadEntera * (p.precio_unitario || 0);
-            } else {
-              // Precio por unidad comercial: cantidad en unidades × precio por unidad
-              lineSubtotal = cantidadEntera * (p.precio_unitario || 0);
-            }
+            const resultadoSubtotal = calcularSubtotal({
+              cantidad: cantidadEntera,
+              precio_unitario: p.precio_unitario || 0,
+              nombre_producto: p.nombre_producto
+            });
             return {
               pedido_id: pedido.id,
               producto_id: p.producto_id!,
               cantidad: cantidadEntera,
               precio_unitario: p.precio_unitario || 0,
-              subtotal: Math.round(lineSubtotal * 100) / 100,
+              subtotal: resultadoSubtotal.subtotal,
             };
           });
 

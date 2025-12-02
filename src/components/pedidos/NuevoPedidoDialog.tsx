@@ -28,8 +28,10 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Search, ShoppingCart, Building2 } from "lucide-react";
-import { formatCurrency, calcularDesgloseImpuestos } from "@/lib/utils";
+import { Plus, Trash2, Search, ShoppingCart, Building2, AlertTriangle } from "lucide-react";
+import { formatCurrency } from "@/lib/utils";
+import { calcularSubtotal, calcularDesgloseImpuestos, validarAntesDeGuardar, redondear, LineaPedido } from "@/lib/calculos";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface NuevoPedidoDialogProps {
   open: boolean;
@@ -166,7 +168,13 @@ const NuevoPedidoDialog = ({ open, onOpenChange, onPedidoCreated }: NuevoPedidoD
   const updateDetalle = (index: number, field: "cantidad" | "precio_unitario", value: number) => {
     const newDetalles = [...detalles];
     newDetalles[index][field] = value;
-    newDetalles[index].subtotal = newDetalles[index].cantidad * newDetalles[index].precio_unitario;
+    // Usar sistema centralizado de cálculos
+    const resultado = calcularSubtotal({
+      cantidad: newDetalles[index].cantidad,
+      precio_unitario: newDetalles[index].precio_unitario,
+      nombre_producto: newDetalles[index].producto.nombre
+    });
+    newDetalles[index].subtotal = resultado.subtotal;
     setDetalles(newDetalles);
   };
 
@@ -174,27 +182,43 @@ const NuevoPedidoDialog = ({ open, onOpenChange, onPedidoCreated }: NuevoPedidoD
     setDetalles(detalles.filter((_, i) => i !== index));
   };
 
+  // Convertir detalles a formato LineaPedido para validación
+  const getLineasPedido = (): LineaPedido[] => {
+    return detalles.map(d => ({
+      producto_id: d.producto_id,
+      nombre_producto: d.producto.nombre,
+      cantidad: d.cantidad,
+      precio_unitario: d.precio_unitario,
+      aplica_iva: d.producto.aplica_iva,
+      aplica_ieps: d.producto.aplica_ieps
+    }));
+  };
+
+  // Validación antes de guardar
+  const validacionPedido = detalles.length > 0 ? validarAntesDeGuardar(getLineasPedido()) : null;
+
   const calcularTotales = () => {
     let subtotalGeneral = 0;
     let ivaTotal = 0;
     let iepsTotal = 0;
 
     detalles.forEach(d => {
-      const { base, iva, ieps } = calcularDesgloseImpuestos(
-        d.subtotal,
-        d.producto.aplica_iva,
-        d.producto.aplica_ieps
-      );
-      subtotalGeneral += base;
-      ivaTotal += iva;
-      iepsTotal += ieps;
+      const resultado = calcularDesgloseImpuestos({
+        precio_con_impuestos: d.subtotal,
+        aplica_iva: d.producto.aplica_iva,
+        aplica_ieps: d.producto.aplica_ieps,
+        nombre_producto: d.producto.nombre
+      });
+      subtotalGeneral += resultado.base;
+      ivaTotal += resultado.iva;
+      iepsTotal += resultado.ieps;
     });
 
     return {
-      subtotal: subtotalGeneral,
-      iva: ivaTotal,
-      ieps: iepsTotal,
-      total: subtotalGeneral + ivaTotal + iepsTotal,
+      subtotal: redondear(subtotalGeneral),
+      iva: redondear(ivaTotal),
+      ieps: redondear(iepsTotal),
+      total: redondear(subtotalGeneral + ivaTotal + iepsTotal),
     };
   };
 
@@ -219,6 +243,17 @@ const NuevoPedidoDialog = ({ open, onOpenChange, onPedidoCreated }: NuevoPedidoD
     }
     if (detalles.length === 0) {
       toast({ title: "Agrega al menos un producto", variant: "destructive" });
+      return;
+    }
+
+    // VALIDACIÓN OBLIGATORIA antes de guardar
+    const validacion = validarAntesDeGuardar(getLineasPedido());
+    if (!validacion.puede_guardar) {
+      toast({ 
+        title: "Error en cálculos", 
+        description: validacion.errores.join(". "),
+        variant: "destructive" 
+      });
       return;
     }
 

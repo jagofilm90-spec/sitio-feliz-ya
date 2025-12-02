@@ -32,7 +32,8 @@ import { Loader2, Plus, Trash2, Search, FileText, Mail } from "lucide-react";
 import ClienteCorreosManager from "@/components/clientes/ClienteCorreosManager";
 import { format, addDays } from "date-fns";
 import { es } from "date-fns/locale";
-import { formatCurrency, calcularDesgloseImpuestos, validarTotales } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
+import { calcularDesgloseImpuestos, redondear } from "@/lib/calculos";
 
 interface DetalleProducto {
   producto_id: string;
@@ -370,36 +371,30 @@ const CrearCotizacionDialog = ({
     setDetalles(nuevosDetalles);
   };
 
-  // Calcular totales desglosando IVA e IEPS de precios que YA incluyen impuestos
+  // Calcular totales usando sistema centralizado
   const calcularTotales = () => {
     let subtotalNeto = 0;
     let totalIva = 0;
     let totalIeps = 0;
 
     detalles.forEach((d) => {
-      const desglose = calcularDesgloseImpuestos(d.subtotal, d.aplica_iva, d.aplica_ieps);
-      subtotalNeto += desglose.base;
-      totalIva += desglose.iva;
-      totalIeps += desglose.ieps;
+      const resultado = calcularDesgloseImpuestos({
+        precio_con_impuestos: d.subtotal,
+        aplica_iva: d.aplica_iva,
+        aplica_ieps: d.aplica_ieps,
+        nombre_producto: d.nombre
+      });
+      subtotalNeto += resultado.base;
+      totalIva += resultado.iva;
+      totalIeps += resultado.ieps;
     });
 
-    // Redondear a 2 decimales
-    subtotalNeto = Math.round(subtotalNeto * 100) / 100;
-    totalIva = Math.round(totalIva * 100) / 100;
-    totalIeps = Math.round(totalIeps * 100) / 100;
-    const total = Math.round((subtotalNeto + totalIva + totalIeps) * 100) / 100;
-
-    // Validar consistencia
-    if (!validarTotales(subtotalNeto, totalIva, totalIeps, total)) {
-      console.warn('Inconsistencia en cálculo de totales detectada');
-    }
-
     return { 
-      subtotal: subtotalNeto, 
-      iva: totalIva,
-      ieps: totalIeps,
-      impuestos: totalIva + totalIeps, 
-      total
+      subtotal: redondear(subtotalNeto), 
+      iva: redondear(totalIva),
+      ieps: redondear(totalIeps),
+      impuestos: redondear(totalIva + totalIeps), 
+      total: redondear(subtotalNeto + totalIva + totalIeps)
     };
   };
 

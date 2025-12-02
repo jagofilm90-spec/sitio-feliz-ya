@@ -694,16 +694,18 @@ export default function ProcesarPedidoDialog({
             })
             .eq("id", existingAcumulativo.id);
 
-          // Actualizar detalles - agregar cantidades a productos existentes o insertar nuevos
+          // OPTIMIZADO: Obtener TODOS los detalles existentes de una vez
+          const { data: existingDetalles } = await supabase
+            .from("pedidos_acumulativos_detalles")
+            .select("*")
+            .eq("pedido_acumulativo_id", existingAcumulativo.id);
+
+          // Preparar updates e inserts
+          const updates: Array<{ id: string; cantidad: number; subtotal: number }> = [];
+          const inserts: Array<any> = [];
+
           for (const prod of validProducts) {
             const cantidadEntera = Math.round(prod.cantidad);
-            const { data: existingDetalle } = await supabase
-              .from("pedidos_acumulativos_detalles")
-              .select("*")
-              .eq("pedido_acumulativo_id", existingAcumulativo.id)
-              .eq("producto_id", prod.producto_id!)
-              .maybeSingle();
-
             let lineSubtotal: number;
             if (prod.precio_por_kilo) {
               lineSubtotal = cantidadEntera * (prod.precio_unitario || 0);
@@ -713,25 +715,41 @@ export default function ProcesarPedidoDialog({
               lineSubtotal = cantidadEntera * (prod.precio_unitario || 0);
             }
 
+            const existingDetalle = existingDetalles?.find(d => d.producto_id === prod.producto_id);
+
             if (existingDetalle) {
-              await supabase
-                .from("pedidos_acumulativos_detalles")
-                .update({
-                  cantidad: existingDetalle.cantidad + cantidadEntera,
-                  subtotal: Math.round((existingDetalle.subtotal + lineSubtotal) * 100) / 100,
-                })
-                .eq("id", existingDetalle.id);
+              updates.push({
+                id: existingDetalle.id,
+                cantidad: existingDetalle.cantidad + cantidadEntera,
+                subtotal: Math.round((existingDetalle.subtotal + lineSubtotal) * 100) / 100,
+              });
             } else {
-              await supabase
-                .from("pedidos_acumulativos_detalles")
-                .insert({
-                  pedido_acumulativo_id: existingAcumulativo.id,
-                  producto_id: prod.producto_id!,
-                  cantidad: cantidadEntera,
-                  precio_unitario: prod.precio_unitario || 0,
-                  subtotal: Math.round(lineSubtotal * 100) / 100,
-                });
+              inserts.push({
+                pedido_acumulativo_id: existingAcumulativo.id,
+                producto_id: prod.producto_id!,
+                cantidad: cantidadEntera,
+                precio_unitario: prod.precio_unitario || 0,
+                subtotal: Math.round(lineSubtotal * 100) / 100,
+              });
             }
+          }
+
+          // Ejecutar updates en batch
+          for (const update of updates) {
+            await supabase
+              .from("pedidos_acumulativos_detalles")
+              .update({
+                cantidad: update.cantidad,
+                subtotal: update.subtotal,
+              })
+              .eq("id", update.id);
+          }
+
+          // Ejecutar todos los inserts de una vez
+          if (inserts.length > 0) {
+            await supabase
+              .from("pedidos_acumulativos_detalles")
+              .insert(inserts);
           }
         } else {
           // CREAR nuevo pedido acumulativo

@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Edit, Trash2, MapPin, Truck, X, Mail, BarChart3, Upload, FileText, ExternalLink } from "lucide-react";
+import { Plus, Search, Edit, Trash2, MapPin, Truck, X, Mail, BarChart3, Upload, FileText, ExternalLink, Loader2, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import ClienteSucursalesDialog from "@/components/clientes/ClienteSucursalesDialog";
 import GoogleMapsAddressAutocomplete from "@/components/GoogleMapsAddressAutocomplete";
@@ -133,6 +133,7 @@ const Clientes = () => {
   // CSF file upload state
   const [csfFile, setCsfFile] = useState<File | null>(null);
   const [uploadingCsf, setUploadingCsf] = useState(false);
+  const [parsingCsf, setParsingCsf] = useState(false);
 
   // Delivery options state
   const [entregarMismaDireccion, setEntregarMismaDireccion] = useState(true);
@@ -258,6 +259,71 @@ const Clientes = () => {
       ...c,
       es_principal: c.id === correoId,
     })));
+  };
+
+  // Parse CSF with AI
+  const handleParseCsf = async (file: File) => {
+    setParsingCsf(true);
+    try {
+      // Convert file to base64
+      const buffer = await file.arrayBuffer();
+      const base64 = btoa(
+        new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
+
+      const { data, error } = await supabase.functions.invoke('parse-csf', {
+        body: { pdfBase64: base64 }
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      const parsedData = data?.data;
+      if (parsedData) {
+        // Auto-fill the form with parsed data
+        setFormData(prev => ({
+          ...prev,
+          rfc: parsedData.rfc || prev.rfc,
+          razon_social: parsedData.razon_social || prev.razon_social,
+          regimen_capital: parsedData.regimen_capital || prev.regimen_capital,
+          codigo_postal: parsedData.codigo_postal || prev.codigo_postal,
+          tipo_vialidad: parsedData.tipo_vialidad || prev.tipo_vialidad,
+          nombre_vialidad: parsedData.nombre_vialidad || prev.nombre_vialidad,
+          numero_exterior: parsedData.numero_exterior || prev.numero_exterior,
+          numero_interior: parsedData.numero_interior || prev.numero_interior,
+          nombre_colonia: parsedData.nombre_colonia || prev.nombre_colonia,
+          nombre_localidad: parsedData.nombre_localidad || prev.nombre_localidad,
+          nombre_municipio: parsedData.nombre_municipio || prev.nombre_municipio,
+          nombre_entidad_federativa: parsedData.nombre_entidad_federativa || prev.nombre_entidad_federativa,
+          entre_calle: parsedData.entre_calle || prev.entre_calle,
+          y_calle: parsedData.y_calle || prev.y_calle,
+          // Auto-generate direccion from components
+          direccion: [
+            parsedData.tipo_vialidad,
+            parsedData.nombre_vialidad,
+            parsedData.numero_exterior,
+            parsedData.nombre_colonia,
+            parsedData.nombre_municipio,
+            parsedData.nombre_entidad_federativa,
+            parsedData.codigo_postal
+          ].filter(Boolean).join(', ') || prev.direccion,
+        }));
+
+        toast({
+          title: "CSF analizada correctamente",
+          description: "Los datos fiscales se han auto-llenado. Verifica que sean correctos.",
+        });
+      }
+    } catch (error: any) {
+      console.error("Error parsing CSF:", error);
+      toast({
+        title: "Error al analizar CSF",
+        description: error.message || "No se pudo extraer la información del PDF",
+        variant: "destructive",
+      });
+    } finally {
+      setParsingCsf(false);
+    }
   };
 
   const addSucursal = () => {
@@ -905,15 +971,39 @@ const Clientes = () => {
                       <Input
                         type="file"
                         accept=".pdf"
-                        onChange={(e) => setCsfFile(e.target.files?.[0] || null)}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] || null;
+                          setCsfFile(file);
+                        }}
                         className="flex-1"
                       />
                       {csfFile && (
-                        <Badge variant="secondary">{csfFile.name}</Badge>
+                        <>
+                          <Badge variant="secondary">{csfFile.name}</Badge>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleParseCsf(csfFile)}
+                            disabled={parsingCsf}
+                          >
+                            {parsingCsf ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                Analizando...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="h-4 w-4 mr-1" />
+                                Auto-llenar con AI
+                              </>
+                            )}
+                          </Button>
+                        </>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Sube el PDF de la Constancia de Situación Fiscal del SAT
+                      Sube el PDF de la Constancia de Situación Fiscal del SAT. Usa "Auto-llenar con AI" para extraer los datos automáticamente.
                     </p>
                   </div>
                 </div>

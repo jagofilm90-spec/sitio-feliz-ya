@@ -247,12 +247,22 @@ export default function ProcesarPedidoDialog({
         });
       }
 
+      console.log(`Email ${emailId} check:`, processedInfo.length > 0 ? "Already processed" : "Not processed");
+
+      // Solo marcar como procesado si realmente encontramos registros
       if (processedInfo.length > 0) {
         setEmailAlreadyProcessed(true);
         setProcessedOrdersInfo(processedInfo);
+      } else {
+        // Asegurar que está en false si no hay registros
+        setEmailAlreadyProcessed(false);
+        setProcessedOrdersInfo([]);
       }
     } catch (error) {
       console.error("Error checking if email was processed:", error);
+      // En caso de error, permitir el procesamiento
+      setEmailAlreadyProcessed(false);
+      setProcessedOrdersInfo([]);
     }
   };
 

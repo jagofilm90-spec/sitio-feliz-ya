@@ -29,11 +29,12 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Edit, Trash2, MapPin, Truck, X, Mail, BarChart3, Upload, FileText, ExternalLink, Loader2, Sparkles } from "lucide-react";
+import { Plus, Search, Edit, Trash2, MapPin, Truck, X, Mail, BarChart3, Upload, FileText, ExternalLink, Loader2, Sparkles, UserPlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import ClienteSucursalesDialog from "@/components/clientes/ClienteSucursalesDialog";
 import GoogleMapsAddressAutocomplete from "@/components/GoogleMapsAddressAutocomplete";
 import ClienteHistorialAnalytics from "@/components/analytics/ClienteHistorialAnalytics";
+import { CrearAccesoPortalDialog } from "@/components/clientes/CrearAccesoPortalDialog";
 import {
   Dialog as HistorialDialog,
   DialogContent as HistorialDialogContent,
@@ -75,6 +76,8 @@ const Clientes = () => {
   const [selectedClienteForSucursales, setSelectedClienteForSucursales] = useState<{ id: string; nombre: string } | null>(null);
   const [historialDialogOpen, setHistorialDialogOpen] = useState(false);
   const [selectedClienteForHistorial, setSelectedClienteForHistorial] = useState<{ id: string; nombre: string } | null>(null);
+  const [accesoPortalDialogOpen, setAccesoPortalDialogOpen] = useState(false);
+  const [selectedClienteForAcceso, setSelectedClienteForAcceso] = useState<{ id: string; nombre: string; email?: string; user_id?: string } | null>(null);
   const { toast } = useToast();
 
   // Form state
@@ -1402,6 +1405,30 @@ const Clientes = () => {
                         <Button
                           variant="ghost"
                           size="icon"
+                          onClick={() => {
+                            if (cliente.user_id) {
+                              toast({
+                                title: "Ya tiene acceso",
+                                description: "Este cliente ya tiene una cuenta de portal vinculada",
+                              });
+                              return;
+                            }
+                            setSelectedClienteForAcceso({ 
+                              id: cliente.id, 
+                              nombre: cliente.nombre, 
+                              email: cliente.email,
+                              user_id: cliente.user_id 
+                            });
+                            setAccesoPortalDialogOpen(true);
+                          }}
+                          title={cliente.user_id ? "Ya tiene acceso al portal" : "Crear acceso al portal"}
+                          className={cliente.user_id ? "text-green-500" : ""}
+                        >
+                          <UserPlus className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => handleEdit(cliente)}
                           title="Editar cliente y correos"
                         >
@@ -1446,6 +1473,14 @@ const Clientes = () => {
           )}
         </HistorialDialogContent>
       </HistorialDialog>
+
+      {/* Dialog para crear acceso al portal de clientes */}
+      <CrearAccesoPortalDialog
+        open={accesoPortalDialogOpen}
+        onOpenChange={setAccesoPortalDialogOpen}
+        cliente={selectedClienteForAcceso}
+        onSuccess={loadClientes}
+      />
     </Layout>
   );
 };

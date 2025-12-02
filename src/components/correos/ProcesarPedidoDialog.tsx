@@ -1062,28 +1062,49 @@ export default function ProcesarPedidoDialog({
     updated.sucursales[sucIndex].productos[prodIndex].cantidad = cantidad;
     setParsedOrder(updated);
   };
+ 
+  const getDisplayUnit = (prod: ParsedProduct): string => {
+    // Si el precio es por kilo, el campo de cantidad siempre se interpreta como kilos
+    if (prod.precio_por_kilo) return "/kg";
 
+    const producto = productos?.find((p) => p.id === prod.producto_id);
+    const baseUnit = producto?.unidad || prod.unidad || "";
+
+    // Alias de presentación por código de producto
+    switch (producto?.codigo) {
+      case "PAP-002":
+        // Papel Estraza Bala Rojo: mostrar "balón" aunque la unidad interna sea "bulto"
+        return "balón";
+      case "PIÑ-TAI-004":
+      case "PIÑ-TAI-003":
+        // Piña Rodaja 12/850gr (12/14): mostrar como "caja", no "bulto"
+        return "caja";
+      default:
+        return baseUnit;
+    }
+  };
+ 
   const updateProductPrice = (sucIndex: number, prodIndex: number, precio: number) => {
     if (!parsedOrder) return;
     const updated = { ...parsedOrder };
     updated.sucursales[sucIndex].productos[prodIndex].precio_unitario = precio;
     setParsedOrder(updated);
   };
-
+ 
   const removeProduct = (sucIndex: number, prodIndex: number) => {
     if (!parsedOrder) return;
     const updated = { ...parsedOrder };
     updated.sucursales[sucIndex].productos.splice(prodIndex, 1);
     setParsedOrder(updated);
   };
-
+ 
   const updateSucursalMatch = (sucIndex: number, sucursalId: string) => {
     if (!parsedOrder) return;
     const updated = { ...parsedOrder };
     updated.sucursales[sucIndex].sucursal_id = sucursalId;
     setParsedOrder(updated);
   };
-
+ 
   // VALIDACIÓN ESTRICTA - Contar productos coincidentes vs sin resolver
   const { matchedCount, unmatchedCount } = useMemo(() => {
     if (!parsedOrder) return { matchedCount: 0, unmatchedCount: 0 };
@@ -1355,7 +1376,7 @@ export default function ProcesarPedidoDialog({
                               className="w-20"
                             />
                             <span className="text-sm text-muted-foreground w-16">
-                              {prod.precio_por_kilo ? "/kg" : prod.unidad}
+                              {getDisplayUnit(prod)}
                             </span>
 
                             {/* Price */}

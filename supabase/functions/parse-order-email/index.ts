@@ -236,59 +236,77 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
   }
   
   // Product synonyms mapping - comprehensive mappings for client product names
-  // Key: canonical product name (lowercase, no accents) - MUST match database product names
-  // Value: client product name variations
+  // Key: canonical product name (lowercase, no accents) - MUST match database product names EXACTLY
+  // Value: client product name variations from Lecaroz emails
   const PRODUCT_SYNONYMS: Record<string, string[]> = {
-    // Papeles - mapean a productos reales en la base de datos
-    'papel estraza bala rojo': ['papel estraza', 'papel estraza cafe', 'papel estraza(cafe)', 'papel cafe', 'papel kraft', 'estraza', 'papel para rojo', 'papel rojo'],
-    'papel estraza liebre': ['papel libre', 'papel liebre', 'estraza liebre'],
-    'hoja de polipapel 25x35': ['polipapel', 'poly papel', 'polypapel', 'poli papel', 'hoja polipapel'],
-    'bolsa de polipapel 26x32': ['bolsa polipapel', 'bolsa poly'],
-    
-    // Frutas en lata - nombres EXACTOS de la base de datos
-    'piña rodaja 12/850gr (12)': ['pina en lata', 'piña en lata', 'pina lata', 'piña lata', 'piña', 'pina rodaja', 'piña rodaja'],
-    'mango en rebanadas 24/800gr': ['mango en lata', 'mango lata', 'mango en almibar', 'mango'],
-    'durazno': ['durazno en lata', 'durazno lata', 'durazno en almibar', 'duraznos'],
-    // Almendras - nombre EXACTO de la base de datos
-    'almendra non parel 27/30': ['almendra entera', 'almendras', 'almendra natural', 'almendra'],
-    
-    // Avellana
-    'avellana sin casacara': ['avellana entera', 'avellana', 'avellanas'],
-    
-    // Azúcar
-    'azucar estandar': ['azucar', 'azúcar', 'azucar blanca', 'azúcar blanca', 'azucar segunda'],
-    'azucar refinada': ['azucar ref', 'azúcar ref'],
+    // ========== AZÚCARES ==========
+    // "azucar refinada" siempre es la Potrero (bulto 25kg)
+    'azucar refinada': ['azucar refinada', 'azúcar refinada', 'azucar ref', 'refinada', 'potrero'],
+    // "azucar de segunda" o solo "azucar" es Azúcar Estándar (bulto 25kg)
+    'azucar estandar': ['azucar', 'azúcar', 'azucar blanca', 'azúcar blanca', 'azucar segunda', 'azucar de segunda', 'segunda'],
     'azucar glass': ['azucar glas', 'azúcar glas', 'glass', 'glas'],
     
-    // Sal
+    // ========== PAPELES ==========
+    // "papel estraza cafe" → Papel Estraza Bala Rojo (bulto 50kg)
+    'papel estraza bala rojo': ['papel estraza', 'papel estraza cafe', 'papel estraza(cafe)', 'papel cafe', 'papel kraft', 'estraza', 'papel para rojo', 'papel rojo', 'estraza cafe'],
+    'papel estraza liebre': ['papel libre', 'papel liebre', 'estraza liebre'],
+    // "polipapel" → Hoja de Polipapel 25x35 (caja 5kg)
+    'hoja de polipapel 25x35': ['polipapel', 'poly papel', 'polypapel', 'poli papel', 'hoja polipapel', 'polipapel 25x35'],
+    'bolsa de polipapel 26x32': ['bolsa polipapel', 'bolsa poly'],
+    
+    // ========== FRUTAS EN LATA ==========
+    // Piña rodaja 12/850gr (12) - código PIÑ-TAI-004 (bulto de 12 piezas)
+    'piña rodaja 12/850gr (12)': ['pina en lata', 'piña en lata', 'pina lata', 'piña lata', 'piña', 'pina rodaja', 'piña rodaja', 'pina 12/850', 'piña 12/850'],
+    // Piña rodaja 24/800gr → usuario dijo que busque "piña" en cotización y la use
+    'piña rodaja 24/800gr (11)': ['pina 24/800', 'piña 24/800'],
+    'piña rodaja 24/800gr (8)': ['pina 24/800gr'],
+    'piña trozo 24/800gr': ['pina trozo', 'piña trozo'],
+    // Mango en rebanadas 24/800gr - código MAN-NAC-001 (caja de 24 piezas)
+    'mango en rebanadas 24/800gr': ['mango en lata', 'mango lata', 'mango en almibar', 'mango', 'mango 24/800', 'mango rebanadas'],
+    
+    // ========== ALMENDRAS ==========
+    // Almendra Non Parel 27/30 (entera) - código NFS-001 (caja 22.68kg)
+    'almendra non parel 27/30': ['almendra entera', 'almendras', 'almendra natural', 'almendra', 'almendra non parel'],
+    // Almendra Fileteada - código NFS-002 (caja 11.34kg)
+    'almendra fileteada': ['almendra fileteada', 'fileteada', 'almendra rebanada'],
+    
+    // ========== CEREZAS ==========
+    // Cereza Con Rabo 4/3.500 kg - código VAR-004 (caja 13.6kg)
+    'cereza con rabo 4/3.500 kg': ['cereza', 'cerezas', 'cereza con rabo', 'cereza rabo'],
+    
+    // ========== CIRUELAS ==========
+    // Ciruela Pasa 30/40, 40/50, 50/60, 80/90 - todas en caja de 10kg
+    'ciruela pasa 30/40': ['ciruela', 'ciruela pasa', 'ciruelas', 'ciruela 30/40'],
+    'ciruela pasa 40/50': ['ciruela 40/50'],
+    'ciruela pasa 50/60': ['ciruela 50/60'],
+    'ciruela pasa 80/90': ['ciruela 80/90'],
+    
+    // ========== OTROS INGREDIENTES ==========
+    // Coco Rallado - caja 1kg (precio por kilo)
+    'coco rallado': ['coco', 'coco rallado', 'coco rayado'],
+    // Fécula de Maíz (maizena) - bulto 25kg
+    'fecula de maiz': ['maizena', 'maicena', 'fecula', 'fécula', 'maicena de maiz'],
+    // Avena Hojuela - bulto 20kg
+    'avena hojuela': ['avena', 'avena hojuelas', 'avena natural', 'avena hojuela'],
+    // Chocoarroz - bulto precio por kilo
+    'chocoarroz': ['chocoarroz', 'choco arroz', 'chocolate arroz'],
+    // Cacahuate - precio por kilo
+    'cacahuate tostado': ['cacahuate pelado sin sal', 'cacahuate pelado', 'cacahuate', 'cacahuates', 'cacahuate natural', 'mani', 'maní'],
+    
+    // ========== DURAZNO ==========
+    'durazno': ['durazno en lata', 'durazno lata', 'durazno en almibar', 'duraznos'],
+    
+    // ========== OTROS ==========
+    'avellana sin casacara': ['avellana entera', 'avellana', 'avellanas'],
     'sal refinada': ['sal', 'sal de mesa', 'sal fina'],
-    
-    // Féculas
-    'fecula de maiz': ['maizena', 'maicena', 'fecula', 'fécula'],
-    
-    // Pasas
     'uva pasa': ['pasas', 'pasa', 'pasitas', 'uva pasas'],
-    
-    // Avena
-    'avena hojuela': ['avena', 'avena hojuelas', 'avena natural'],
-    
-    // Girasol
     'girasol pelado': ['semilla de girasol pelado', 'semilla girasol pelado', 'girasol sin cascara'],
-    
-    // Cereales
     'fruty rueda': ['frutirueda', 'fruti rueda', 'fruty ruedas'],
     'hojuela natural': ['hojuela s/azucar', 'hojuela sin azucar', 'hojuela s/azúcar'],
-    
-    // Arroz
     'arroz 25/1kg': ['arroz morelos', 'arroz de morelos', 'morelos'],
-    
-    // Otros
     'canela': ['canela entera', 'canela molida', 'raja de canela'],
     'ajonjoli': ['ajonjolí', 'sesamo', 'sésamo'],
     'nuez': ['nuez entera', 'nueces', 'nuez de castilla'],
-    'cacahuate': ['cacahuates', 'cacahuate natural', 'mani', 'maní'],
-    
-    // Dulces / Confitería
     'caramel cream': ['caramel creme', 'carmel creme', 'caramelo cream'],
   };
   

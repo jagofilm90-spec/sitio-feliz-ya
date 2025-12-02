@@ -400,6 +400,37 @@ const CotizacionDetalleDialog = ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No hay usuario autenticado");
 
+      // Verificar que todos los productos de la cotización existan
+      const productosIds = cotizacion.detalles?.map((d: any) => d.producto_id || d.producto?.id).filter(Boolean) || [];
+      
+      if (productosIds.length === 0) {
+        throw new Error("La cotización no tiene productos");
+      }
+
+      const { data: productosExistentes, error: productosError } = await supabase
+        .from("productos")
+        .select("id, nombre, codigo, activo")
+        .in("id", productosIds);
+
+      if (productosError) throw productosError;
+
+      // Identificar productos faltantes o inactivos
+      const productosFaltantes = cotizacion.detalles?.filter((d: any) => {
+        const productoId = d.producto_id || d.producto?.id;
+        const existe = productosExistentes?.find(p => p.id === productoId && p.activo);
+        return !existe;
+      });
+
+      if (productosFaltantes && productosFaltantes.length > 0) {
+        const nombresFaltantes = productosFaltantes.map((d: any) => 
+          `${d.producto?.codigo || 'N/A'} - ${d.producto?.nombre || 'Producto desconocido'}`
+        ).join('\n');
+        
+        throw new Error(
+          `No se puede crear el pedido. Los siguientes productos de la cotización no existen o están inactivos:\n\n${nombresFaltantes}\n\nPor favor, actualiza la cotización antes de convertirla a pedido.`
+        );
+      }
+
       // Generate folio for new pedido
       const currentYearMonth = new Date().toISOString().slice(0, 7).replace('-', '');
       const { data: lastPedido } = await supabase

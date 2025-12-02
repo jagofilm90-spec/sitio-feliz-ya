@@ -86,6 +86,7 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
   const [deletingSelected, setDeletingSelected] = useState(false);
   const [showOnlyUnread, setShowOnlyUnread] = useState(false);
   const [markingAllInboxAsRead, setMarkingAllInboxAsRead] = useState(false);
+  const [filterProcessed, setFilterProcessed] = useState<'all' | 'processed' | 'unprocessed'>('all');
   // Flag to open first unread email after account switch from notification
   const [pendingOpenUnread, setPendingOpenUnread] = useState<string | null>(null);
   
@@ -971,6 +972,31 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
                   <Filter className="h-4 w-4 mr-2" />
                   No leídos
                 </Button>
+                
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant={filterProcessed !== 'all' ? "default" : "outline"}
+                      size="sm"
+                    >
+                      <CheckCheck className="h-4 w-4 mr-2" />
+                      {filterProcessed === 'all' ? 'Todos' : 
+                       filterProcessed === 'processed' ? 'Procesados' : 'No procesados'}
+                      <ChevronDown className="h-4 w-4 ml-1" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setFilterProcessed('all')}>
+                      Todos los correos
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setFilterProcessed('processed')}>
+                      Solo procesados
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setFilterProcessed('unprocessed')}>
+                      Solo no procesados
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 {!selectionMode ? (
                   <Button
                     variant="outline"
@@ -1038,10 +1064,17 @@ const BandejaEntrada = ({ cuentas }: BandejaEntradaProps) => {
 
           <TabsContent value="inbox" className="mt-4">
             <EmailListView
-              emails={(showOnlyUnread ? emails.filter(e => e.isUnread) : emails).map(email => ({
-                ...email,
-                isProcesado: correosProcesados?.has(email.id) || false,
-              }))}
+              emails={(showOnlyUnread ? emails.filter(e => e.isUnread) : emails)
+                .map(email => ({
+                  ...email,
+                  isProcesado: correosProcesados?.has(email.id) || false,
+                }))
+                .filter(email => {
+                  if (filterProcessed === 'processed') return email.isProcesado;
+                  if (filterProcessed === 'unprocessed') return !email.isProcesado;
+                  return true;
+                })
+              }
               isLoading={isLoading}
               onSelectEmail={(id, index) => handleSelectEmail(id, false, index)}
               onRefresh={() => refetch()}

@@ -53,6 +53,17 @@ const getNombreProductoVerificacion = (nombre: string): string => {
   return nombre;
 };
 
+// Formatear término de crédito
+const getTerminoCreditoLabel = (termino: string | null): string => {
+  switch (termino) {
+    case 'contado': return 'Contado';
+    case '8_dias': return '8 días';
+    case '15_dias': return '15 días';
+    case '30_dias': return '30 días';
+    default: return 'N/A';
+  }
+};
+
 // Tipo para el estado de verificación de productos
 interface VerificacionProducto {
   detalleId: string;
@@ -81,7 +92,7 @@ export function PedidosAcumulativosManager() {
         .from("pedidos_acumulativos")
         .select(`
           *,
-          clientes:cliente_id(nombre, codigo),
+          clientes:cliente_id(nombre, codigo, termino_credito),
           cliente_sucursales:sucursal_id(nombre, direccion, codigo_sucursal)
         `)
         .eq("status", "borrador");
@@ -777,6 +788,9 @@ export function PedidosAcumulativosManager() {
                             <Calendar className="h-3 w-3" />
                             {format(new Date(pedido.fecha_entrega), "dd MMM yyyy", { locale: es })}
                           </span>
+                          <Badge variant="secondary" className="text-xs">
+                            Crédito: {getTerminoCreditoLabel(pedido.clientes?.termino_credito)}
+                          </Badge>
                         </CardDescription>
                       </div>
                     </div>

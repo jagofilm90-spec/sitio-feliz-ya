@@ -216,11 +216,19 @@ export default function PedidoDetalleDialog({
                 <TableBody>
                   {pedido.pedidos_detalles.map((detalle) => {
                     const producto = detalle.productos;
-                    const unidadComercial = producto.unidad || "pza";
+                    const nombreLower = producto.nombre.toLowerCase();
+                    let unidadComercial = producto.unidad || "pza";
+                    
+                    // Detectar si es cliente Lecaroz para reglas especiales
+                    const esLecaroz = pedido.clientes?.nombre?.toLowerCase().includes('lecaroz');
+                    
+                    // Regla especial para Lecaroz: Anís y Canela Molida siempre se muestran como "bolsa"
+                    if (esLecaroz && (nombreLower.includes('anís') || nombreLower.includes('anis') || nombreLower.includes('canela molida'))) {
+                      unidadComercial = 'bolsa';
+                    }
                     
                     // Calcular presentación para bodegueros - SIEMPRE en unidades comerciales, nunca solo kg
                     let presentacion = "";
-                    const esPiloncillo = producto.nombre.toLowerCase().includes('piloncillo');
                     
                     if (producto.precio_por_kilo && producto.kg_por_unidad && producto.kg_por_unidad > 0) {
                       // Producto vendido por kilo con conversión conocida
@@ -253,14 +261,7 @@ export default function PedidoDetalleDialog({
                           )}
                         </TableCell>
                         <TableCell className="text-center font-semibold text-primary">
-                          <div className="flex flex-col items-center gap-1">
-                            {presentacion}
-                            {esPiloncillo && (
-                              <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-300">
-                                ⚠️ Verificar peso
-                              </Badge>
-                            )}
-                          </div>
+                          {presentacion}
                         </TableCell>
                         <TableCell className="text-right font-mono">
                           ${formatCurrency(detalle.precio_unitario)}

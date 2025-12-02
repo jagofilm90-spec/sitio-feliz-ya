@@ -405,14 +405,22 @@ const Pedidos = () => {
       if (error) throw error;
 
       // Prepare data for remision
+      // Detectar si es cliente Lecaroz para reglas especiales de presentación
+      const esLecaroz = pedido.clientes?.nombre?.toLowerCase().includes('lecaroz');
+      
       const productos = pedido.pedidos_detalles.map((detalle: any) => {
         const producto = detalle.productos;
         const descripcion = `${producto.nombre}${producto.marca ? ` ${producto.marca}` : ''}${producto.presentacion ? ` (${producto.presentacion}KG)` : ''}`;
-        const esPiloncillo = producto.nombre.toLowerCase().includes('piloncillo');
+        const nombreLower = producto.nombre.toLowerCase();
         
         // Calcular presentación para bodegueros - SIEMPRE en unidades comerciales, nunca solo kg
         let presentacion = "";
-        const unidadComercial = producto.unidad || 'pza';
+        let unidadComercial = producto.unidad || 'pza';
+        
+        // Regla especial para Lecaroz: Anís y Canela Molida siempre se muestran como "bolsa"
+        if (esLecaroz && (nombreLower.includes('anís') || nombreLower.includes('anis') || nombreLower.includes('canela molida'))) {
+          unidadComercial = 'bolsa';
+        }
         
         // Mostrar cantidad con su unidad original
         let cantidadDisplay = "";
@@ -435,11 +443,6 @@ const Pedidos = () => {
           // Producto vendido por unidad comercial directamente
           const plural = detalle.cantidad !== 1 ? 's' : '';
           presentacion = `${detalle.cantidad} ${unidadComercial}${plural}`;
-        }
-        
-        // Agregar alerta de peso variable para piloncillo
-        if (esPiloncillo) {
-          presentacion = `${presentacion} ⚠️ VERIFICAR PESO`;
         }
         
         return {

@@ -131,6 +131,7 @@ const CotizacionDetalleDialog = ({
             subtotal,
             cantidad_maxima,
             nota_linea,
+            tipo_precio,
             producto:productos(nombre, codigo, unidad)
           )
         `)
@@ -1006,6 +1007,7 @@ const CotizacionDetalleDialog = ({
               <TableHeader>
                 <TableRow>
                   <TableHead>Producto</TableHead>
+                  <TableHead className="text-center">Tipo Precio</TableHead>
                   {!esSoloPrecios && <TableHead className="text-center">Cantidad</TableHead>}
                   <TableHead className="text-right">Precio Unit.</TableHead>
                   {!esSoloPrecios && <TableHead className="text-right">Subtotal</TableHead>}
@@ -1030,6 +1032,11 @@ const CotizacionDetalleDialog = ({
                           </p>
                         )}
                       </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="secondary" className="text-xs">
+                        {d.tipo_precio?.replace('por_', '') || 'N/A'}
+                      </Badge>
                     </TableCell>
                     {!esSoloPrecios && <TableCell className="text-center">{d.cantidad}</TableCell>}
                     <TableCell className="text-right font-mono">

@@ -454,6 +454,7 @@ export type Database = {
           precio_unitario: number
           producto_id: string
           subtotal: number
+          tipo_precio: string | null
         }
         Insert: {
           cantidad: number
@@ -465,6 +466,7 @@ export type Database = {
           precio_unitario: number
           producto_id: string
           subtotal: number
+          tipo_precio?: string | null
         }
         Update: {
           cantidad?: number
@@ -476,6 +478,7 @@ export type Database = {
           precio_unitario?: number
           producto_id?: string
           subtotal?: number
+          tipo_precio?: string | null
         }
         Relationships: [
           {

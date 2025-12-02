@@ -213,7 +213,7 @@ const Productos = () => {
     marca: string;
     categoria: string;
     presentacion: string;
-    unidad: "bulto" | "caja" | "churla" | "cubeta" | "balón";
+    unidad: "bulto" | "caja" | "churla" | "costal" | "cubeta" | "kg" | "litro" | "pieza" | "balón";
     precio_por_kilo: boolean;
     kg_por_unidad: string;
     precio_venta: string;
@@ -634,7 +634,7 @@ const Productos = () => {
                     <Label htmlFor="unidad">Unidad *</Label>
                     <Select
                       value={formData.unidad}
-                      onValueChange={(value: "bulto" | "caja" | "churla" | "cubeta" | "balón") => {
+                      onValueChange={(value: "bulto" | "caja" | "churla" | "costal" | "cubeta" | "kg" | "litro" | "pieza" | "balón") => {
                         const newFormData = { ...formData, unidad: value };
                         setFormData(newFormData);
                         setDuplicateWarning(checkDuplicateProduct(newFormData.nombre, newFormData.marca, newFormData.presentacion, value));
@@ -648,7 +648,11 @@ const Productos = () => {
                         <SelectItem value="bulto">Bulto</SelectItem>
                         <SelectItem value="caja">Caja</SelectItem>
                         <SelectItem value="churla">Churla</SelectItem>
+                        <SelectItem value="costal">Costal</SelectItem>
                         <SelectItem value="cubeta">Cubeta</SelectItem>
+                        <SelectItem value="kg">Kg</SelectItem>
+                        <SelectItem value="litro">Litro</SelectItem>
+                        <SelectItem value="pieza">Pieza</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

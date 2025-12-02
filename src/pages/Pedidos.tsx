@@ -395,7 +395,7 @@ const Pedidos = () => {
           pedidos_detalles (
             id, cantidad, precio_unitario, subtotal,
             productos (
-              id, codigo, nombre, marca, presentacion, unidad, aplica_iva
+              id, codigo, nombre, marca, presentacion, unidad, aplica_iva, kg_por_unidad, precio_por_kilo
             )
           )
         `)
@@ -409,9 +409,34 @@ const Pedidos = () => {
         const producto = detalle.productos;
         const descripcion = `${producto.nombre}${producto.marca ? ` ${producto.marca}` : ''}${producto.presentacion ? ` (${producto.presentacion}KG)` : ''}`;
         
+        // Calcular presentación para bodegueros
+        let presentacion = "";
+        const unidadComercial = producto.unidad || 'pza';
+        
+        // Mostrar cantidad con su unidad original
+        let cantidadDisplay = "";
+        if (producto.precio_por_kilo) {
+          cantidadDisplay = `${detalle.cantidad} kg`;
+        } else {
+          cantidadDisplay = `${detalle.cantidad} ${unidadComercial}`;
+        }
+        
+        if (producto.precio_por_kilo && producto.kg_por_unidad && producto.kg_por_unidad > 0) {
+          // Si se vende por kilo, calcular cuántas unidades comerciales son
+          const unidadesComerciales = Math.ceil(detalle.cantidad / producto.kg_por_unidad);
+          presentacion = `${unidadesComerciales} ${unidadComercial}${unidadesComerciales !== 1 ? 's' : ''}`;
+        } else if (!producto.precio_por_kilo) {
+          // Si se vende por unidad comercial, mostrar directamente
+          presentacion = `${detalle.cantidad} ${unidadComercial}${detalle.cantidad !== 1 ? 's' : ''}`;
+        } else {
+          // Fallback: mostrar cantidad en kg
+          presentacion = `${detalle.cantidad} kg`;
+        }
+        
         return {
           cantidad: detalle.cantidad,
-          unidad: producto.unidad || 'pza',
+          cantidadDisplay, // Cantidad con unidad original (ej: "45 kg")
+          unidad: presentacion, // Presentación calculada para bodegueros (ej: "2 cajas")
           descripcion,
           precio_unitario: detalle.precio_unitario,
           total: detalle.subtotal,

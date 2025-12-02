@@ -208,6 +208,7 @@ export default function PedidoDetalleDialog({
                     <TableHead>Código</TableHead>
                     <TableHead>Producto</TableHead>
                     <TableHead className="text-right">Cantidad</TableHead>
+                    <TableHead className="text-center">Presentación</TableHead>
                     <TableHead className="text-right">P. Unitario</TableHead>
                     <TableHead className="text-right">Subtotal</TableHead>
                   </TableRow>
@@ -215,7 +216,21 @@ export default function PedidoDetalleDialog({
                 <TableBody>
                   {pedido.pedidos_detalles.map((detalle) => {
                     const producto = detalle.productos;
-                    const unidadDisplay = producto.precio_por_kilo ? "kg" : (producto.unidad || "pza");
+                    const unidadComercial = producto.unidad || "pza";
+                    
+                    // Calcular presentación para bodegueros
+                    let presentacion = "";
+                    if (producto.precio_por_kilo && producto.kg_por_unidad && producto.kg_por_unidad > 0) {
+                      // Si se vende por kilo, calcular cuántas unidades comerciales son
+                      const unidadesComerciales = Math.ceil(detalle.cantidad / producto.kg_por_unidad);
+                      presentacion = `${unidadesComerciales} ${unidadComercial}${unidadesComerciales !== 1 ? 's' : ''}`;
+                    } else if (!producto.precio_por_kilo) {
+                      // Si se vende por unidad comercial, mostrar directamente
+                      presentacion = `${detalle.cantidad} ${unidadComercial}${detalle.cantidad !== 1 ? 's' : ''}`;
+                    } else {
+                      presentacion = `${detalle.cantidad} kg`;
+                    }
+                    
                     return (
                       <TableRow key={detalle.id}>
                         <TableCell className="font-mono text-sm">{producto.codigo}</TableCell>
@@ -224,12 +239,15 @@ export default function PedidoDetalleDialog({
                           {producto.marca && <span className="text-muted-foreground ml-1">({producto.marca})</span>}
                         </TableCell>
                         <TableCell className="text-right">
-                          {detalle.cantidad} {unidadDisplay !== "kg" ? producto.unidad : "bultos"}
+                          {detalle.cantidad} {producto.precio_por_kilo ? "kg" : unidadComercial}
                           {producto.kg_por_unidad && !producto.precio_por_kilo && (
                             <span className="text-muted-foreground text-xs ml-1">
                               ({detalle.cantidad * producto.kg_por_unidad} kg)
                             </span>
                           )}
+                        </TableCell>
+                        <TableCell className="text-center font-semibold text-primary">
+                          {presentacion}
                         </TableCell>
                         <TableCell className="text-right font-mono">
                           ${formatCurrency(detalle.precio_unitario)}

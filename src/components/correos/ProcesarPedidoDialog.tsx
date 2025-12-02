@@ -638,36 +638,40 @@ export default function ProcesarPedidoDialog({
           .eq("status", "borrador")
           .maybeSingle();
 
-        let subtotal = 0;
-        let impuestos = 0;
-
         // Calcular totales
+        let totalIva = 0;
+        let totalIeps = 0;
+        let subtotalNeto = 0;
+
         for (const prod of validProducts) {
           const cantidadEntera = Math.round(prod.cantidad);
           let lineSubtotal: number;
 
-          // NUEVA REGLA GLOBAL: si es precio_por_kilo, la cantidad SIEMPRE son KILOS
+          // REGLA: si es precio_por_kilo, la cantidad son KILOS
           if (prod.precio_por_kilo) {
             lineSubtotal = cantidadEntera * (prod.precio_unitario || 0);
-          } else if (prod.kg_por_unidad) {
-            // Productos por bulto/caja: cantidad (bultos) × kg_por_unidad × precio_por_kg
-            lineSubtotal = cantidadEntera * prod.kg_por_unidad * (prod.precio_unitario || 0);
           } else {
-            // Productos normales por pieza/caja
+            // Productos por bulto/caja/pieza: cantidad × precio_unitario
+            // NO multiplicar por kg_por_unidad porque el precio ya está en la unidad comercial
             lineSubtotal = cantidadEntera * (prod.precio_unitario || 0);
           }
-          subtotal += lineSubtotal;
 
-          // Calcular impuestos por producto
-          if (prod.aplica_iva) {
-            const baseIva = lineSubtotal / 1.16;
-            impuestos += lineSubtotal - baseIva;
-          }
-          if (prod.aplica_ieps) {
-            const baseIeps = lineSubtotal / 1.08;
-            impuestos += lineSubtotal - baseIeps;
-          }
+          // Desagregar impuestos (precios ya incluyen impuestos)
+          let divisor = 1;
+          if (prod.aplica_iva) divisor += 0.16;
+          if (prod.aplica_ieps) divisor += 0.08;
+          
+          const baseNeto = lineSubtotal / divisor;
+          const ivaLinea = prod.aplica_iva ? baseNeto * 0.16 : 0;
+          const iepsLinea = prod.aplica_ieps ? baseNeto * 0.08 : 0;
+
+          subtotalNeto += baseNeto;
+          totalIva += ivaLinea;
+          totalIeps += iepsLinea;
         }
+
+        const subtotal = Math.round(subtotalNeto * 100) / 100;
+        const impuestos = Math.round((totalIva + totalIeps) * 100) / 100;
 
         const total = subtotal + impuestos;
 
@@ -709,9 +713,8 @@ export default function ProcesarPedidoDialog({
             let lineSubtotal: number;
             if (prod.precio_por_kilo) {
               lineSubtotal = cantidadEntera * (prod.precio_unitario || 0);
-            } else if (prod.kg_por_unidad) {
-              lineSubtotal = cantidadEntera * prod.kg_por_unidad * (prod.precio_unitario || 0);
             } else {
+              // NO multiplicar por kg_por_unidad - el precio ya está en la unidad comercial
               lineSubtotal = cantidadEntera * (prod.precio_unitario || 0);
             }
 
@@ -779,9 +782,8 @@ export default function ProcesarPedidoDialog({
             let lineSubtotal: number;
             if (p.precio_por_kilo) {
               lineSubtotal = cantidadEntera * (p.precio_unitario || 0);
-            } else if (p.kg_por_unidad) {
-              lineSubtotal = cantidadEntera * p.kg_por_unidad * (p.precio_unitario || 0);
             } else {
+              // NO multiplicar por kg_por_unidad - el precio ya está en la unidad comercial
               lineSubtotal = cantidadEntera * (p.precio_unitario || 0);
             }
             return {
@@ -871,11 +873,8 @@ export default function ProcesarPedidoDialog({
           if (p.precio_por_kilo) {
             // Productos precio por kilo: cantidad SIEMPRE en kilos
             lineSubtotal = cantidadEntera * (p.precio_unitario || 0);
-          } else if (p.kg_por_unidad) {
-            // Productos por bulto/caja con kg_por_unidad definido
-            lineSubtotal = cantidadEntera * p.kg_por_unidad * (p.precio_unitario || 0);
           } else {
-            // Productos normales por pieza/caja
+            // Productos por bulto/caja/pieza: precio ya está en la unidad comercial
             lineSubtotal = cantidadEntera * (p.precio_unitario || 0);
           }
 
@@ -913,8 +912,6 @@ export default function ProcesarPedidoDialog({
             let lineSubtotal: number;
             if (newProd.precio_por_kilo) {
               lineSubtotal = cantidadEntera * (newProd.precio_unitario || 0);
-            } else if (newProd.kg_por_unidad) {
-              lineSubtotal = cantidadEntera * newProd.kg_por_unidad * (newProd.precio_unitario || 0);
             } else {
               lineSubtotal = cantidadEntera * (newProd.precio_unitario || 0);
             }
@@ -1019,9 +1016,11 @@ export default function ProcesarPedidoDialog({
             // IMPORTANTE: Redondear cantidad a entero para la base de datos
             const cantidadEntera = Math.round(p.cantidad);
             let lineSubtotal: number;
-            if (p.precio_por_kilo && p.kg_por_unidad) {
-              lineSubtotal = cantidadEntera * p.kg_por_unidad * (p.precio_unitario || 0);
+            if (p.precio_por_kilo) {
+              // Precio por kilo: cantidad en kg × precio por kg
+              lineSubtotal = cantidadEntera * (p.precio_unitario || 0);
             } else {
+              // Precio por unidad comercial: cantidad en unidades × precio por unidad
               lineSubtotal = cantidadEntera * (p.precio_unitario || 0);
             }
             return {

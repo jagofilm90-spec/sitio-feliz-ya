@@ -10,6 +10,7 @@ interface ProductoCotizacion {
   subtotal: number;
   cantidad_maxima?: number | null;
   nota_linea?: string | null;
+  tipo_precio?: string | null;
 }
 
 interface DatosCotizacion {
@@ -120,6 +121,7 @@ export const CotizacionPrintTemplate = ({ datos }: CotizacionPrintTemplateProps)
           <tr className="bg-gray-800 text-white">
             <th className="p-2 text-left w-20">Código</th>
             <th className="p-2 text-left">Producto</th>
+            <th className="p-2 text-center w-20">Tipo</th>
             {!datos.soloPrecios && (
               <>
                 <th className="p-2 text-center w-20">Cantidad</th>
@@ -150,6 +152,11 @@ export const CotizacionPrintTemplate = ({ datos }: CotizacionPrintTemplateProps)
                   )}
                 </div>
               </td>
+              <td className="p-2 border-b text-center text-[10px]">
+                <span className="bg-gray-200 px-1.5 py-0.5 rounded">
+                  {producto.tipo_precio?.replace('por_', '') || 'N/A'}
+                </span>
+              </td>
               {!datos.soloPrecios && (
                 <>
                   <td className="p-2 border-b text-center">{producto.cantidad}</td>
@@ -170,6 +177,7 @@ export const CotizacionPrintTemplate = ({ datos }: CotizacionPrintTemplateProps)
           {Array.from({ length: Math.max(0, 10 - datos.productos.length) }).map((_, i) => (
             <tr key={`empty-${i}`} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
               <td className="p-2 border-b">&nbsp;</td>
+              <td className="p-2 border-b"></td>
               <td className="p-2 border-b"></td>
               {!datos.soloPrecios && (
                 <>

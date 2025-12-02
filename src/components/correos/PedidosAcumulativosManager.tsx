@@ -18,14 +18,31 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { calcularSubtotal, calcularDesgloseImpuestos as calcularDesgloseImpuestosNuevo, redondear } from "@/lib/calculos";
 import { formatCurrency } from "@/lib/utils";
 
+// Helper para detectar productos que requieren verificación manual
+const esProductoVerificable = (nombre: string) => {
+  const nombreLower = nombre?.toLowerCase() || '';
+  return nombreLower.includes('piloncillo') || 
+         nombreLower.includes('canela molida') || 
+         nombreLower.includes('anís') ||
+         nombreLower.includes('anis');
+};
+
+const getTipoUnidad = (nombre: string): 'caja' | 'bolsa' => {
+  const nombreLower = nombre?.toLowerCase() || '';
+  if (nombreLower.includes('canela molida') || nombreLower.includes('anís') || nombreLower.includes('anis')) {
+    return 'bolsa';
+  }
+  return 'caja';
+};
+
 export function PedidosAcumulativosManager() {
   const [selectedPedido, setSelectedPedido] = useState<string | null>(null);
   const [selectedForBatch, setSelectedForBatch] = useState<Set<string>>(new Set());
   const [editingDetalle, setEditingDetalle] = useState<{ 
     id: string; 
     cantidadKg: number; 
-    cantidadCajas: number;
-    kgPorCaja: number;
+    cantidadUnidades: number;
+    tipoUnidad: 'caja' | 'bolsa';
   } | null>(null);
   const queryClient = useQueryClient();
 
@@ -107,23 +124,23 @@ export function PedidosAcumulativosManager() {
     },
   });
 
-  // Contar pedidos que tienen piloncillo
-  const pedidosConPiloncilloCount = useMemo(() => {
+  // Contar pedidos que tienen productos verificables (piloncillo, canela, anís)
+  const pedidosConVerificacionCount = useMemo(() => {
     if (!allDetallesForPiloncillo) return 0;
-    const pedidoIdsConPiloncillo = new Set<string>();
+    const pedidoIdsConVerificacion = new Set<string>();
     allDetallesForPiloncillo.forEach((det: any) => {
-      if (det.productos?.nombre?.toLowerCase().includes('piloncillo')) {
-        pedidoIdsConPiloncillo.add(det.pedido_acumulativo_id);
+      if (esProductoVerificable(det.productos?.nombre)) {
+        pedidoIdsConVerificacion.add(det.pedido_acumulativo_id);
       }
     });
-    return pedidoIdsConPiloncillo.size;
+    return pedidoIdsConVerificacion.size;
   }, [allDetallesForPiloncillo]);
 
-  // Detectar si el detalle actual tiene piloncillo
-  const detallesConPiloncillo = useMemo(() => {
+  // Detectar si el detalle actual tiene productos verificables
+  const detallesConVerificacion = useMemo(() => {
     if (!detalles) return [];
     return detalles.filter((det: any) => 
-      det.productos?.nombre?.toLowerCase().includes('piloncillo')
+      esProductoVerificable(det.productos?.nombre)
     );
   }, [detalles]);
 
@@ -601,14 +618,14 @@ export function PedidosAcumulativosManager() {
 
   const handleKgChange = (kg: number) => {
     if (!editingDetalle) return;
-    const cajas = editingDetalle.kgPorCaja > 0 ? Math.ceil(kg / editingDetalle.kgPorCaja) : 1;
-    setEditingDetalle({ ...editingDetalle, cantidadKg: kg, cantidadCajas: cajas });
+    // Sin autocorrección - el usuario pone lo que quiere
+    setEditingDetalle({ ...editingDetalle, cantidadKg: kg });
   };
 
-  const handleCajasChange = (cajas: number) => {
+  const handleUnidadesChange = (unidades: number) => {
     if (!editingDetalle) return;
-    // Al cambiar cajas, recalcular kg (pero dejar que el usuario ajuste manualmente si quiere)
-    setEditingDetalle({ ...editingDetalle, cantidadCajas: cajas });
+    // Sin autocorrección - el usuario pone lo que quiere
+    setEditingDetalle({ ...editingDetalle, cantidadUnidades: unidades });
   };
 
   if (isLoading) {
@@ -679,15 +696,15 @@ export function PedidosAcumulativosManager() {
         </div>
       </div>
 
-      {/* Alerta de pedidos con piloncillo */}
-      {pedidosConPiloncilloCount > 0 && (
+      {/* Alerta de pedidos que requieren verificación */}
+      {pedidosConVerificacionCount > 0 && (
         <Alert variant="default" className="border-amber-500 bg-amber-50 dark:bg-amber-950/30">
           <AlertTriangle className="h-4 w-4 text-amber-600" />
           <AlertTitle className="text-amber-800 dark:text-amber-200">
-            ⚠️ {pedidosConPiloncilloCount} pedido{pedidosConPiloncilloCount > 1 ? 's' : ''} con piloncillo requiere{pedidosConPiloncilloCount > 1 ? 'n' : ''} verificación de peso
+            ⚠️ {pedidosConVerificacionCount} pedido{pedidosConVerificacionCount > 1 ? 's' : ''} requiere{pedidosConVerificacionCount > 1 ? 'n' : ''} verificación de peso
           </AlertTitle>
           <AlertDescription className="text-amber-700 dark:text-amber-300">
-            Antes de generar los pedidos finales, revisa y ajusta el peso del piloncillo en cada pedido haciendo clic en "Ver detalles".
+            Antes de generar los pedidos finales, revisa y ajusta el peso de piloncillo, canela molida o anís.
           </AlertDescription>
         </Alert>
       )}
@@ -701,14 +718,14 @@ export function PedidosAcumulativosManager() {
       ) : (
         <div className="grid gap-4">
           {pedidosAcumulativos.map((pedido: any) => {
-            // Verificar si este pedido tiene piloncillo
-            const tienePiloncillo = allDetallesForPiloncillo?.some(
+            // Verificar si este pedido tiene productos que requieren verificación
+            const tieneVerificacion = allDetallesForPiloncillo?.some(
               (det: any) => det.pedido_acumulativo_id === pedido.id && 
-                det.productos?.nombre?.toLowerCase().includes('piloncillo')
+                esProductoVerificable(det.productos?.nombre)
             );
             
             return (
-              <Card key={pedido.id} className={`${selectedForBatch.has(pedido.id) ? "border-primary" : ""} ${tienePiloncillo ? "border-l-4 border-l-amber-500" : ""}`}>
+              <Card key={pedido.id} className={`${selectedForBatch.has(pedido.id) ? "border-primary" : ""} ${tieneVerificacion ? "border-l-4 border-l-amber-500" : ""}`}>
                 <CardHeader>
                   <div className="flex justify-between items-start">
                     <div className="flex items-start gap-3 flex-1">
@@ -721,9 +738,9 @@ export function PedidosAcumulativosManager() {
                         <CardTitle className="text-lg flex items-center gap-2">
                           <Package className="h-4 w-4" />
                           {pedido.clientes?.nombre || "Cliente desconocido"}
-                          {tienePiloncillo && (
+                          {tieneVerificacion && (
                             <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 text-xs">
-                              ⚠️ Piloncillo
+                              ⚠️ Verificar
                             </Badge>
                           )}
                         </CardTitle>
@@ -751,12 +768,12 @@ export function PedidosAcumulativosManager() {
                     </div>
                     <div className="flex gap-2">
                       <Button
-                        variant={tienePiloncillo ? "default" : "outline"}
+                        variant={tieneVerificacion ? "default" : "outline"}
                         size="sm"
                         onClick={() => setSelectedPedido(pedido.id)}
-                        className={tienePiloncillo ? "bg-amber-600 hover:bg-amber-700" : ""}
+                        className={tieneVerificacion ? "bg-amber-600 hover:bg-amber-700" : ""}
                       >
-                        {tienePiloncillo ? "⚠️ Verificar peso" : "Ver detalles"}
+                        {tieneVerificacion ? "⚠️ Verificar peso" : "Ver detalles"}
                       </Button>
                       <Button
                         variant="default"
@@ -792,25 +809,25 @@ export function PedidosAcumulativosManager() {
         </div>
       )}
 
-      {/* Dialog para ver detalles con edición de piloncillo */}
+      {/* Dialog para ver detalles con edición */}
       <Dialog open={!!selectedPedido} onOpenChange={() => { setSelectedPedido(null); setEditingDetalle(null); }}>
         <DialogContent className="max-w-3xl max-h-[80vh]">
           <DialogHeader>
             <DialogTitle>Detalles del Pedido Acumulativo</DialogTitle>
             <DialogDescription>
-              {detallesConPiloncillo.length > 0 
-                ? "⚠️ Este pedido contiene piloncillo. Ajusta el peso antes de generar el pedido final."
+              {detallesConVerificacion.length > 0 
+                ? "⚠️ Este pedido contiene productos que requieren verificación de peso."
                 : "Productos incluidos en este pedido"
               }
             </DialogDescription>
           </DialogHeader>
           
-          {/* Alerta de piloncillo en el dialog */}
-          {detallesConPiloncillo.length > 0 && (
+          {/* Alerta de verificación en el dialog */}
+          {detallesConVerificacion.length > 0 && (
             <Alert variant="default" className="border-amber-500 bg-amber-50 dark:bg-amber-950/30">
               <AlertTriangle className="h-4 w-4 text-amber-600" />
               <AlertDescription className="text-amber-700 dark:text-amber-300">
-                Haz clic en el botón de editar junto al piloncillo para ajustar el peso real de la caja.
+                Haz clic en el botón de editar para ajustar las cantidades y el peso.
               </AlertDescription>
             </Alert>
           )}
@@ -819,17 +836,18 @@ export function PedidosAcumulativosManager() {
             {detalles && detalles.length > 0 ? (
               <div className="space-y-2">
                 {detalles.map((detalle: any, idx: number) => {
-                  const esPiloncillo = detalle.productos?.nombre?.toLowerCase().includes('piloncillo');
+                  const requiereVerificacion = esProductoVerificable(detalle.productos?.nombre);
+                  const tipoUnidadProducto = getTipoUnidad(detalle.productos?.nombre);
                   const isEditing = editingDetalle?.id === detalle.id;
                   
                   return (
                     <div key={detalle.id}>
                       {idx > 0 && <Separator className="my-2" />}
-                      <div className={`flex justify-between items-start p-3 rounded-lg ${esPiloncillo ? 'bg-amber-50 dark:bg-amber-950/30 border border-amber-300' : 'bg-muted/50'}`}>
+                      <div className={`flex justify-between items-start p-3 rounded-lg ${requiereVerificacion ? 'bg-amber-50 dark:bg-amber-950/30 border border-amber-300' : 'bg-muted/50'}`}>
                         <div className="flex-1">
                           <div className="font-medium flex items-center gap-2">
                             {detalle.productos?.codigo} - {detalle.productos?.nombre}
-                            {esPiloncillo && (
+                            {requiereVerificacion && (
                               <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-400 text-xs">
                                 ⚠️ Verificar peso
                               </Badge>
@@ -839,14 +857,16 @@ export function PedidosAcumulativosManager() {
                             <div className="flex flex-col gap-3 mt-2 p-3 bg-amber-100/50 dark:bg-amber-900/30 rounded-lg">
                               <div className="flex items-center gap-4">
                                 <div className="flex items-center gap-2">
-                                  <Label htmlFor="edit-cajas" className="text-sm font-medium whitespace-nowrap">Cajas:</Label>
+                                  <Label htmlFor="edit-unidades" className="text-sm font-medium whitespace-nowrap">
+                                    {editingDetalle.tipoUnidad === 'bolsa' ? 'Bolsas:' : 'Cajas:'}
+                                  </Label>
                                   <Input
-                                    id="edit-cajas"
+                                    id="edit-unidades"
                                     type="number"
                                     step="1"
                                     min="1"
-                                    value={editingDetalle.cantidadCajas}
-                                    onChange={(e) => handleCajasChange(parseInt(e.target.value) || 1)}
+                                    value={editingDetalle.cantidadUnidades}
+                                    onChange={(e) => handleUnidadesChange(parseInt(e.target.value) || 1)}
                                     className="w-20 h-8"
                                   />
                                 </div>
@@ -864,7 +884,7 @@ export function PedidosAcumulativosManager() {
                                 </div>
                               </div>
                               <div className="text-xs text-amber-700 dark:text-amber-300">
-                                = {editingDetalle.cantidadCajas} caja{editingDetalle.cantidadCajas !== 1 ? 's' : ''} de {editingDetalle.kgPorCaja > 0 ? (editingDetalle.cantidadKg / editingDetalle.cantidadCajas).toFixed(2) : '?'} kg c/u
+                                = {editingDetalle.cantidadUnidades} {editingDetalle.tipoUnidad}{editingDetalle.cantidadUnidades !== 1 ? 's' : ''} de {editingDetalle.cantidadUnidades > 0 ? (editingDetalle.cantidadKg / editingDetalle.cantidadUnidades).toFixed(2) : '?'} kg c/u
                               </div>
                               <div className="flex gap-2">
                                 <Button size="sm" onClick={handleSavePiloncilloWeight} disabled={updateDetalleMutation.isPending}>
@@ -878,20 +898,20 @@ export function PedidosAcumulativosManager() {
                           ) : (
                             <div className="text-sm text-muted-foreground flex items-center gap-2">
                               {detalle.cantidad} {detalle.productos?.unidad} × ${detalle.precio_unitario.toFixed(2)}
-                              {esPiloncillo && (
+                              {requiereVerificacion && (
                                 <Button 
                                   size="sm" 
                                   variant="outline" 
                                   className="h-6 px-2 text-xs border-amber-400 text-amber-700 hover:bg-amber-100"
                                   onClick={() => {
-                                    const kgPorCaja = detalle.productos?.kg_por_unidad || 10;
+                                    const kgPorUnidad = detalle.productos?.kg_por_unidad || 10;
                                     const cantidadKg = detalle.cantidad;
-                                    const cantidadCajas = kgPorCaja > 0 ? Math.ceil(cantidadKg / kgPorCaja) : 1;
+                                    const cantidadUnidades = kgPorUnidad > 0 ? Math.ceil(cantidadKg / kgPorUnidad) : 1;
                                     setEditingDetalle({ 
                                       id: detalle.id, 
                                       cantidadKg,
-                                      cantidadCajas,
-                                      kgPorCaja
+                                      cantidadUnidades,
+                                      tipoUnidad: tipoUnidadProducto
                                     });
                                   }}
                                 >

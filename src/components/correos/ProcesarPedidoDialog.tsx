@@ -33,6 +33,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { calcularSubtotal, calcularDesgloseImpuestos as calcularDesgloseImpuestosNuevo, redondear } from "@/lib/calculos";
 
 interface ParsedProduct {
   nombre_producto: string;
@@ -638,48 +639,55 @@ export default function ProcesarPedidoDialog({
           .eq("status", "borrador")
           .maybeSingle();
 
-        // Calcular totales
+        // Calcular totales usando sistema centralizado
         let totalIva = 0;
         let totalIeps = 0;
         let subtotalNeto = 0;
 
         for (const prod of validProducts) {
           const cantidadEntera = Math.round(prod.cantidad);
-          let lineSubtotal: number;
+          
+          // USAR SISTEMA CENTRALIZADO: calcular subtotal con validación
+          const resultadoSubtotal = calcularSubtotal({
+            cantidad: cantidadEntera,
+            precio_unitario: prod.precio_unitario || 0,
+            nombre_producto: prod.nombre_producto
+          });
 
-          // REGLA: si es precio_por_kilo, la cantidad son KILOS
-          if (prod.precio_por_kilo) {
-            lineSubtotal = cantidadEntera * (prod.precio_unitario || 0);
-          } else {
-            // Productos por bulto/caja/pieza: cantidad × precio_unitario
-            // NO multiplicar por kg_por_unidad porque el precio ya está en la unidad comercial
-            lineSubtotal = cantidadEntera * (prod.precio_unitario || 0);
+          if (!resultadoSubtotal.valido) {
+            console.error(`❌ Error calculando subtotal:`, resultadoSubtotal.error);
+            throw new Error(`Error en cálculo: ${resultadoSubtotal.error}`);
           }
 
-          // Desagregar impuestos (precios ya incluyen impuestos)
-          let divisor = 1;
-          if (prod.aplica_iva) divisor += 0.16;
-          if (prod.aplica_ieps) divisor += 0.08;
-          
-          const baseNeto = lineSubtotal / divisor;
-          const ivaLinea = prod.aplica_iva ? baseNeto * 0.16 : 0;
-          const iepsLinea = prod.aplica_ieps ? baseNeto * 0.08 : 0;
+          const lineSubtotal = resultadoSubtotal.subtotal;
 
-          subtotalNeto += baseNeto;
-          totalIva += ivaLinea;
-          totalIeps += iepsLinea;
+          // Desagregar impuestos usando sistema centralizado
+          const desglose = calcularDesgloseImpuestosNuevo({
+            precio_con_impuestos: lineSubtotal,
+            aplica_iva: prod.aplica_iva || false,
+            aplica_ieps: prod.aplica_ieps || false,
+            nombre_producto: prod.nombre_producto
+          });
+
+          if (!desglose.valido) {
+            console.error(`❌ Error calculando impuestos:`, desglose.error);
+            throw new Error(`Error en cálculo de impuestos: ${desglose.error}`);
+          }
+
+          subtotalNeto += desglose.base;
+          totalIva += desglose.iva;
+          totalIeps += desglose.ieps;
         }
 
-        const subtotal = Math.round(subtotalNeto * 100) / 100;
-        const impuestos = Math.round((totalIva + totalIeps) * 100) / 100;
-
-        const total = subtotal + impuestos;
+        const subtotal = redondear(subtotalNeto);
+        const impuestos = redondear(totalIva + totalIeps);
+        const total = redondear(subtotal + impuestos);
 
         if (existingAcumulativo) {
           // ACTUALIZAR acumulativo existente
-          const updatedSubtotal = (existingAcumulativo.subtotal || 0) + subtotal;
-          const updatedImpuestos = (existingAcumulativo.impuestos || 0) + impuestos;
-          const updatedTotal = (existingAcumulativo.total || 0) + total;
+          const updatedSubtotal = redondear((existingAcumulativo.subtotal || 0) + subtotal);
+          const updatedImpuestos = redondear((existingAcumulativo.impuestos || 0) + impuestos);
+          const updatedTotal = redondear((existingAcumulativo.total || 0) + total);
 
           // Agregar emailId al array correos_procesados
           const correosProcesados = existingAcumulativo.correos_procesados || [];
@@ -690,9 +698,9 @@ export default function ProcesarPedidoDialog({
           await supabase
             .from("pedidos_acumulativos")
             .update({
-              subtotal: Math.round(updatedSubtotal * 100) / 100,
-              impuestos: Math.round(updatedImpuestos * 100) / 100,
-              total: Math.round(updatedTotal * 100) / 100,
+              subtotal: updatedSubtotal,
+              impuestos: updatedImpuestos,
+              total: updatedTotal,
               correos_procesados: correosProcesados,
               updated_at: new Date().toISOString(),
             })
@@ -710,13 +718,19 @@ export default function ProcesarPedidoDialog({
 
           for (const prod of validProducts) {
             const cantidadEntera = Math.round(prod.cantidad);
-            let lineSubtotal: number;
-            if (prod.precio_por_kilo) {
-              lineSubtotal = cantidadEntera * (prod.precio_unitario || 0);
-            } else {
-              // NO multiplicar por kg_por_unidad - el precio ya está en la unidad comercial
-              lineSubtotal = cantidadEntera * (prod.precio_unitario || 0);
+            
+            // USAR SISTEMA CENTRALIZADO para calcular subtotal
+            const resultadoSubtotal = calcularSubtotal({
+              cantidad: cantidadEntera,
+              precio_unitario: prod.precio_unitario || 0,
+              nombre_producto: prod.nombre_producto
+            });
+
+            if (!resultadoSubtotal.valido) {
+              throw new Error(`Error en subtotal: ${resultadoSubtotal.error}`);
             }
+
+            const lineSubtotal = resultadoSubtotal.subtotal;
 
             const existingDetalle = existingDetalles?.find(d => d.producto_id === prod.producto_id);
 
@@ -724,7 +738,7 @@ export default function ProcesarPedidoDialog({
               updates.push({
                 id: existingDetalle.id,
                 cantidad: existingDetalle.cantidad + cantidadEntera,
-                subtotal: Math.round((existingDetalle.subtotal + lineSubtotal) * 100) / 100,
+                subtotal: redondear(existingDetalle.subtotal + lineSubtotal),
               });
             } else {
               inserts.push({
@@ -732,7 +746,7 @@ export default function ProcesarPedidoDialog({
                 producto_id: prod.producto_id!,
                 cantidad: cantidadEntera,
                 precio_unitario: prod.precio_unitario || 0,
-                subtotal: Math.round(lineSubtotal * 100) / 100,
+                subtotal: lineSubtotal,
               });
             }
           }
@@ -762,9 +776,9 @@ export default function ProcesarPedidoDialog({
               cliente_id: selectedClienteId,
               sucursal_id: suc.sucursal_id || null,
               fecha_entrega: suc.fecha_entrega_solicitada || today,
-              subtotal: Math.round(subtotal * 100) / 100,
-              impuestos: Math.round(impuestos * 100) / 100,
-              total: Math.round(total * 100) / 100,
+              subtotal,
+              impuestos,
+              total,
               status: "borrador",
               correos_procesados: [emailId],
               notas: parsedOrder.notas_generales 
@@ -779,19 +793,24 @@ export default function ProcesarPedidoDialog({
           // Insertar detalles
           const detalles = validProducts.map(p => {
             const cantidadEntera = Math.round(p.cantidad);
-            let lineSubtotal: number;
-            if (p.precio_por_kilo) {
-              lineSubtotal = cantidadEntera * (p.precio_unitario || 0);
-            } else {
-              // NO multiplicar por kg_por_unidad - el precio ya está en la unidad comercial
-              lineSubtotal = cantidadEntera * (p.precio_unitario || 0);
+            
+            // USAR SISTEMA CENTRALIZADO
+            const resultadoSubtotal = calcularSubtotal({
+              cantidad: cantidadEntera,
+              precio_unitario: p.precio_unitario || 0,
+              nombre_producto: p.nombre_producto
+            });
+
+            if (!resultadoSubtotal.valido) {
+              throw new Error(`Error en subtotal: ${resultadoSubtotal.error}`);
             }
+
             return {
               pedido_acumulativo_id: acumulativo.id,
               producto_id: p.producto_id!,
               cantidad: cantidadEntera,
               precio_unitario: p.precio_unitario || 0,
-              subtotal: Math.round(lineSubtotal * 100) / 100,
+              subtotal: resultadoSubtotal.subtotal,
             };
           });
 

@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
+import { calcularSubtotal, calcularDesgloseImpuestos as calcularDesgloseImpuestosNuevo, redondear } from "@/lib/calculos";
+import { formatCurrency } from "@/lib/utils";
 
 export function PedidosAcumulativosManager() {
   const [selectedPedido, setSelectedPedido] = useState<string | null>(null);
@@ -79,18 +81,29 @@ export function PedidosAcumulativosManager() {
           .from("pedidos_acumulativos_detalles")
           .select(`
             *,
-            productos:producto_id(precio_por_kilo, aplica_iva, aplica_ieps)
+            productos:producto_id(nombre, precio_por_kilo, aplica_iva, aplica_ieps)
           `)
           .eq("pedido_acumulativo_id", pedido.id);
 
         if (detallesError) throw detallesError;
         if (!detalles || detalles.length === 0) continue;
 
-        // Recalcular subtotales de cada detalle
+        // Recalcular subtotales de cada detalle usando sistema centralizado
         const detallesUpdates = [];
         for (const detalle of detalles) {
-          // FÓRMULA CORRECTA: cantidad × precio_unitario (SIN kg_por_unidad)
-          const lineSubtotalCorrecto = Math.round(detalle.cantidad * detalle.precio_unitario * 100) / 100;
+          // USAR SISTEMA CENTRALIZADO: calcularSubtotal con validación
+          const resultado = calcularSubtotal({
+            cantidad: detalle.cantidad,
+            precio_unitario: detalle.precio_unitario,
+            nombre_producto: detalle.productos?.nombre || 'Producto desconocido'
+          });
+
+          if (!resultado.valido) {
+            console.error(`❌ Error al calcular subtotal:`, resultado.error);
+            continue;
+          }
+
+          const lineSubtotalCorrecto = resultado.subtotal;
           
           if (Math.abs(lineSubtotalCorrecto - detalle.subtotal) > 0.01) {
             console.log(`🔧 Corrigiendo línea: ${detalle.cantidad} × ${detalle.precio_unitario} = ${lineSubtotalCorrecto} (antes: ${detalle.subtotal})`);
@@ -112,12 +125,12 @@ export function PedidosAcumulativosManager() {
           if (error) throw error;
         }
 
-        // Recalcular totales del pedido con detalles ya corregidos
+        // Recalcular totales del pedido usando sistema centralizado
         const { data: detallesActualizados, error: detallesActError } = await supabase
           .from("pedidos_acumulativos_detalles")
           .select(`
             *,
-            productos:producto_id(aplica_iva, aplica_ieps)
+            productos:producto_id(nombre, aplica_iva, aplica_ieps)
           `)
           .eq("pedido_acumulativo_id", pedido.id);
 
@@ -131,30 +144,26 @@ export function PedidosAcumulativosManager() {
           const producto = detalle.productos;
           const lineSubtotal = detalle.subtotal;
 
-          // Calcular base sin impuestos (desagregar)
-          let divisor = 1;
-          if (producto.aplica_iva && producto.aplica_ieps) {
-            divisor = 1.24; // 1 + 0.16 + 0.08
-          } else if (producto.aplica_iva) {
-            divisor = 1.16;
-          } else if (producto.aplica_ieps) {
-            divisor = 1.08;
+          // Usar sistema centralizado para desagregar impuestos
+          const desglose = calcularDesgloseImpuestosNuevo({
+            precio_con_impuestos: lineSubtotal,
+            aplica_iva: producto.aplica_iva,
+            aplica_ieps: producto.aplica_ieps,
+            nombre_producto: producto.nombre
+          });
+
+          if (!desglose.valido) {
+            console.error(`❌ Error al calcular impuestos:`, desglose.error);
           }
 
-          const baseAmount = lineSubtotal / divisor;
-
-          // Calcular impuestos sobre la base
-          const lineIva = producto.aplica_iva ? baseAmount * 0.16 : 0;
-          const lineIeps = producto.aplica_ieps ? baseAmount * 0.08 : 0;
-
-          subtotalTotal += baseAmount;
-          ivaTotal += lineIva;
-          iepsTotal += lineIeps;
+          subtotalTotal += desglose.base;
+          ivaTotal += desglose.iva;
+          iepsTotal += desglose.ieps;
         }
 
-        const subtotalRedondeado = Math.round(subtotalTotal * 100) / 100;
-        const impuestosRedondeado = Math.round((ivaTotal + iepsTotal) * 100) / 100;
-        const totalRedondeado = Math.round((subtotalTotal + ivaTotal + iepsTotal) * 100) / 100;
+        const subtotalRedondeado = redondear(subtotalTotal);
+        const impuestosRedondeado = redondear(ivaTotal + iepsTotal);
+        const totalRedondeado = redondear(subtotalTotal + ivaTotal + iepsTotal);
 
         console.log(`✅ Pedido ${pedido.id}: Subtotal=${subtotalRedondeado}, Impuestos=${impuestosRedondeado}, Total=${totalRedondeado}`);
 

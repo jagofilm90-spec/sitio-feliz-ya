@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { calcularDesgloseImpuestosLegacy, validarTotalesLegacy } from "./calculos";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -18,6 +19,7 @@ export function formatCurrency(value: number): string {
 
 /**
  * Calcula el desglose de impuestos para productos con precios que incluyen IVA/IEPS
+ * NOTA: Esta función ahora usa el sistema centralizado de cálculos (src/lib/calculos.ts)
  * @param precioConImpuestos - Precio total incluyendo impuestos
  * @param aplica_iva - Si el producto tiene IVA (16%)
  * @param aplica_ieps - Si el producto tiene IEPS (8%)
@@ -28,31 +30,13 @@ export function calcularDesgloseImpuestos(
   aplica_iva: boolean,
   aplica_ieps: boolean
 ) {
-  // Calcular divisor según impuestos aplicables
-  let divisor = 1;
-  if (aplica_iva) divisor += 0.16;
-  if (aplica_ieps) divisor += 0.08;
-  
-  // Precio base sin impuestos
-  const base = precioConImpuestos / divisor;
-  
-  // Calcular impuestos
-  const iva = aplica_iva ? base * 0.16 : 0;
-  const ieps = aplica_ieps ? base * 0.08 : 0;
-  
-  return {
-    base: Math.round(base * 100) / 100,
-    iva: Math.round(iva * 100) / 100,
-    ieps: Math.round(ieps * 100) / 100,
-    total: Math.round(precioConImpuestos * 100) / 100,
-  };
+  return calcularDesgloseImpuestosLegacy(precioConImpuestos, aplica_iva, aplica_ieps);
 }
 
 /**
  * Valida que los totales sean consistentes
+ * NOTA: Esta función ahora usa el sistema centralizado de cálculos (src/lib/calculos.ts)
  */
 export function validarTotales(subtotal: number, iva: number, ieps: number, total: number): boolean {
-  const calculado = subtotal + iva + ieps;
-  // Permitir diferencia de 1 centavo por redondeo
-  return Math.abs(calculado - total) < 0.02;
+  return validarTotalesLegacy(subtotal, iva, ieps, total);
 }

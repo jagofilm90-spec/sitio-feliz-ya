@@ -3,6 +3,7 @@ import DOMPurify from "dompurify";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,6 +33,7 @@ import {
   Forward,
   FileSpreadsheet,
   ShoppingCart,
+  AlertTriangle,
 } from "lucide-react";
 import CrearCotizacionDialog from "@/components/cotizaciones/CrearCotizacionDialog";
 import ProcesarPedidoDialog from "./ProcesarPedidoDialog";
@@ -39,6 +41,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 import ComposeEmailDialog from "./ComposeEmailDialog";
 
 interface EmailAttachment {
@@ -100,6 +103,35 @@ const EmailDetailView = ({
   const [cotizacionOpen, setCotizacionOpen] = useState(false);
   const [procesarPedidoOpen, setProcesarPedidoOpen] = useState(false);
   const [downloadingAttachment, setDownloadingAttachment] = useState<string | null>(null);
+
+  // Verificar si el correo tiene un pedido acumulativo activo (borrador)
+  const { data: acumulativoActivo, refetch: refetchAcumulativo } = useQuery({
+    queryKey: ["email-acumulativo-status", email.id],
+    queryFn: async () => {
+      if (!email.id) return null;
+      
+      const { data, error } = await supabase
+        .from("pedidos_acumulativos")
+        .select("id, clientes:cliente_id(nombre), cliente_sucursales:sucursal_id(nombre)")
+        .contains("correos_procesados", [email.id])
+        .eq("status", "borrador")
+        .maybeSingle();
+      
+      if (error) {
+        console.error("Error checking email acumulativo status:", error);
+        return null;
+      }
+      return data;
+    },
+    enabled: !!email.id && !isFromTrash,
+  });
+
+  // Refetch status when dialog closes
+  useEffect(() => {
+    if (!procesarPedidoOpen) {
+      refetchAcumulativo();
+    }
+  }, [procesarPedidoOpen, refetchAcumulativo]);
 
   // Keyboard navigation with arrow keys
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -308,7 +340,13 @@ const EmailDetailView = ({
           <div className="flex items-center gap-2">
             {!isFromTrash && (
               <>
-                <Button variant="default" size="sm" onClick={() => setProcesarPedidoOpen(true)}>
+                <Button 
+                  variant="default" 
+                  size="sm" 
+                  onClick={() => setProcesarPedidoOpen(true)}
+                  disabled={!!acumulativoActivo}
+                  title={acumulativoActivo ? "Este correo ya fue procesado" : "Procesar pedido"}
+                >
                   <ShoppingCart className="h-4 w-4 mr-2" />
                   Procesar Pedido
                 </Button>
@@ -375,6 +413,22 @@ const EmailDetailView = ({
             )}
           </div>
         </div>
+
+        {/* Alerta si el correo ya tiene pedido acumulativo activo */}
+        {acumulativoActivo && (
+          <Alert variant="default" className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20">
+            <AlertTriangle className="h-4 w-4 text-yellow-600" />
+            <AlertTitle className="text-yellow-800 dark:text-yellow-200">Correo ya procesado</AlertTitle>
+            <AlertDescription className="text-yellow-700 dark:text-yellow-300">
+              Este correo ya tiene un pedido acumulativo activo para{" "}
+              <strong>
+                {(acumulativoActivo as any).clientes?.nombre}
+                {(acumulativoActivo as any).cliente_sucursales?.nombre && ` - ${(acumulativoActivo as any).cliente_sucursales?.nombre}`}
+              </strong>
+              . Para reprocesar, primero elimina el pedido acumulativo desde la pestaña "Pedidos Acumulados".
+            </AlertDescription>
+          </Alert>
+        )}
 
         <Card>
           <CardHeader className="pb-3">

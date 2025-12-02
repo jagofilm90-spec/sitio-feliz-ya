@@ -213,6 +213,8 @@ export default function ProcesarPedidoDialog({
     if (!emailId) return;
     
     try {
+      const processedInfo: { folio: string; tipo: string }[] = [];
+
       // Verificar en pedidos finales a través de las notas
       const { data: pedidosData, error: pedidosError } = await supabase
         .from("pedidos")
@@ -221,9 +223,7 @@ export default function ProcesarPedidoDialog({
 
       if (pedidosError) throw pedidosError;
 
-      const processedInfo: { folio: string; tipo: string }[] = [];
-
-      // Solo bloquear si hay pedidos finales creados
+      // Bloquear si hay pedidos finales creados
       if (pedidosData && pedidosData.length > 0) {
         pedidosData.forEach(pedido => {
           processedInfo.push({
@@ -233,10 +233,29 @@ export default function ProcesarPedidoDialog({
         });
       }
 
-      console.log(`Email ${emailId} check:`, processedInfo.length > 0 ? "Final orders exist" : "No final orders");
+      // NUEVO: También verificar si hay pedidos acumulativos en borrador para este correo
+      const { data: acumulativosData, error: acumulativosError } = await supabase
+        .from("pedidos_acumulativos")
+        .select("id, clientes:cliente_id(nombre), cliente_sucursales:sucursal_id(nombre)")
+        .contains("correos_procesados", [emailId])
+        .eq("status", "borrador");
 
-      // Solo marcar como procesado si hay pedidos finales
-      // Los pedidos acumulativos en borrador no bloquean el reprocesamiento
+      if (acumulativosError) throw acumulativosError;
+
+      // Bloquear si hay pedidos acumulativos en borrador
+      if (acumulativosData && acumulativosData.length > 0) {
+        acumulativosData.forEach((acum: any) => {
+          const clienteNombre = acum.clientes?.nombre || "Cliente";
+          const sucursalNombre = acum.cliente_sucursales?.nombre || "";
+          processedInfo.push({
+            folio: sucursalNombre ? `${clienteNombre} - ${sucursalNombre}` : clienteNombre,
+            tipo: "Pedido Acumulativo (Borrador)"
+          });
+        });
+      }
+
+      console.log(`Email ${emailId} check:`, processedInfo.length > 0 ? "Orders exist" : "No orders");
+
       if (processedInfo.length > 0) {
         setEmailAlreadyProcessed(true);
         setProcessedOrdersInfo(processedInfo);

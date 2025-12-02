@@ -29,13 +29,24 @@ export function PedidosAcumulativosManager() {
         .select(`
           *,
           clientes:cliente_id(nombre, codigo),
-          cliente_sucursales:sucursal_id(nombre, direccion)
+          cliente_sucursales:sucursal_id(nombre, direccion, codigo_sucursal)
         `)
-        .eq("status", "borrador")
-        .order("created_at", { ascending: false });
+        .eq("status", "borrador");
 
       if (error) throw error;
-      return data;
+      
+      // Ordenar por código de sucursal (número)
+      return data?.sort((a: any, b: any) => {
+        const codigoA = a.cliente_sucursales?.codigo_sucursal || '';
+        const codigoB = b.cliente_sucursales?.codigo_sucursal || '';
+        // Intentar ordenar numéricamente si son números
+        const numA = parseInt(codigoA);
+        const numB = parseInt(codigoB);
+        if (!isNaN(numA) && !isNaN(numB)) {
+          return numA - numB;
+        }
+        return codigoA.localeCompare(codigoB);
+      }) || [];
     },
   });
 

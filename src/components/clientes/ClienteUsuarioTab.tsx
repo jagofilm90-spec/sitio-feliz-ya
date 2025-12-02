@@ -5,7 +5,18 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { User, Key, Copy, RefreshCw, Check, Eye, EyeOff, UserPlus, Loader2 } from "lucide-react";
+import { User, Key, Copy, RefreshCw, Check, Eye, EyeOff, UserPlus, Loader2, UserMinus } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface ClienteUsuarioTabProps {
   cliente: {
@@ -116,11 +127,48 @@ export function ClienteUsuarioTab({ cliente, onUserCreated }: ClienteUsuarioTabP
         description: "La nueva contraseña ha sido establecida",
       });
       
-      // Clear the field after successful reset
       setNewPassword("");
     } catch (error: any) {
       toast({
         title: "Error al resetear contraseña",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveAccess = async () => {
+    if (!cliente.user_id) return;
+    
+    setLoading(true);
+    try {
+      // Delete the user using admin API
+      const { data, error } = await supabase.functions.invoke("delete-user", {
+        body: { userId: cliente.user_id },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      // Clear the user_id from the client
+      const { error: updateError } = await supabase
+        .from("clientes")
+        .update({ user_id: null })
+        .eq("id", cliente.id);
+
+      if (updateError) throw updateError;
+
+      toast({
+        title: "Acceso eliminado",
+        description: `Se quitó el acceso al portal para ${cliente.nombre}`,
+      });
+      
+      onUserCreated?.();
+    } catch (error: any) {
+      toast({
+        title: "Error al quitar acceso",
         description: error.message,
         variant: "destructive",
       });
@@ -203,6 +251,42 @@ export function ClienteUsuarioTab({ cliente, onUserCreated }: ClienteUsuarioTabP
               {copied ? "Copiado" : "Copiar credenciales"}
             </Button>
           )}
+        </div>
+
+        {/* Quitar Acceso */}
+        <div className="space-y-4 pt-4 border-t">
+          <h4 className="font-medium flex items-center gap-2 text-destructive">
+            <UserMinus className="h-4 w-4" />
+            Quitar Acceso al Portal
+          </h4>
+          <p className="text-sm text-muted-foreground">
+            Elimina permanentemente las credenciales de acceso del cliente. Ya no podrá iniciar sesión.
+          </p>
+          
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" className="w-full" disabled={loading}>
+                <UserMinus className="h-4 w-4 mr-2" />
+                Quitar Acceso
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>¿Quitar acceso al portal?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Esta acción eliminará las credenciales de acceso de <strong>{cliente.nombre}</strong>.
+                  El cliente ya no podrá iniciar sesión en el portal. Podrás crear nuevas credenciales después si lo necesitas.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleRemoveAccess} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Sí, quitar acceso
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
     );

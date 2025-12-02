@@ -433,9 +433,15 @@ export default function ProcesarPedidoDialog({
 
                   let cantidadFinal = prod.cantidad;
                   let notasFinal = prod.notas;
+                  let unidadFinal = unidadCatalogo;
 
-                  // Si el producto NO se vende por kg pero el cliente mandó kilos y tenemos kg_por_unidad → convertir
-                  if (
+                  // NUEVA REGLA: si el producto es precio_por_kilo, SIEMPRE trabajamos en KILOS
+                  if (matchedByCotizacion.precio_por_kilo) {
+                    const kilos = typeof kilosDelCorreo === 'number' ? kilosDelCorreo : prod.cantidad;
+                    cantidadFinal = kilos;
+                    unidadFinal = 'kg';
+                    notasFinal = notasFinal || undefined;
+                  } else if (
                     unidadVentaLower !== 'kg' &&
                     unidadVentaLower !== 'kilo' &&
                     unidadVentaLower !== 'kilos' &&
@@ -443,25 +449,28 @@ export default function ProcesarPedidoDialog({
                     kgPorUnidad > 0 &&
                     typeof kilosDelCorreo === 'number'
                   ) {
+                    // Producto NO es por kilo: convertir kilos del correo a unidades comerciales
                     const unidades = kilosDelCorreo / kgPorUnidad;
                     const unidadesRedondeadas = Math.round(unidades); // Redondear a entero
                     cantidadFinal = unidadesRedondeadas;
                     notasFinal = `${kilosDelCorreo} kg`;
                   }
 
-                  console.log('CONVERSIÓN FINAL BY-ID (RESPETANDO CATÁLOGO)', {
+                  console.log('CONVERSIÓN FINAL BY-ID (RESPETANDO CATÁLOGO/PRECIO_KG)', {
                     producto: matchedByCotizacion.nombre,
                     cantidad_original_ai: prod.cantidad,
                     kilos_del_correo: kilosDelCorreo,
                     cantidad_final: cantidadFinal,
                     unidad_catalogo: unidadCatalogo,
+                    unidad_final: unidadFinal,
                     kg_por_unidad: kgPorUnidad,
+                    precio_por_kilo: matchedByCotizacion.precio_por_kilo,
                   });
                   
                   return {
                     ...prod,
                     cantidad: cantidadFinal,
-                    unidad: unidadCatalogo, // SIEMPRE usar unidad del catálogo
+                    unidad: unidadFinal,
                     unidad_comercial: unidadCatalogo,
                     producto_id: matchedByCotizacion.id,
                     precio_unitario: precioFinal,
@@ -520,7 +529,7 @@ export default function ProcesarPedidoDialog({
                 }
               }
               
-              // REGLA: la unidad SIEMPRE viene del catálogo.
+              // REGLA: la unidad SIEMPRE viene del catálogo, pero si es precio_por_kilo trabajamos en kilos
               const unidadCatalogo = matched?.unidad;
               const kgPorUnidad = matched?.kg_por_unidad;
               const unidadVentaLower = (unidadCatalogo || '').toLowerCase();
@@ -534,8 +543,14 @@ export default function ProcesarPedidoDialog({
 
               let cantidadFinal = prod.cantidad;
               let notasFinal = prod.notas;
+              let unidadFinal = unidadCatalogo;
 
-              if (
+              if (matched?.precio_por_kilo) {
+                const kilos = typeof kilosDelCorreo === 'number' ? kilosDelCorreo : prod.cantidad;
+                cantidadFinal = kilos;
+                unidadFinal = 'kg';
+                notasFinal = notasFinal || undefined;
+              } else if (
                 unidadVentaLower !== 'kg' &&
                 unidadVentaLower !== 'kilo' &&
                 unidadVentaLower !== 'kilos' &&
@@ -549,19 +564,21 @@ export default function ProcesarPedidoDialog({
                 notasFinal = `${kilosDelCorreo} kg`;
               }
 
-              console.log('CONVERSIÓN FINAL BY-NAME (RESPETANDO CATÁLOGO)', {
+              console.log('CONVERSIÓN FINAL BY-NAME (RESPETANDO CATÁLOGO/PRECIO_KG)', {
                 producto: matched?.nombre,
                 cantidad_original_ai: prod.cantidad,
                 kilos_del_correo: kilosDelCorreo,
                 cantidad_final: cantidadFinal,
                 unidad_catalogo: unidadCatalogo,
+                unidad_final: unidadFinal,
                 kg_por_unidad: kgPorUnidad,
+                precio_por_kilo: matched?.precio_por_kilo,
               });
 
               return {
                 ...prod,
                 cantidad: cantidadFinal,
-                unidad: unidadCatalogo, // SIEMPRE usar unidad del catálogo
+                unidad: unidadFinal,
                 unidad_comercial: unidadCatalogo,
                 producto_id: matched?.id,
                 precio_unitario: precioCotizacionPorNombre || matched?.precio_venta || prod.precio_sugerido,
@@ -626,9 +643,15 @@ export default function ProcesarPedidoDialog({
         for (const prod of validProducts) {
           const cantidadEntera = Math.round(prod.cantidad);
           let lineSubtotal: number;
-          if (prod.precio_por_kilo && prod.kg_por_unidad) {
+
+          // NUEVA REGLA GLOBAL: si es precio_por_kilo, la cantidad SIEMPRE son KILOS
+          if (prod.precio_por_kilo) {
+            lineSubtotal = cantidadEntera * (prod.precio_unitario || 0);
+          } else if (prod.kg_por_unidad) {
+            // Productos por bulto/caja: cantidad (bultos) × kg_por_unidad × precio_por_kg
             lineSubtotal = cantidadEntera * prod.kg_por_unidad * (prod.precio_unitario || 0);
           } else {
+            // Productos normales por pieza/caja
             lineSubtotal = cantidadEntera * (prod.precio_unitario || 0);
           }
           subtotal += lineSubtotal;
@@ -680,7 +703,9 @@ export default function ProcesarPedidoDialog({
               .maybeSingle();
 
             let lineSubtotal: number;
-            if (prod.precio_por_kilo && prod.kg_por_unidad) {
+            if (prod.precio_por_kilo) {
+              lineSubtotal = cantidadEntera * (prod.precio_unitario || 0);
+            } else if (prod.kg_por_unidad) {
               lineSubtotal = cantidadEntera * prod.kg_por_unidad * (prod.precio_unitario || 0);
             } else {
               lineSubtotal = cantidadEntera * (prod.precio_unitario || 0);
@@ -732,7 +757,9 @@ export default function ProcesarPedidoDialog({
           const detalles = validProducts.map(p => {
             const cantidadEntera = Math.round(p.cantidad);
             let lineSubtotal: number;
-            if (p.precio_por_kilo && p.kg_por_unidad) {
+            if (p.precio_por_kilo) {
+              lineSubtotal = cantidadEntera * (p.precio_unitario || 0);
+            } else if (p.kg_por_unidad) {
               lineSubtotal = cantidadEntera * p.kg_por_unidad * (p.precio_unitario || 0);
             } else {
               lineSubtotal = cantidadEntera * (p.precio_unitario || 0);
@@ -821,11 +848,14 @@ export default function ProcesarPedidoDialog({
           const cantidadEntera = Math.round(p.cantidad);
           // Calcular subtotal bruto según tipo de precio
           let lineSubtotal: number;
-          if (p.precio_por_kilo && p.kg_por_unidad) {
-            // Producto por kg: cantidad (bultos) × kg por unidad × precio por kg
+          if (p.precio_por_kilo) {
+            // Productos precio por kilo: cantidad SIEMPRE en kilos
+            lineSubtotal = cantidadEntera * (p.precio_unitario || 0);
+          } else if (p.kg_por_unidad) {
+            // Productos por bulto/caja con kg_por_unidad definido
             lineSubtotal = cantidadEntera * p.kg_por_unidad * (p.precio_unitario || 0);
           } else {
-            // Producto por unidad: cantidad × precio unitario
+            // Productos normales por pieza/caja
             lineSubtotal = cantidadEntera * (p.precio_unitario || 0);
           }
 
@@ -861,7 +891,9 @@ export default function ProcesarPedidoDialog({
           for (const newProd of validProducts) {
             const cantidadEntera = Math.round(newProd.cantidad);
             let lineSubtotal: number;
-            if (newProd.precio_por_kilo && newProd.kg_por_unidad) {
+            if (newProd.precio_por_kilo) {
+              lineSubtotal = cantidadEntera * (newProd.precio_unitario || 0);
+            } else if (newProd.kg_por_unidad) {
               lineSubtotal = cantidadEntera * newProd.kg_por_unidad * (newProd.precio_unitario || 0);
             } else {
               lineSubtotal = cantidadEntera * (newProd.precio_unitario || 0);
@@ -1064,8 +1096,8 @@ export default function ProcesarPedidoDialog({
   };
  
   const getDisplayUnit = (prod: ParsedProduct): string => {
-    // Si el precio es por kilo, el campo de cantidad siempre se interpreta como kilos
-    if (prod.precio_por_kilo) return "/kg";
+    // Si el precio es por kilo, siempre mostramos kilos
+    if (prod.precio_por_kilo) return "kg";
 
     const producto = productos?.find((p) => p.id === prod.producto_id);
     const baseUnit = producto?.unidad || prod.unidad || "";

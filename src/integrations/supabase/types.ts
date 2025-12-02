@@ -179,61 +179,100 @@ export type Database = {
         Row: {
           activo: boolean | null
           codigo: string
+          codigo_postal: string | null
           created_at: string
+          csf_archivo_url: string | null
           direccion: string | null
           email: string | null
+          entre_calle: string | null
           id: string
           limite_credito: number | null
           nombre: string
+          nombre_colonia: string | null
+          nombre_entidad_federativa: string | null
+          nombre_localidad: string | null
+          nombre_municipio: string | null
+          nombre_vialidad: string | null
+          numero_exterior: string | null
+          numero_interior: string | null
           preferencia_facturacion: Database["public"]["Enums"]["preferencia_facturacion"]
           razon_social: string | null
+          regimen_capital: string | null
           rfc: string | null
           saldo_pendiente: number | null
           telefono: string | null
           termino_credito: Database["public"]["Enums"]["credit_term"]
+          tipo_vialidad: string | null
           updated_at: string
           user_id: string | null
           vendedor_asignado: string | null
+          y_calle: string | null
           zona_id: string | null
         }
         Insert: {
           activo?: boolean | null
           codigo: string
+          codigo_postal?: string | null
           created_at?: string
+          csf_archivo_url?: string | null
           direccion?: string | null
           email?: string | null
+          entre_calle?: string | null
           id?: string
           limite_credito?: number | null
           nombre: string
+          nombre_colonia?: string | null
+          nombre_entidad_federativa?: string | null
+          nombre_localidad?: string | null
+          nombre_municipio?: string | null
+          nombre_vialidad?: string | null
+          numero_exterior?: string | null
+          numero_interior?: string | null
           preferencia_facturacion?: Database["public"]["Enums"]["preferencia_facturacion"]
           razon_social?: string | null
+          regimen_capital?: string | null
           rfc?: string | null
           saldo_pendiente?: number | null
           telefono?: string | null
           termino_credito?: Database["public"]["Enums"]["credit_term"]
+          tipo_vialidad?: string | null
           updated_at?: string
           user_id?: string | null
           vendedor_asignado?: string | null
+          y_calle?: string | null
           zona_id?: string | null
         }
         Update: {
           activo?: boolean | null
           codigo?: string
+          codigo_postal?: string | null
           created_at?: string
+          csf_archivo_url?: string | null
           direccion?: string | null
           email?: string | null
+          entre_calle?: string | null
           id?: string
           limite_credito?: number | null
           nombre?: string
+          nombre_colonia?: string | null
+          nombre_entidad_federativa?: string | null
+          nombre_localidad?: string | null
+          nombre_municipio?: string | null
+          nombre_vialidad?: string | null
+          numero_exterior?: string | null
+          numero_interior?: string | null
           preferencia_facturacion?: Database["public"]["Enums"]["preferencia_facturacion"]
           razon_social?: string | null
+          regimen_capital?: string | null
           rfc?: string | null
           saldo_pendiente?: number | null
           telefono?: string | null
           termino_credito?: Database["public"]["Enums"]["credit_term"]
+          tipo_vialidad?: string | null
           updated_at?: string
           user_id?: string | null
           vendedor_asignado?: string | null
+          y_calle?: string | null
           zona_id?: string | null
         }
         Relationships: [

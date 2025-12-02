@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Edit, Trash2, MapPin, Truck, X, Mail, BarChart3 } from "lucide-react";
+import { Plus, Search, Edit, Trash2, MapPin, Truck, X, Mail, BarChart3, Upload, FileText, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import ClienteSucursalesDialog from "@/components/clientes/ClienteSucursalesDialog";
 import GoogleMapsAddressAutocomplete from "@/components/GoogleMapsAddressAutocomplete";
@@ -90,6 +90,19 @@ const Clientes = () => {
     limite_credito: string;
     zona_id: string;
     preferencia_facturacion: "siempre_factura" | "siempre_remision" | "variable";
+    regimen_capital: string;
+    codigo_postal: string;
+    tipo_vialidad: string;
+    nombre_vialidad: string;
+    numero_exterior: string;
+    numero_interior: string;
+    nombre_colonia: string;
+    nombre_localidad: string;
+    nombre_municipio: string;
+    nombre_entidad_federativa: string;
+    entre_calle: string;
+    y_calle: string;
+    csf_archivo_url: string;
   }>({
     codigo: "",
     nombre: "",
@@ -102,7 +115,24 @@ const Clientes = () => {
     limite_credito: "",
     zona_id: "",
     preferencia_facturacion: "variable",
+    regimen_capital: "",
+    codigo_postal: "",
+    tipo_vialidad: "",
+    nombre_vialidad: "",
+    numero_exterior: "",
+    numero_interior: "",
+    nombre_colonia: "",
+    nombre_localidad: "",
+    nombre_municipio: "",
+    nombre_entidad_federativa: "",
+    entre_calle: "",
+    y_calle: "",
+    csf_archivo_url: "",
   });
+  
+  // CSF file upload state
+  const [csfFile, setCsfFile] = useState<File | null>(null);
+  const [uploadingCsf, setUploadingCsf] = useState(false);
 
   // Delivery options state
   const [entregarMismaDireccion, setEntregarMismaDireccion] = useState(true);
@@ -261,6 +291,24 @@ const Clientes = () => {
     e.preventDefault();
     
     try {
+      let csfUrl = formData.csf_archivo_url;
+      
+      // Upload CSF file if selected
+      if (csfFile) {
+        setUploadingCsf(true);
+        const fileExt = csfFile.name.split('.').pop();
+        const fileName = `${formData.rfc || formData.codigo}_${Date.now()}.${fileExt}`;
+        const filePath = `${fileName}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('clientes-csf')
+          .upload(filePath, csfFile);
+        
+        if (uploadError) throw uploadError;
+        csfUrl = filePath;
+        setUploadingCsf(false);
+      }
+      
       const clientData = {
         codigo: formData.codigo,
         nombre: formData.nombre,
@@ -273,6 +321,19 @@ const Clientes = () => {
         limite_credito: parseFloat(formData.limite_credito || "0"),
         zona_id: formData.zona_id || null,
         preferencia_facturacion: formData.preferencia_facturacion,
+        regimen_capital: formData.regimen_capital || null,
+        codigo_postal: formData.codigo_postal || null,
+        tipo_vialidad: formData.tipo_vialidad || null,
+        nombre_vialidad: formData.nombre_vialidad || null,
+        numero_exterior: formData.numero_exterior || null,
+        numero_interior: formData.numero_interior || null,
+        nombre_colonia: formData.nombre_colonia || null,
+        nombre_localidad: formData.nombre_localidad || null,
+        nombre_municipio: formData.nombre_municipio || null,
+        nombre_entidad_federativa: formData.nombre_entidad_federativa || null,
+        entre_calle: formData.entre_calle || null,
+        y_calle: formData.y_calle || null,
+        csf_archivo_url: csfUrl || null,
       };
 
       let clienteId: string;
@@ -439,9 +500,23 @@ const Clientes = () => {
       limite_credito: client.limite_credito.toString(),
       zona_id: client.zona_id || "",
       preferencia_facturacion: client.preferencia_facturacion || "variable",
+      regimen_capital: client.regimen_capital || "",
+      codigo_postal: client.codigo_postal || "",
+      tipo_vialidad: client.tipo_vialidad || "",
+      nombre_vialidad: client.nombre_vialidad || "",
+      numero_exterior: client.numero_exterior || "",
+      numero_interior: client.numero_interior || "",
+      nombre_colonia: client.nombre_colonia || "",
+      nombre_localidad: client.nombre_localidad || "",
+      nombre_municipio: client.nombre_municipio || "",
+      nombre_entidad_federativa: client.nombre_entidad_federativa || "",
+      entre_calle: client.entre_calle || "",
+      y_calle: client.y_calle || "",
+      csf_archivo_url: client.csf_archivo_url || "",
     });
     setEntregarMismaDireccion(true);
     setSucursales([]);
+    setCsfFile(null);
     await loadCorreosCliente(client.id);
     setDialogOpen(true);
   };
@@ -497,6 +572,19 @@ const Clientes = () => {
       limite_credito: "",
       zona_id: "",
       preferencia_facturacion: "variable",
+      regimen_capital: "",
+      codigo_postal: "",
+      tipo_vialidad: "",
+      nombre_vialidad: "",
+      numero_exterior: "",
+      numero_interior: "",
+      nombre_colonia: "",
+      nombre_localidad: "",
+      nombre_municipio: "",
+      nombre_entidad_federativa: "",
+      entre_calle: "",
+      y_calle: "",
+      csf_archivo_url: "",
     });
     setEntregarMismaDireccion(true);
     setSucursales([]);
@@ -504,6 +592,7 @@ const Clientes = () => {
     setOriginalCorreoIds([]);
     setNewCorreoEmail("");
     setNewCorreoNombre("");
+    setCsfFile(null);
   };
 
   const filteredClientes = clientes.filter(
@@ -573,9 +662,9 @@ const Clientes = () => {
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="razon_social">Razón Social</Label>
+                      <Label htmlFor="razon_social">Denominación/Razón Social</Label>
                       <Input
                         id="razon_social"
                         value={formData.razon_social}
@@ -587,19 +676,251 @@ const Clientes = () => {
                       <Input
                         id="rfc"
                         value={formData.rfc}
-                        onChange={(e) => setFormData({ ...formData, rfc: e.target.value })}
+                        onChange={(e) => setFormData({ ...formData, rfc: e.target.value.toUpperCase() })}
+                        placeholder="PDI000309CR3"
                       />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="direccion">Dirección Fiscal</Label>
+                    <Label htmlFor="regimen_capital">Régimen Capital</Label>
+                    <Select
+                      value={formData.regimen_capital}
+                      onValueChange={(value) => setFormData({ ...formData, regimen_capital: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar régimen" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="SOCIEDAD ANONIMA DE CAPITAL VARIABLE">S.A. de C.V.</SelectItem>
+                        <SelectItem value="SOCIEDAD DE RESPONSABILIDAD LIMITADA">S. de R.L.</SelectItem>
+                        <SelectItem value="PERSONA FISICA CON ACTIVIDAD EMPRESARIAL">Persona Física con Actividad Empresarial</SelectItem>
+                        <SelectItem value="PERSONA FISICA">Persona Física</SelectItem>
+                        <SelectItem value="SOCIEDAD CIVIL">S.C.</SelectItem>
+                        <SelectItem value="ASOCIACION CIVIL">A.C.</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Dirección Fiscal Detallada (CSF) */}
+                <div className="space-y-4">
+                  <h4 className="font-medium text-lg border-b pb-2 flex items-center gap-2">
+                    <MapPin className="h-5 w-5" />
+                    Domicilio Fiscal (según CSF)
+                  </h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="codigo_postal">Código Postal</Label>
+                      <Input
+                        id="codigo_postal"
+                        value={formData.codigo_postal}
+                        onChange={(e) => setFormData({ ...formData, codigo_postal: e.target.value })}
+                        placeholder="01000"
+                        maxLength={5}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="tipo_vialidad">Tipo de Vialidad</Label>
+                      <Select
+                        value={formData.tipo_vialidad}
+                        onValueChange={(value) => setFormData({ ...formData, tipo_vialidad: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="CALLE">Calle</SelectItem>
+                          <SelectItem value="AVENIDA">Avenida</SelectItem>
+                          <SelectItem value="BOULEVARD">Boulevard</SelectItem>
+                          <SelectItem value="CALZADA">Calzada</SelectItem>
+                          <SelectItem value="CERRADA">Cerrada</SelectItem>
+                          <SelectItem value="PRIVADA">Privada</SelectItem>
+                          <SelectItem value="CARRETERA">Carretera</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="nombre_vialidad">Nombre de Vialidad</Label>
+                      <Input
+                        id="nombre_vialidad"
+                        value={formData.nombre_vialidad}
+                        onChange={(e) => setFormData({ ...formData, nombre_vialidad: e.target.value })}
+                        placeholder="DESIERTO DE LOS LEONES"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-4 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="numero_exterior">Número Exterior</Label>
+                      <Input
+                        id="numero_exterior"
+                        value={formData.numero_exterior}
+                        onChange={(e) => setFormData({ ...formData, numero_exterior: e.target.value })}
+                        placeholder="67"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="numero_interior">Número Interior</Label>
+                      <Input
+                        id="numero_interior"
+                        value={formData.numero_interior}
+                        onChange={(e) => setFormData({ ...formData, numero_interior: e.target.value })}
+                        placeholder="(opcional)"
+                      />
+                    </div>
+                    <div className="col-span-2 space-y-2">
+                      <Label htmlFor="nombre_colonia">Nombre de la Colonia</Label>
+                      <Input
+                        id="nombre_colonia"
+                        value={formData.nombre_colonia}
+                        onChange={(e) => setFormData({ ...formData, nombre_colonia: e.target.value })}
+                        placeholder="SAN ANGEL"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="nombre_localidad">Nombre de Localidad</Label>
+                      <Input
+                        id="nombre_localidad"
+                        value={formData.nombre_localidad}
+                        onChange={(e) => setFormData({ ...formData, nombre_localidad: e.target.value })}
+                        placeholder="ALVARO OBREGON"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="nombre_municipio">Municipio/Demarcación Territorial</Label>
+                      <Input
+                        id="nombre_municipio"
+                        value={formData.nombre_municipio}
+                        onChange={(e) => setFormData({ ...formData, nombre_municipio: e.target.value })}
+                        placeholder="ALVARO OBREGON"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="nombre_entidad_federativa">Entidad Federativa</Label>
+                    <Select
+                      value={formData.nombre_entidad_federativa}
+                      onValueChange={(value) => setFormData({ ...formData, nombre_entidad_federativa: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar estado" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="AGUASCALIENTES">Aguascalientes</SelectItem>
+                        <SelectItem value="BAJA CALIFORNIA">Baja California</SelectItem>
+                        <SelectItem value="BAJA CALIFORNIA SUR">Baja California Sur</SelectItem>
+                        <SelectItem value="CAMPECHE">Campeche</SelectItem>
+                        <SelectItem value="CHIAPAS">Chiapas</SelectItem>
+                        <SelectItem value="CHIHUAHUA">Chihuahua</SelectItem>
+                        <SelectItem value="CIUDAD DE MEXICO">Ciudad de México</SelectItem>
+                        <SelectItem value="COAHUILA">Coahuila</SelectItem>
+                        <SelectItem value="COLIMA">Colima</SelectItem>
+                        <SelectItem value="DURANGO">Durango</SelectItem>
+                        <SelectItem value="GUANAJUATO">Guanajuato</SelectItem>
+                        <SelectItem value="GUERRERO">Guerrero</SelectItem>
+                        <SelectItem value="HIDALGO">Hidalgo</SelectItem>
+                        <SelectItem value="JALISCO">Jalisco</SelectItem>
+                        <SelectItem value="MEXICO">Estado de México</SelectItem>
+                        <SelectItem value="MICHOACAN">Michoacán</SelectItem>
+                        <SelectItem value="MORELOS">Morelos</SelectItem>
+                        <SelectItem value="NAYARIT">Nayarit</SelectItem>
+                        <SelectItem value="NUEVO LEON">Nuevo León</SelectItem>
+                        <SelectItem value="OAXACA">Oaxaca</SelectItem>
+                        <SelectItem value="PUEBLA">Puebla</SelectItem>
+                        <SelectItem value="QUERETARO">Querétaro</SelectItem>
+                        <SelectItem value="QUINTANA ROO">Quintana Roo</SelectItem>
+                        <SelectItem value="SAN LUIS POTOSI">San Luis Potosí</SelectItem>
+                        <SelectItem value="SINALOA">Sinaloa</SelectItem>
+                        <SelectItem value="SONORA">Sonora</SelectItem>
+                        <SelectItem value="TABASCO">Tabasco</SelectItem>
+                        <SelectItem value="TAMAULIPAS">Tamaulipas</SelectItem>
+                        <SelectItem value="TLAXCALA">Tlaxcala</SelectItem>
+                        <SelectItem value="VERACRUZ">Veracruz</SelectItem>
+                        <SelectItem value="YUCATAN">Yucatán</SelectItem>
+                        <SelectItem value="ZACATECAS">Zacatecas</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="entre_calle">Entre Calle</Label>
+                      <Input
+                        id="entre_calle"
+                        value={formData.entre_calle}
+                        onChange={(e) => setFormData({ ...formData, entre_calle: e.target.value })}
+                        placeholder="AV INSURGENTES"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="y_calle">Y Calle</Label>
+                      <Input
+                        id="y_calle"
+                        value={formData.y_calle}
+                        onChange={(e) => setFormData({ ...formData, y_calle: e.target.value })}
+                        placeholder="AV REVOLUCION"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="direccion">Dirección Completa (referencia rápida)</Label>
                     <Input
                       id="direccion"
                       value={formData.direccion}
                       onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
-                      placeholder="Dirección fiscal del cliente"
+                      placeholder="Se autogenera con los campos anteriores"
                     />
                   </div>
+                </div>
+
+                {/* Archivo CSF */}
+                <div className="space-y-4">
+                  <h4 className="font-medium text-lg border-b pb-2 flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    Constancia de Situación Fiscal (PDF)
+                  </h4>
+                  <div className="space-y-3">
+                    {formData.csf_archivo_url && (
+                      <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-md">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm flex-1">CSF cargada</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={async () => {
+                            const { data } = await supabase.storage
+                              .from('clientes-csf')
+                              .createSignedUrl(formData.csf_archivo_url, 3600);
+                            if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+                          }}
+                        >
+                          <ExternalLink className="h-4 w-4 mr-1" />
+                          Ver
+                        </Button>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="file"
+                        accept=".pdf"
+                        onChange={(e) => setCsfFile(e.target.files?.[0] || null)}
+                        className="flex-1"
+                      />
+                      {csfFile && (
+                        <Badge variant="secondary">{csfFile.name}</Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Sube el PDF de la Constancia de Situación Fiscal del SAT
+                    </p>
+                  </div>
+                </div>
+
+                {/* Datos Comerciales */}
+                <div className="space-y-4">
+                  <h4 className="font-medium text-lg border-b pb-2">Datos Comerciales</h4>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="telefono">Teléfono</Label>

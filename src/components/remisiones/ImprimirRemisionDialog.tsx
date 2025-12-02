@@ -76,8 +76,21 @@ export const ImprimirRemisionDialog = ({ open, onOpenChange, datos }: ImprimirRe
       const imgY = 5;
 
       pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
-      pdf.save(`Remision_${datos.folio}.pdf`);
-      toast.success('PDF descargado correctamente');
+      
+      // Detectar si es móvil para usar método compatible
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      
+      if (isMobile) {
+        // En móvil, abrir en nueva ventana para que el usuario pueda guardar
+        const pdfBlob = pdf.output('blob');
+        const blobUrl = URL.createObjectURL(pdfBlob);
+        window.open(blobUrl, '_blank');
+        toast.success('PDF abierto - usa el menú del navegador para guardar');
+      } else {
+        // En escritorio, descarga directa
+        pdf.save(`Remision_${datos.folio}.pdf`);
+        toast.success('PDF descargado correctamente');
+      }
     } catch (error) {
       console.error('Error generating PDF:', error);
       toast.error('Error al generar el PDF');

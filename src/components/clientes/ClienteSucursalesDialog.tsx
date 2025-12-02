@@ -150,10 +150,36 @@ const ClienteSucursalesDialog = ({
     if (!cliente) return;
 
     try {
+      // Verificar si ya existe una sucursal con el mismo nombre
+      const { data: existingSucursales, error: checkError } = await supabase
+        .from("cliente_sucursales")
+        .select("id, nombre")
+        .eq("cliente_id", cliente.id)
+        .ilike("nombre", formData.nombre.trim())
+        .eq("activo", true);
+
+      if (checkError) throw checkError;
+
+      // Si encontramos una sucursal con el mismo nombre y no estamos editando esa misma sucursal
+      if (existingSucursales && existingSucursales.length > 0) {
+        const isDuplicate = editingSucursal 
+          ? existingSucursales.some(s => s.id !== editingSucursal.id)
+          : true;
+
+        if (isDuplicate) {
+          toast({
+            title: "❌ Nombre duplicado",
+            description: `Ya existe una sucursal con el nombre "${formData.nombre}" para este cliente`,
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
       const sucursalData = {
         cliente_id: cliente.id,
-        nombre: formData.nombre,
-        codigo_sucursal: formData.codigo_sucursal || null,
+        nombre: formData.nombre.trim(),
+        codigo_sucursal: formData.codigo_sucursal?.trim() || null,
         direccion: formData.direccion || null,
         zona_id: formData.zona_id || null,
         telefono: formData.telefono || null,

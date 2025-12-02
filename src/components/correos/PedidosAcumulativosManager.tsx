@@ -1,23 +1,27 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Package, MapPin, Calendar, Trash2, Check, CheckSquare, Square } from "lucide-react";
+import { Loader2, Package, MapPin, Calendar, Trash2, Check, CheckSquare, Square, AlertTriangle, Edit2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { calcularSubtotal, calcularDesgloseImpuestos as calcularDesgloseImpuestosNuevo, redondear } from "@/lib/calculos";
 import { formatCurrency } from "@/lib/utils";
 
 export function PedidosAcumulativosManager() {
   const [selectedPedido, setSelectedPedido] = useState<string | null>(null);
   const [selectedForBatch, setSelectedForBatch] = useState<Set<string>>(new Set());
+  const [editingDetalle, setEditingDetalle] = useState<{ id: string; cantidad: number } | null>(null);
   const queryClient = useQueryClient();
 
   // Fetch pedidos acumulativos en borrador
@@ -50,8 +54,8 @@ export function PedidosAcumulativosManager() {
     },
   });
 
-  // Fetch detalles del pedido seleccionado
-  const { data: detalles } = useQuery({
+  // Fetch detalles del pedido seleccionado con info de producto completa
+  const { data: detalles, refetch: refetchDetalles } = useQuery({
     queryKey: ["pedidos-acumulativos-detalles", selectedPedido],
     enabled: !!selectedPedido,
     queryFn: async () => {
@@ -59,7 +63,7 @@ export function PedidosAcumulativosManager() {
         .from("pedidos_acumulativos_detalles")
         .select(`
           *,
-          productos:producto_id(codigo, nombre, unidad)
+          productos:producto_id(codigo, nombre, unidad, precio_por_kilo, kg_por_unidad, aplica_iva, aplica_ieps)
         `)
         .eq("pedido_acumulativo_id", selectedPedido);
 
@@ -67,6 +71,56 @@ export function PedidosAcumulativosManager() {
       return data;
     },
   });
+
+  // Detectar pedidos con piloncillo
+  const pedidosConPiloncillo = useMemo(() => {
+    if (!pedidosAcumulativos) return [];
+    return pedidosAcumulativos.filter((pedido: any) => {
+      // Need to check if any detail has piloncillo - for now we mark all and check details when viewing
+      return true; // Will be filtered more accurately when we have all details
+    });
+  }, [pedidosAcumulativos]);
+
+  // Fetch all details for piloncillo detection
+  const { data: allDetallesForPiloncillo } = useQuery({
+    queryKey: ["pedidos-acumulativos-all-detalles-piloncillo"],
+    enabled: !!pedidosAcumulativos && pedidosAcumulativos.length > 0,
+    queryFn: async () => {
+      const pedidoIds = pedidosAcumulativos?.map((p: any) => p.id) || [];
+      if (pedidoIds.length === 0) return [];
+      
+      const { data, error } = await supabase
+        .from("pedidos_acumulativos_detalles")
+        .select(`
+          pedido_acumulativo_id,
+          productos:producto_id(nombre)
+        `)
+        .in("pedido_acumulativo_id", pedidoIds);
+
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Contar pedidos que tienen piloncillo
+  const pedidosConPiloncilloCount = useMemo(() => {
+    if (!allDetallesForPiloncillo) return 0;
+    const pedidoIdsConPiloncillo = new Set<string>();
+    allDetallesForPiloncillo.forEach((det: any) => {
+      if (det.productos?.nombre?.toLowerCase().includes('piloncillo')) {
+        pedidoIdsConPiloncillo.add(det.pedido_acumulativo_id);
+      }
+    });
+    return pedidoIdsConPiloncillo.size;
+  }, [allDetallesForPiloncillo]);
+
+  // Detectar si el detalle actual tiene piloncillo
+  const detallesConPiloncillo = useMemo(() => {
+    if (!detalles) return [];
+    return detalles.filter((det: any) => 
+      det.productos?.nombre?.toLowerCase().includes('piloncillo')
+    );
+  }, [detalles]);
 
   // Mutation para recalcular todos los pedidos acumulativos
   const recalcularMutation = useMutation({
@@ -434,6 +488,76 @@ export function PedidosAcumulativosManager() {
     },
   });
 
+  // Mutation para actualizar cantidad de un detalle (piloncillo)
+  const updateDetalleMutation = useMutation({
+    mutationFn: async ({ detalleId, nuevaCantidad }: { detalleId: string; nuevaCantidad: number }) => {
+      // Obtener detalle actual para recalcular
+      const { data: detalle, error: fetchError } = await supabase
+        .from("pedidos_acumulativos_detalles")
+        .select(`*, productos:producto_id(aplica_iva, aplica_ieps, nombre)`)
+        .eq("id", detalleId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const nuevoSubtotal = nuevaCantidad * detalle.precio_unitario;
+
+      // Actualizar detalle
+      const { error: updateError } = await supabase
+        .from("pedidos_acumulativos_detalles")
+        .update({ cantidad: nuevaCantidad, subtotal: nuevoSubtotal })
+        .eq("id", detalleId);
+
+      if (updateError) throw updateError;
+
+      // Recalcular totales del pedido
+      const { data: todosDetalles, error: detallesError } = await supabase
+        .from("pedidos_acumulativos_detalles")
+        .select(`*, productos:producto_id(aplica_iva, aplica_ieps, nombre)`)
+        .eq("pedido_acumulativo_id", detalle.pedido_acumulativo_id);
+
+      if (detallesError) throw detallesError;
+
+      let subtotalTotal = 0;
+      let ivaTotal = 0;
+      let iepsTotal = 0;
+
+      for (const det of todosDetalles) {
+        const desglose = calcularDesgloseImpuestosNuevo({
+          precio_con_impuestos: det.subtotal,
+          aplica_iva: det.productos?.aplica_iva || false,
+          aplica_ieps: det.productos?.aplica_ieps || false,
+          nombre_producto: det.productos?.nombre || ''
+        });
+        subtotalTotal += desglose.base;
+        ivaTotal += desglose.iva;
+        iepsTotal += desglose.ieps;
+      }
+
+      const { error: pedidoError } = await supabase
+        .from("pedidos_acumulativos")
+        .update({
+          subtotal: redondear(subtotalTotal),
+          impuestos: redondear(ivaTotal + iepsTotal),
+          total: redondear(subtotalTotal + ivaTotal + iepsTotal)
+        })
+        .eq("id", detalle.pedido_acumulativo_id);
+
+      if (pedidoError) throw pedidoError;
+
+      return { success: true };
+    },
+    onSuccess: () => {
+      toast.success("Peso actualizado correctamente");
+      setEditingDetalle(null);
+      refetchDetalles();
+      queryClient.invalidateQueries({ queryKey: ["pedidos-acumulativos"] });
+    },
+    onError: (error: any) => {
+      toast.error("Error al actualizar: " + error.message);
+    }
+  });
+
   const toggleSelection = (pedidoId: string) => {
     setSelectedForBatch(prev => {
       const newSet = new Set(prev);
@@ -460,6 +584,14 @@ export function PedidosAcumulativosManager() {
       return;
     }
     finalizarMultipleMutation.mutate(Array.from(selectedForBatch));
+  };
+
+  const handleSavePiloncilloWeight = () => {
+    if (!editingDetalle) return;
+    updateDetalleMutation.mutate({
+      detalleId: editingDetalle.id,
+      nuevaCantidad: editingDetalle.cantidad
+    });
   };
 
   if (isLoading) {
@@ -530,6 +662,19 @@ export function PedidosAcumulativosManager() {
         </div>
       </div>
 
+      {/* Alerta de pedidos con piloncillo */}
+      {pedidosConPiloncilloCount > 0 && (
+        <Alert variant="default" className="border-amber-500 bg-amber-50 dark:bg-amber-950/30">
+          <AlertTriangle className="h-4 w-4 text-amber-600" />
+          <AlertTitle className="text-amber-800 dark:text-amber-200">
+            ⚠️ {pedidosConPiloncilloCount} pedido{pedidosConPiloncilloCount > 1 ? 's' : ''} con piloncillo requiere{pedidosConPiloncilloCount > 1 ? 'n' : ''} verificación de peso
+          </AlertTitle>
+          <AlertDescription className="text-amber-700 dark:text-amber-300">
+            Antes de generar los pedidos finales, revisa y ajusta el peso del piloncillo en cada pedido haciendo clic en "Ver detalles".
+          </AlertDescription>
+        </Alert>
+      )}
+
       {!pedidosAcumulativos || pedidosAcumulativos.length === 0 ? (
         <Card>
           <CardContent className="p-8 text-center text-muted-foreground">
@@ -538,114 +683,184 @@ export function PedidosAcumulativosManager() {
         </Card>
       ) : (
         <div className="grid gap-4">
-          {pedidosAcumulativos.map((pedido: any) => (
-            <Card key={pedido.id} className={selectedForBatch.has(pedido.id) ? "border-primary" : ""}>
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div className="flex items-start gap-3 flex-1">
-                    <Checkbox
-                      checked={selectedForBatch.has(pedido.id)}
-                      onCheckedChange={() => toggleSelection(pedido.id)}
-                      className="mt-1"
-                    />
-                    <div>
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <Package className="h-4 w-4" />
-                        {pedido.clientes?.nombre || "Cliente desconocido"}
-                      </CardTitle>
-                    <CardDescription className="flex items-center gap-4 mt-2">
-                      <span className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
-                        {pedido.cliente_sucursales?.nombre || "Sin sucursal"}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {format(new Date(pedido.fecha_entrega), "dd MMM yyyy", { locale: es })}
-                      </span>
-                    </CardDescription>
+          {pedidosAcumulativos.map((pedido: any) => {
+            // Verificar si este pedido tiene piloncillo
+            const tienePiloncillo = allDetallesForPiloncillo?.some(
+              (det: any) => det.pedido_acumulativo_id === pedido.id && 
+                det.productos?.nombre?.toLowerCase().includes('piloncillo')
+            );
+            
+            return (
+              <Card key={pedido.id} className={`${selectedForBatch.has(pedido.id) ? "border-primary" : ""} ${tienePiloncillo ? "border-l-4 border-l-amber-500" : ""}`}>
+                <CardHeader>
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-start gap-3 flex-1">
+                      <Checkbox
+                        checked={selectedForBatch.has(pedido.id)}
+                        onCheckedChange={() => toggleSelection(pedido.id)}
+                        className="mt-1"
+                      />
+                      <div>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <Package className="h-4 w-4" />
+                          {pedido.clientes?.nombre || "Cliente desconocido"}
+                          {tienePiloncillo && (
+                            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 text-xs">
+                              ⚠️ Piloncillo
+                            </Badge>
+                          )}
+                        </CardTitle>
+                      <CardDescription className="flex items-center gap-4 mt-2">
+                        <span className="flex items-center gap-1">
+                          <MapPin className="h-3 w-3" />
+                          {pedido.cliente_sucursales?.nombre || "Sin sucursal"}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {format(new Date(pedido.fecha_entrega), "dd MMM yyyy", { locale: es })}
+                        </span>
+                      </CardDescription>
+                      </div>
+                    </div>
+                    <Badge variant="outline">
+                      {pedido.correos_procesados?.length || 0} correos
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex justify-between items-center">
+                    <div className="text-2xl font-bold">
+                      ${pedido.total?.toFixed(2) || "0.00"}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant={tienePiloncillo ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSelectedPedido(pedido.id)}
+                        className={tienePiloncillo ? "bg-amber-600 hover:bg-amber-700" : ""}
+                      >
+                        {tienePiloncillo ? "⚠️ Verificar peso" : "Ver detalles"}
+                      </Button>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => finalizarMutation.mutate(pedido.id)}
+                        disabled={finalizarMutation.isPending}
+                      >
+                        {finalizarMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Check className="h-4 w-4 mr-1" />
+                        )}
+                        Generar pedido final
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => deleteMutation.mutate(pedido.id)}
+                        disabled={deleteMutation.isPending}
+                      >
+                        {deleteMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </Button>
                     </div>
                   </div>
-                  <Badge variant="outline">
-                    {pedido.correos_procesados?.length || 0} correos
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex justify-between items-center">
-                  <div className="text-2xl font-bold">
-                    ${pedido.total?.toFixed(2) || "0.00"}
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setSelectedPedido(pedido.id)}
-                    >
-                      Ver detalles
-                    </Button>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={() => finalizarMutation.mutate(pedido.id)}
-                      disabled={finalizarMutation.isPending}
-                    >
-                      {finalizarMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Check className="h-4 w-4 mr-1" />
-                      )}
-                      Generar pedido final
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => deleteMutation.mutate(pedido.id)}
-                      disabled={deleteMutation.isPending}
-                    >
-                      {deleteMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
-      {/* Dialog para ver detalles */}
-      <Dialog open={!!selectedPedido} onOpenChange={() => setSelectedPedido(null)}>
+      {/* Dialog para ver detalles con edición de piloncillo */}
+      <Dialog open={!!selectedPedido} onOpenChange={() => { setSelectedPedido(null); setEditingDetalle(null); }}>
         <DialogContent className="max-w-3xl max-h-[80vh]">
           <DialogHeader>
             <DialogTitle>Detalles del Pedido Acumulativo</DialogTitle>
             <DialogDescription>
-              Productos incluidos en este pedido
+              {detallesConPiloncillo.length > 0 
+                ? "⚠️ Este pedido contiene piloncillo. Ajusta el peso antes de generar el pedido final."
+                : "Productos incluidos en este pedido"
+              }
             </DialogDescription>
           </DialogHeader>
-          <ScrollArea className="h-[500px] pr-4">
+          
+          {/* Alerta de piloncillo en el dialog */}
+          {detallesConPiloncillo.length > 0 && (
+            <Alert variant="default" className="border-amber-500 bg-amber-50 dark:bg-amber-950/30">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <AlertDescription className="text-amber-700 dark:text-amber-300">
+                Haz clic en el botón de editar junto al piloncillo para ajustar el peso real de la caja.
+              </AlertDescription>
+            </Alert>
+          )}
+          
+          <ScrollArea className="h-[400px] pr-4">
             {detalles && detalles.length > 0 ? (
               <div className="space-y-2">
-                {detalles.map((detalle: any, idx: number) => (
-                  <div key={detalle.id}>
-                    {idx > 0 && <Separator className="my-2" />}
-                    <div className="flex justify-between items-start p-3 bg-muted/50 rounded-lg">
-                      <div className="flex-1">
-                        <div className="font-medium">
-                          {detalle.productos?.codigo} - {detalle.productos?.nombre}
+                {detalles.map((detalle: any, idx: number) => {
+                  const esPiloncillo = detalle.productos?.nombre?.toLowerCase().includes('piloncillo');
+                  const isEditing = editingDetalle?.id === detalle.id;
+                  
+                  return (
+                    <div key={detalle.id}>
+                      {idx > 0 && <Separator className="my-2" />}
+                      <div className={`flex justify-between items-start p-3 rounded-lg ${esPiloncillo ? 'bg-amber-50 dark:bg-amber-950/30 border border-amber-300' : 'bg-muted/50'}`}>
+                        <div className="flex-1">
+                          <div className="font-medium flex items-center gap-2">
+                            {detalle.productos?.codigo} - {detalle.productos?.nombre}
+                            {esPiloncillo && (
+                              <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-400 text-xs">
+                                ⚠️ Verificar peso
+                              </Badge>
+                            )}
+                          </div>
+                          {isEditing ? (
+                            <div className="flex items-center gap-2 mt-2">
+                              <Label htmlFor="edit-cantidad" className="text-sm">Peso (kg):</Label>
+                              <Input
+                                id="edit-cantidad"
+                                type="number"
+                                step="0.1"
+                                min="0.1"
+                                value={editingDetalle.cantidad}
+                                onChange={(e) => setEditingDetalle({ ...editingDetalle, cantidad: parseFloat(e.target.value) || 0 })}
+                                className="w-24 h-8"
+                              />
+                              <Button size="sm" onClick={handleSavePiloncilloWeight} disabled={updateDetalleMutation.isPending}>
+                                {updateDetalleMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Guardar"}
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => setEditingDetalle(null)}>
+                                Cancelar
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="text-sm text-muted-foreground flex items-center gap-2">
+                              {detalle.cantidad} {detalle.productos?.unidad} × ${detalle.precio_unitario.toFixed(2)}
+                              {esPiloncillo && (
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="h-6 px-2 text-xs border-amber-400 text-amber-700 hover:bg-amber-100"
+                                  onClick={() => setEditingDetalle({ id: detalle.id, cantidad: detalle.cantidad })}
+                                >
+                                  <Edit2 className="h-3 w-3 mr-1" />
+                                  Editar peso
+                                </Button>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        <div className="text-sm text-muted-foreground">
-                          {detalle.cantidad} {detalle.productos?.unidad} × ${detalle.precio_unitario.toFixed(2)}
+                        <div className="text-right font-semibold">
+                          ${detalle.subtotal.toFixed(2)}
                         </div>
-                      </div>
-                      <div className="text-right font-semibold">
-                        ${detalle.subtotal.toFixed(2)}
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="text-center text-muted-foreground p-8">
@@ -653,6 +868,24 @@ export function PedidosAcumulativosManager() {
               </div>
             )}
           </ScrollArea>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelectedPedido(null)}>
+              Cerrar
+            </Button>
+            {selectedPedido && (
+              <Button 
+                onClick={() => {
+                  finalizarMutation.mutate(selectedPedido);
+                  setSelectedPedido(null);
+                }}
+                disabled={finalizarMutation.isPending}
+              >
+                {finalizarMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
+                Generar pedido final
+              </Button>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

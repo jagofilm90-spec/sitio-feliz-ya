@@ -531,21 +531,24 @@ const CotizacionDetalleDialog = ({
 
     const logoBase64 = await getLogoBase64();
 
-    const productosHTML = cotizacion.detalles?.map((d: any) => 
-      esSoloPrecios 
+    const productosHTML = cotizacion.detalles?.map((d: any) => {
+      const tipoPrecio = d.tipo_precio?.replace('por_', '') || 'N/A';
+      return esSoloPrecios 
         ? `<tr>
             <td style="text-align: center;">${d.producto?.codigo || '-'}</td>
             <td>${d.producto?.nombre || 'Producto'}</td>
+            <td style="text-align: center;"><span style="background: #e0e0e0; padding: 2px 6px; border-radius: 4px; font-size: 9px;">${tipoPrecio}</span></td>
             <td style="text-align: right;">$${d.precio_unitario?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
           </tr>`
         : `<tr>
             <td style="text-align: center;">${d.producto?.codigo || '-'}</td>
             <td>${d.producto?.nombre || 'Producto'}</td>
+            <td style="text-align: center;"><span style="background: #e0e0e0; padding: 2px 6px; border-radius: 4px; font-size: 9px;">${tipoPrecio}</span></td>
             <td style="text-align: center;">${d.cantidad} ${d.producto?.unidad || ''}</td>
             <td style="text-align: right;">$${d.precio_unitario?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
             <td style="text-align: right;">$${d.subtotal?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-          </tr>`
-    ).join('') || '';
+          </tr>`;
+    }).join('') || '';
 
     // Parse dates correctly to avoid timezone issues
     const parseDateLocal = (dateStr: string) => {
@@ -840,6 +843,7 @@ const CotizacionDetalleDialog = ({
               <tr>
                 <th style="width: 80px; text-align: center;">Código</th>
                 <th>Producto</th>
+                <th style="width: 80px; text-align: center;">Tipo</th>
                 ${esSoloPrecios ? '' : '<th style="width: 100px; text-align: center;">Cantidad</th>'}
                 <th style="width: 100px; text-align: right;">Precio Unit.</th>
                 ${esSoloPrecios ? '' : '<th style="width: 100px; text-align: right;">Subtotal</th>'}

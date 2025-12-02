@@ -178,6 +178,29 @@ const Pedidos = () => {
     setSelectedPedidos(newSelected);
   };
 
+  // Navegación entre pedidos
+  const handleNavigateNextPedido = () => {
+    if (!selectedPedidoId) return;
+    const currentIndex = filteredPedidos.findIndex(p => p.id === selectedPedidoId);
+    if (currentIndex < filteredPedidos.length - 1) {
+      setSelectedPedidoId(filteredPedidos[currentIndex + 1].id);
+    }
+  };
+
+  const handleNavigatePreviousPedido = () => {
+    if (!selectedPedidoId) return;
+    const currentIndex = filteredPedidos.findIndex(p => p.id === selectedPedidoId);
+    if (currentIndex > 0) {
+      setSelectedPedidoId(filteredPedidos[currentIndex - 1].id);
+    }
+  };
+
+  const currentPedidoIndex = selectedPedidoId 
+    ? filteredPedidos.findIndex(p => p.id === selectedPedidoId)
+    : -1;
+  const canNavigateNext = currentPedidoIndex >= 0 && currentPedidoIndex < filteredPedidos.length - 1;
+  const canNavigatePrevious = currentPedidoIndex > 0;
+
   const handleDeleteSelected = async () => {
     if (selectedPedidos.size === 0) return;
     
@@ -718,6 +741,10 @@ const Pedidos = () => {
         pedidoId={selectedPedidoId}
         open={pedidoDetalleOpen}
         onOpenChange={setPedidoDetalleOpen}
+        onNavigateNext={handleNavigateNextPedido}
+        onNavigatePrevious={handleNavigatePreviousPedido}
+        canNavigateNext={canNavigateNext}
+        canNavigatePrevious={canNavigatePrevious}
       />
 
       {/* Alert Dialog para confirmar eliminación */}

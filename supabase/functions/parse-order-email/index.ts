@@ -864,22 +864,36 @@ async function parseWithAI(emailBody: string, emailSubject: string, emailFrom: s
     ).join('\n')}`;
   }
 
-const systemPrompt = `Eres un asistente especializado en extraer información de pedidos desde correos electrónicos.
+const systemPrompt = `Eres un asistente de extracción de datos de pedidos. Tu ÚNICA tarea es identificar productos y NÚMEROS de cantidad.
 
-Tu tarea es ÚNICAMENTE identificar productos y cantidades. NO inventes unidades.
+🔴 REGLA FUNDAMENTAL (APLICA A TODOS LOS PRODUCTOS - 0% ERROR):
+La fuente de verdad es el CATÁLOGO DE PRODUCTOS, NO el texto del email/PDF.
 
-⚠️ REGLAS CRÍTICAS SOBRE UNIDADES (0% ERROR PERMITIDO):
-1. Cada producto tiene su unidad FIJA en el sistema: bulto, caja, kilo, pieza, etc.
-2. TÚ SOLO extraes las CANTIDADES numéricas del email
-3. La unidad correcta SIEMPRE viene de la configuración del producto - NUNCA LA INVENTES
-4. NUNCA uses "/kg" a menos que el producto esté configurado con unidad="kilo"
-5. Si un producto dice "Arroz 25 kg" pero su unidad es "bulto", respeta "bulto"
-6. Si un producto dice "Azúcar Refinada 25 kg" pero su unidad es "bulto", respeta "bulto"
+TU TRABAJO:
+1. Identificar el producto correcto del catálogo (por código o nombre)
+2. Extraer SOLO el NÚMERO de cantidad del email
+3. Anotar qué unidad menciona el cliente (KILOS, PIEZAS, CAJAS) solo como referencia
 
-CONVERSIONES AUTOMÁTICAS (el sistema las hace):
-- Cliente pide "100 kilos" de "Arroz 25 kg" (bulto) → Extraes "100", sistema convierte a 4 bultos
-- Cliente pide "50 kilos" de "Azúcar 25 kg" (bulto) → Extraes "50", sistema convierte a 2 bultos
-- Cliente pide "96 piezas" de "Piña 12 piezas" (caja) → Extraes "96", sistema convierte a 8 cajas
+LO QUE NO DEBES HACER:
+❌ NO decidas la unidad comercial (el catálogo ya la tiene)
+❌ NO calcules precios (el catálogo ya los tiene)
+❌ NO inventes conversiones (el sistema las hace automáticamente)
+❌ NO uses "/kg" a menos que el producto esté configurado así en el catálogo
+
+CONVERSIONES AUTOMÁTICAS DEL SISTEMA:
+Cada producto tiene en el catálogo:
+- unidad_comercial: bulto, caja, saco, kg, pieza, etc.
+- kg_por_unidad: cuántos kg tiene cada unidad (ej: bulto de 25kg)
+- piezas_por_unidad: cuántas piezas tiene cada unidad (ej: caja de 12 piezas)
+- precio_unitario: precio por esa unidad_comercial
+
+Ejemplos de lo que hace el SISTEMA (no tú):
+- Cliente pide "950 KILOS" de Azúcar Refinada (bulto 25kg) → Sistema: 950÷25 = 38 bultos
+- Cliente pide "1000 KILOS" de Arroz 25kg (bulto 25kg) → Sistema: 1000÷25 = 40 bultos  
+- Cliente pide "225 KILOS" de Maizena (bulto 25kg) → Sistema: 225÷25 = 9 bultos
+- Cliente pide "96 PIEZAS" de Piña (caja 12 piezas) → Sistema: 96÷12 = 8 cajas
+
+Tú solo extraes: producto_id, cantidad_numerica=950, unidad_mencionada="KILOS"
 
 REGLA CRÍTICA - SEPARACIÓN DE SUCURSALES:
 - Cada sucursal empieza con un ENCABEZADO en formato: "<numero> <NOMBRE_SUCURSAL>"
@@ -889,14 +903,24 @@ REGLA CRÍTICA - SEPARACIÓN DE SUCURSALES:
 - Los productos que siguen a un encabezado pertenecen SOLO a esa sucursal
 - Cuando encuentres un NUEVO encabezado, ese es el inicio de una NUEVA sucursal
 
-PRODUCTOS DISPONIBLES CON SUS UNIDADES REALES:
+CATÁLOGO DE PRODUCTOS DISPONIBLES:
 ${productosContext}
 
-RECUERDA: Extrae SOLO el número de cantidad del email. La unidad ya está definida en cada producto.
-El sistema aplicará automáticamente las conversiones necesarias.
+⚠️ SI FALTAN DATOS EN EL CATÁLOGO:
+Si un producto NO tiene kg_por_unidad o unidad definida claramente:
+→ Márcalo con "requiere_revision": true en tus resultados
+→ NO asumas valores, NO inventes conversiones
+→ El usuario revisará manualmente ese producto
 
-SINÓNIMOS DE PRODUCTOS:
-- "Maizena" o "MAIZENA" = "Fécula de Maíz"`;
+SINÓNIMOS DE PRODUCTOS (para ayudarte a encontrar coincidencias):
+- "Maizena" o "MAIZENA" = "Fécula de Maíz"
+- "Pasas" = "Uva Pasa"
+- "Frutirueda" = "Fruty Rueda"
+- "Avellana Entera" = "Avellana Sin Cáscara"
+- "Hojuela S/Azúcar" = "Hojuela Natural"
+- "Caramel Creme" = "Caramel Cream"
+
+RECUERDA: Tu trabajo es SOLO extraer números y encontrar el producto correcto. El catálogo tiene TODA la información de unidades y precios.`;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 45000);
@@ -919,7 +943,45 @@ SINÓNIMOS DE PRODUCTOS:
             parameters: {
               type: "object",
               properties: {
-                sucursales: { type: "array", items: { type: "object", properties: { nombre_sucursal: { type: "string" }, fecha_entrega_solicitada: { type: "string" }, productos: { type: "array", items: { type: "object", properties: { nombre_producto: { type: "string" }, cantidad: { type: "number", description: "SOLO el número de cantidad mencionado en el email (sin unidad). Ejemplos: si dice '100 kilos' extrae 100, si dice '50 bultos' extrae 50, si dice '96 piezas' extrae 96. El sistema aplicará las conversiones automáticamente según la unidad configurada del producto." }, unidad: { type: "string", description: "Unidad del email para referencia: KILOS, PIEZAS, CAJAS, etc." }, precio_sugerido: { type: "number" }, notas: { type: "string" }, producto_cotizado_id: { type: "string", description: "ID exacto del producto del catálogo" } }, required: ["nombre_producto", "cantidad", "unidad"] } } }, required: ["nombre_sucursal", "productos"] } },
+                sucursales: { 
+                  type: "array", 
+                  items: { 
+                    type: "object", 
+                    properties: { 
+                      nombre_sucursal: { type: "string" }, 
+                      fecha_entrega_solicitada: { type: "string" }, 
+                      productos: { 
+                        type: "array", 
+                        items: { 
+                          type: "object", 
+                          properties: { 
+                            nombre_producto: { type: "string" }, 
+                            cantidad: { 
+                              type: "number", 
+                              description: "SOLO el número puro de cantidad mencionado en el email. Ejemplos: '100 kilos' → 100, '50 bultos' → 50, '96 piezas' → 96. NO hagas conversiones, el sistema las hace automáticamente." 
+                            }, 
+                            unidad: { 
+                              type: "string", 
+                              description: "Unidad que menciona el cliente en el email: KILOS, PIEZAS, CAJAS, BULTOS, etc. Solo para referencia." 
+                            }, 
+                            precio_sugerido: { type: "number" }, 
+                            notas: { type: "string" }, 
+                            producto_cotizado_id: { 
+                              type: "string", 
+                              description: "ID exacto del producto del catálogo" 
+                            },
+                            requiere_revision: {
+                              type: "boolean",
+                              description: "Marca como true si el producto NO tiene kg_por_unidad o unidad clara en el catálogo"
+                            }
+                          }, 
+                          required: ["nombre_producto", "cantidad", "unidad"] 
+                        } 
+                      } 
+                    }, 
+                    required: ["nombre_sucursal", "productos"] 
+                  } 
+                },
                 notas_generales: { type: "string" },
                 confianza: { type: "number" }
               },

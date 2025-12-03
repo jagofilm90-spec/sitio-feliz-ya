@@ -222,6 +222,33 @@ export function VerificacionRapidaLecaroz({ onClose }: VerificacionRapidaLecaroz
         return;
       }
 
+      // *** ALERTA PARA CANELA MOLIDA / ANÍS >12 KG ***
+      const productosConCantidadInusual = productosModificados.filter(p => {
+        const nombreLower = p.productoNombre?.toLowerCase() || '';
+        const esCanelaoAnis = nombreLower.includes('canela molida') || 
+                             nombreLower.includes('anís') || 
+                             nombreLower.includes('anis');
+        return esCanelaoAnis && p.cantidadKg > 12;
+      });
+
+      if (productosConCantidadInusual.length > 0) {
+        const listaProductos = productosConCantidadInusual.map(p => 
+          `• ${p.sucursalCodigo} ${p.sucursalNombre}: ${p.productoNombre} - ${p.cantidadKg} kg`
+        ).join('\n');
+        
+        const confirmar = window.confirm(
+          `⚠️ CANTIDADES INUSUALES DETECTADAS\n\n` +
+          `${listaProductos}\n\n` +
+          `Es muy raro que una panadería pida más de 12 kg de Canela Molida o Anís.\n` +
+          `¿Estás seguro de que las cantidades son correctas?`
+        );
+        
+        if (!confirmar) {
+          setGuardando(false);
+          return;
+        }
+      }
+
       // Group by pedido to update totals efficiently
       const pedidosAfectados = new Set<string>();
       

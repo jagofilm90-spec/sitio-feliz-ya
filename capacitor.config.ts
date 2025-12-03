@@ -13,19 +13,27 @@ const config: CapacitorConfig = {
       presentationOptions: ['badge', 'sound', 'alert']
     },
     SplashScreen: {
-      launchShowDuration: 2000,
+      launchShowDuration: 2500,
       launchAutoHide: true,
       backgroundColor: '#ffffff',
-      androidSplashResourceName: 'splash',
-      androidScaleType: 'CENTER_CROP',
       showSpinner: false,
       splashFullScreen: true,
-      splashImmersive: true
+      splashImmersive: true,
+      // iOS specific
+      iosSpinnerStyle: 'small',
+      // Android specific  
+      androidSplashResourceName: 'splash',
+      androidScaleType: 'CENTER_CROP'
     },
     StatusBar: {
       style: 'DARK',
       backgroundColor: '#ffffff'
     }
+  },
+  ios: {
+    contentInset: 'automatic',
+    preferredContentMode: 'mobile',
+    scheme: 'ALMASA ERP'
   }
 };
 

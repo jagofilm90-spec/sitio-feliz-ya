@@ -47,6 +47,7 @@ import {
 } from "lucide-react";
 import { format, subMonths } from "date-fns";
 import { es } from "date-fns/locale";
+import { ordenarProductosAzucarPrimero } from "@/lib/calculos";
 import { formatCurrency } from "@/lib/utils";
 
 interface PedidoPorAutorizar {
@@ -520,7 +521,7 @@ export function PedidosPorAutorizarTab() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {selectedPedido.pedidos_detalles.map((detalle) => {
+                    {ordenarProductosAzucarPrimero(selectedPedido.pedidos_detalles, (d) => d.productos?.nombre || '').map((detalle) => {
                       const comparison = getPriceComparison(detalle);
                       const ComparisonIcon = comparison.icon;
                       const currentPrice = editingPrices[detalle.id] ?? detalle.precio_unitario;

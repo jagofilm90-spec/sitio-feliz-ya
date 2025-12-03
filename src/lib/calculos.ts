@@ -20,6 +20,48 @@ const DECIMAL_PRECISION = 2;
 export const PRODUCTOS_BOLSAS_5KG = ['anís', 'anis', 'canela molida'];
 export const KG_POR_BOLSA = 5;
 
+// ==================== ORDENAMIENTO DE PRODUCTOS (AZÚCARES PRIMERO) ====================
+/**
+ * Orden de prioridad para productos de azúcar
+ * Azúcares van primero, luego el resto (avío) en orden alfabético
+ */
+const ORDEN_AZUCAR: Record<string, number> = {
+  'azucar estandar': 1,
+  'azucar estándar': 1,
+  'azúcar estándar': 1,
+  'azúcar estandar': 1,
+  'azucar refinada': 2,
+  'azúcar refinada': 2,
+  'azucar glas': 3,
+  'azúcar glas': 3,
+};
+
+/**
+ * Ordena productos poniendo azúcares primero (Estándar, Refinada, Glas)
+ * y luego el resto en orden alfabético
+ */
+export function ordenarProductosAzucarPrimero<T>(
+  productos: T[],
+  getNombre: (p: T) => string
+): T[] {
+  return [...productos].sort((a, b) => {
+    const nombreA = getNombre(a).toLowerCase();
+    const nombreB = getNombre(b).toLowerCase();
+    
+    // Buscar orden de azúcar
+    const ordenA = Object.entries(ORDEN_AZUCAR).find(([key]) => nombreA.includes(key))?.[1] || 999;
+    const ordenB = Object.entries(ORDEN_AZUCAR).find(([key]) => nombreB.includes(key))?.[1] || 999;
+    
+    // Si alguno es azúcar, ordenar por prioridad
+    if (ordenA !== ordenB) {
+      return ordenA - ordenB;
+    }
+    
+    // Si ambos son avío (o mismo tipo de azúcar), ordenar alfabéticamente
+    return nombreA.localeCompare(nombreB);
+  });
+}
+
 /**
  * Detecta si un producto es Anís o Canela Molida (que se venden en bolsas de 5kg)
  */

@@ -16,7 +16,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/utils";
-import { esProductoBolsas5kg, redondearABolsasCompletas, calcularNumeroBolsas, KG_POR_BOLSA } from "@/lib/calculos";
+import { esProductoBolsas5kg, redondearABolsasCompletas, calcularNumeroBolsas, KG_POR_BOLSA, ordenarProductosAzucarPrimero } from "@/lib/calculos";
 import { Loader2 } from "lucide-react";
 
 interface PedidoDetalleDialogProps {
@@ -215,7 +215,7 @@ export default function PedidoDetalleDialog({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pedido.pedidos_detalles.map((detalle) => {
+                  {ordenarProductosAzucarPrimero(pedido.pedidos_detalles, (d) => d.productos.nombre).map((detalle) => {
                     const producto = detalle.productos;
                     const nombreLower = producto.nombre.toLowerCase();
                     let unidadComercial = producto.unidad || "pza";

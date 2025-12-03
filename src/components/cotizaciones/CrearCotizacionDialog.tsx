@@ -117,9 +117,25 @@ const CrearCotizacionDialog = ({
   const [folio, setFolio] = useState<string>("");
   const [sinCantidades, setSinCantidades] = useState(false);
   const [nombreCotizacion, setNombreCotizacion] = useState("");
+  const [tipoCotizacion, setTipoCotizacion] = useState<string>("general");
+  const [mesVigencia, setMesVigencia] = useState<string>(() => {
+    const nextMonth = new Date();
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    return format(nextMonth, "yyyy-MM");
+  });
   const fechaCreacion = new Date();
 
   const isEditMode = !!cotizacionId;
+
+  // Detect if selected client is Lecaroz
+  const isLecarozClient = clientes.find(c => c.id === selectedCliente)?.nombre?.toLowerCase().includes('lecaroz');
+
+  // Auto-enable sinCantidades for Lecaroz
+  useEffect(() => {
+    if (isLecarozClient && !isEditMode) {
+      setSinCantidades(true);
+    }
+  }, [isLecarozClient, isEditMode]);
 
   useEffect(() => {
     if (open) {
@@ -440,6 +456,8 @@ const CrearCotizacionDialog = ({
             subtotal: sinCantidades ? 0 : totales.subtotal,
             impuestos: sinCantidades ? 0 : totales.impuestos,
             total: sinCantidades ? 0 : totales.total,
+            tipo_cotizacion: isLecarozClient ? tipoCotizacion : 'general',
+            mes_vigencia: isLecarozClient ? mesVigencia : null,
           })
           .eq("id", cotizacionId);
 
@@ -510,6 +528,8 @@ const CrearCotizacionDialog = ({
             impuestos: sinCantidades ? 0 : totales.impuestos,
             total: sinCantidades ? 0 : totales.total,
             creado_por: session.session.user.id,
+            tipo_cotizacion: isLecarozClient ? tipoCotizacion : 'general',
+            mes_vigencia: isLecarozClient ? mesVigencia : null,
           })
           .select()
           .single();
@@ -575,6 +595,10 @@ const CrearCotizacionDialog = ({
     setFolio("");
     setSinCantidades(false);
     setNombreCotizacion("");
+    setTipoCotizacion("general");
+    const nextMonth = new Date();
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    setMesVigencia(format(nextMonth, "yyyy-MM"));
   };
 
   const totales = calcularTotales();
@@ -676,28 +700,83 @@ const CrearCotizacionDialog = ({
 
             <div className="space-y-2">
               <Label>Nombre de cotización <span className="text-muted-foreground text-xs">(opcional)</span></Label>
-              {clientes.find(c => c.id === selectedCliente)?.nombre?.toLowerCase().includes('lecaroz') ? (
-                <Select value={nombreCotizacion} onValueChange={setNombreCotizacion}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar tipo de cotización" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={`Avio ${mesCotizacion}`}>
-                      Avio {mesCotizacion}
-                    </SelectItem>
-                    <SelectItem value={`Azúcares ${mesCotizacion}`}>
-                      Azúcares {mesCotizacion}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Input
-                  placeholder="Ej: Avio Diciembre, Azúcares..."
-                  value={nombreCotizacion}
-                  onChange={(e) => setNombreCotizacion(e.target.value)}
-                />
-              )}
+              <Input
+                placeholder="Ej: Avio Diciembre, Azúcares..."
+                value={nombreCotizacion}
+                onChange={(e) => setNombreCotizacion(e.target.value)}
+              />
             </div>
+          </div>
+
+          {/* Lecaroz-specific controls */}
+          {isLecarozClient && (
+            <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg space-y-4">
+              <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-medium">
+                <FileText className="h-4 w-4" />
+                Cotización para Lecaroz
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Tipo de cotización *</Label>
+                  <Select value={tipoCotizacion} onValueChange={(value) => {
+                    setTipoCotizacion(value);
+                    // Auto-set nombre based on tipo
+                    const mesLabel = format(new Date(mesVigencia + "-01"), "MMMM yyyy", { locale: es });
+                    if (value === 'avio') setNombreCotizacion(`Avío ${mesLabel}`);
+                    else if (value === 'azucar') setNombreCotizacion(`Azúcares ${mesLabel}`);
+                    else if (value === 'rosticeria') setNombreCotizacion(`Rosticería ${mesLabel}`);
+                  }}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="avio">🍞 Avío (ingredientes panadería)</SelectItem>
+                      <SelectItem value="azucar">🍬 Azúcar</SelectItem>
+                      <SelectItem value="rosticeria">🍗 Rosticería</SelectItem>
+                      <SelectItem value="general">📋 General</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Mes de vigencia *</Label>
+                  <Select value={mesVigencia} onValueChange={(value) => {
+                    setMesVigencia(value);
+                    // Update nombre with new month
+                    const mesLabel = format(new Date(value + "-01"), "MMMM yyyy", { locale: es });
+                    if (tipoCotizacion === 'avio') setNombreCotizacion(`Avío ${mesLabel}`);
+                    else if (tipoCotizacion === 'azucar') setNombreCotizacion(`Azúcares ${mesLabel}`);
+                    else if (tipoCotizacion === 'rosticeria') setNombreCotizacion(`Rosticería ${mesLabel}`);
+                  }}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar mes" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 6 }, (_, i) => {
+                        const fecha = new Date();
+                        fecha.setMonth(fecha.getMonth() + i);
+                        const mesValue = format(fecha, "yyyy-MM");
+                        const mesLabel = format(fecha, "MMMM yyyy", { locale: es });
+                        return (
+                          <SelectItem key={mesValue} value={mesValue}>
+                            {mesLabel.charAt(0).toUpperCase() + mesLabel.slice(1)}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
+              <p className="text-xs text-muted-foreground">
+                Esta cotización estará disponible para procesar pedidos de Lecaroz del mes seleccionado.
+                La AI detectará automáticamente los precios al procesar pedidos.
+              </p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-4">
 
             <div className="space-y-2">
               <Label>Fecha de creación</Label>

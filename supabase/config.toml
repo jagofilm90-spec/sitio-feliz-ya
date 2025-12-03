@@ -41,3 +41,6 @@ verify_jwt = true
 
 [functions.create-client-user]
 verify_jwt = true
+
+[functions.parse-excel-order]
+verify_jwt = true

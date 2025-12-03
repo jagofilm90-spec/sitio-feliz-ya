@@ -571,6 +571,8 @@ const EmailDetailView = ({
         emailSubject={email.subject}
         emailFrom={email.from}
         emailId={email.id}
+        emailAttachments={email.attachments}
+        cuentaEmail={cuentaEmail}
         onSuccess={onBack}
       />
     </>

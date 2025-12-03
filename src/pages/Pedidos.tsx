@@ -420,9 +420,17 @@ const Pedidos = () => {
         let presentacion = "";
         let unidadComercial = producto.unidad || 'pza';
         
-        // Regla especial para Lecaroz: Anís y Canela Molida siempre se muestran como "bolsa"
-        if (esLecaroz && (nombreLower.includes('anís') || nombreLower.includes('anis') || nombreLower.includes('canela molida'))) {
-          unidadComercial = 'bolsa';
+        // Reglas especiales para Lecaroz
+        if (esLecaroz) {
+          // Anís y Canela Molida siempre se muestran como "bolsa"
+          if (nombreLower.includes('anís') || nombreLower.includes('anis') || nombreLower.includes('canela molida')) {
+            unidadComercial = 'bolsa';
+          }
+          
+          // Arándano Nutri Grand y Avellana Sin Cascara siempre se muestran como "caja"
+          if (nombreLower.includes('arándano') || nombreLower.includes('arandano') || nombreLower.includes('avellana')) {
+            unidadComercial = 'caja';
+          }
         }
         
         // Mostrar cantidad con su unidad original
@@ -433,13 +441,20 @@ const Pedidos = () => {
           cantidadDisplay = `${detalle.cantidad} ${unidadComercial}`;
         }
         
-        if (producto.precio_por_kilo && producto.kg_por_unidad && producto.kg_por_unidad > 0) {
+        // Calcular presentación para bodegueros - SIEMPRE unidades comerciales, NUNCA solo kg
+        // Regla especial Lecaroz: Arándano y Avellana siempre "1 caja" sin importar cantidad
+        if (esLecaroz && (nombreLower.includes('arándano') || nombreLower.includes('arandano') || nombreLower.includes('avellana'))) {
+          // Calcular cuántas cajas (dividir kg entre kg_por_unidad si existe, sino 1)
+          const kgPorCaja = producto.kg_por_unidad || 11.34; // Default para Arándano Nutri Grand
+          const numCajas = Math.ceil(detalle.cantidad / kgPorCaja);
+          presentacion = numCajas === 1 ? '1 caja' : `${numCajas} cajas`;
+        } else if (producto.precio_por_kilo && producto.kg_por_unidad && producto.kg_por_unidad > 0) {
           // Producto vendido por kilo con conversión conocida (ej: coco rallado 20kg/caja)
           const unidadesComerciales = Math.ceil(detalle.cantidad / producto.kg_por_unidad);
           const plural = unidadesComerciales !== 1 ? 's' : '';
           presentacion = `${unidadesComerciales} ${unidadComercial}${plural}`;
         } else if (producto.precio_por_kilo && (!producto.kg_por_unidad || producto.kg_por_unidad === 0)) {
-          // Producto vendido por kilo sin conversión fija (ej: bolsa pesada, piloncillo, anís)
+          // Producto vendido por kilo sin conversión fija (ej: piloncillo, anís)
           // Mostrar como "1 {unidad} de X kg"
           presentacion = `1 ${unidadComercial} de ${detalle.cantidad} kg`;
         } else {

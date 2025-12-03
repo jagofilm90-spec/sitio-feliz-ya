@@ -38,8 +38,53 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { calcularSubtotal, calcularDesgloseImpuestos as calcularDesgloseImpuestosNuevo, redondear } from "@/lib/calculos";
 
+// Productos que se entregan en bolsas completas (Anís y Canela Molida = 5kg/bolsa)
+// Se redondea HACIA ARRIBA y se cobra lo entregado
+const PRODUCTOS_BOLSAS_COMPLETAS = ['anís', 'anis', 'canela molida'];
+
+// Detectar si es producto que se entrega en bolsas completas
+const esProductoBolsasCompletas = (nombre: string): boolean => {
+  const nombreLower = nombre?.toLowerCase() || '';
+  return PRODUCTOS_BOLSAS_COMPLETAS.some(p => nombreLower.includes(p));
+};
+
+// Ajustar cantidad a bolsas completas redondeando ARRIBA
+// Ejemplo: 17kg Anís → 20kg (4 bolsas de 5kg), cobrar 20kg
+const ajustarCantidadBolsasCompletas = (
+  cantidadKg: number, 
+  kgPorUnidad: number,
+  nombreProducto: string
+): number => {
+  if (esProductoBolsasCompletas(nombreProducto) && kgPorUnidad > 0) {
+    const bolsas = cantidadKg / kgPorUnidad;
+    const bolsasRedondeadas = Math.ceil(bolsas); // ⬆️ Redondeo ARRIBA
+    const kgEntregados = bolsasRedondeadas * kgPorUnidad;
+    
+    if (kgEntregados !== cantidadKg) {
+      console.log(`🎯 Conversión bolsas completas: ${nombreProducto}`);
+      console.log(`   Pedido: ${cantidadKg} kg → ${bolsas.toFixed(2)} bolsas`);
+      console.log(`   Entrega: ${bolsasRedondeadas} bolsas → ${kgEntregados} kg (cobrado)`);
+    }
+    
+    return kgEntregados;
+  }
+  return cantidadKg;
+};
+
 // Helper: Redondeo condicional - preserva decimales para productos precio_por_kilo
-const ajustarCantidad = (cantidad: number, precioPorKilo: boolean): number => {
+// MODIFICADO: Ahora incluye conversión automática para Anís y Canela Molida
+const ajustarCantidad = (
+  cantidad: number, 
+  precioPorKilo: boolean,
+  kgPorUnidad?: number,
+  nombreProducto?: string
+): number => {
+  // PRIMERO: Si es Anís o Canela, aplicar redondeo a bolsas completas
+  if (nombreProducto && kgPorUnidad && esProductoBolsasCompletas(nombreProducto)) {
+    return ajustarCantidadBolsasCompletas(cantidad, kgPorUnidad, nombreProducto);
+  }
+  
+  // Comportamiento estándar para otros productos
   if (precioPorKilo) {
     // Productos por kilo: mantener 2 decimales (22.68 → 22.68)
     return Math.round(cantidad * 100) / 100;

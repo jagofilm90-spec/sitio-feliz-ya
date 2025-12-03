@@ -12,6 +12,7 @@ interface ParsedProduct {
   cantidad: number;
   unidad_mencionada_cliente?: string;
   producto_cotizado_id?: string;
+  precio_unitario?: number;
 }
 
 interface ParsedSucursal {
@@ -19,12 +20,15 @@ interface ParsedSucursal {
   rfc?: string;
   razon_social?: string;
   productos: ParsedProduct[];
+  sucursal_id?: string;
 }
 
 interface ParsedOrder {
   sucursales: ParsedSucursal[];
   notas_generales?: string;
   confianza: number;
+  esRosticeria?: boolean;
+  productoCodigo?: string;
 }
 
 serve(async (req) => {
@@ -33,10 +37,6 @@ serve(async (req) => {
   }
 
   try {
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
-
     const { 
       excelBase64, 
       clienteId, 
@@ -73,12 +73,25 @@ serve(async (req) => {
     const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
 
     console.log(`Excel rows: ${jsonData.length}`);
-    console.log(`First row sample:`, jsonData[0]?.slice(0, 5));
+    console.log(`First 5 rows:`, JSON.stringify(jsonData.slice(0, 5)));
 
-    // Parse Lecaroz Excel format
-    const order = parseLecarozExcel(jsonData, productosCotizados, sucursalesRegistradas);
+    // Detect format: Rosticería (block format with "SUCURSAL:") vs Tabular
+    const isRosticeriaFormat = jsonData.some(row => {
+      const firstCell = String(row?.[0] || "").trim().toUpperCase();
+      return firstCell.startsWith("SUCURSAL:");
+    });
+
+    console.log(`Detected format: ${isRosticeriaFormat ? "Rosticería (block)" : "Tabular"}`);
+
+    let order: ParsedOrder;
+    if (isRosticeriaFormat) {
+      order = parseRosticeriaFormat(jsonData, productosCotizados, sucursalesRegistradas);
+    } else {
+      order = parseLecarozExcel(jsonData, productosCotizados, sucursalesRegistradas);
+    }
 
     console.log(`Parsed ${order.sucursales.length} sucursales`);
+    console.log(`Es Rosticería: ${order.esRosticeria}`);
 
     return new Response(
       JSON.stringify({ order }),
@@ -93,6 +106,114 @@ serve(async (req) => {
   }
 });
 
+// Parser for Rosticería format (block-based with SUCURSAL:, RFC:, RAZON SOCIAL:)
+function parseRosticeriaFormat(
+  data: any[][],
+  productosCotizados: any[] = [],
+  sucursalesRegistradas: any[] = []
+): ParsedOrder {
+  const sucursales: ParsedSucursal[] = [];
+  let currentSucursal: ParsedSucursal | null = null;
+  let isRosticeria = false;
+  let productoCodigo: string | undefined;
+
+  console.log("Parsing Rosticería block format...");
+
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    if (!row || row.length === 0) continue;
+
+    const firstCell = String(row[0] || "").trim();
+    const firstCellUpper = firstCell.toUpperCase();
+
+    // Detect start of sucursal: "SUCURSAL: 301 ROST. CRUCERO"
+    if (firstCellUpper.startsWith("SUCURSAL:")) {
+      // Save previous sucursal if it has products
+      if (currentSucursal && currentSucursal.productos.length > 0) {
+        sucursales.push(currentSucursal);
+      }
+
+      const nombreSucursal = firstCell.replace(/^SUCURSAL:\s*/i, "").trim();
+      
+      // Detect Rosticería by "ROST" in branch name
+      if (nombreSucursal.toUpperCase().includes("ROST")) {
+        isRosticeria = true;
+      }
+
+      // Try to match with registered sucursales
+      const matchedSucursal = matchSucursal(nombreSucursal, sucursalesRegistradas);
+
+      currentSucursal = {
+        nombre_sucursal: nombreSucursal,
+        sucursal_id: matchedSucursal?.id,
+        productos: []
+      };
+      
+      console.log(`Found sucursal: ${nombreSucursal} (matched: ${matchedSucursal?.nombre || "no"})`);
+      continue;
+    }
+
+    // Detect RFC
+    if (firstCellUpper.startsWith("RFC:") && currentSucursal) {
+      currentSucursal.rfc = firstCell.replace(/^RFC:\s*/i, "").trim();
+      continue;
+    }
+
+    // Detect Razón Social
+    if (firstCellUpper.startsWith("RAZON SOCIAL:") && currentSucursal) {
+      currentSucursal.razon_social = firstCell.replace(/^RAZON SOCIAL:\s*/i, "").trim();
+      continue;
+    }
+
+    // Detect products (lines starting with numeric code like "417 BOL.ROLLO...")
+    if (currentSucursal && /^\d+\s+/.test(firstCell)) {
+      // Extract product code from the beginning
+      const codeMatch = firstCell.match(/^(\d+)\s+/);
+      if (codeMatch) {
+        productoCodigo = codeMatch[1];
+      }
+
+      // Get quantity from second column
+      const cantidadRaw = String(row[1] || "0").replace(",", ".");
+      const cantidad = parseFloat(cantidadRaw);
+      
+      // Get unit from third column
+      const unidad = String(row[2] || "").trim();
+
+      if (cantidad > 0) {
+        // Try to match product with cotizaciones
+        const matchedProduct = findMatchingProduct(firstCell, productosCotizados);
+
+        currentSucursal.productos.push({
+          nombre_producto: matchedProduct?.nombre || firstCell,
+          cantidad: cantidad,
+          unidad_mencionada_cliente: unidad || "ROLLO",
+          producto_cotizado_id: matchedProduct?.producto_id,
+          precio_unitario: matchedProduct?.precio_cotizado
+        });
+      }
+    }
+  }
+
+  // Save last sucursal
+  if (currentSucursal && currentSucursal.productos.length > 0) {
+    sucursales.push(currentSucursal);
+  }
+
+  console.log(`Total sucursales parsed: ${sucursales.length}`);
+  console.log(`Is Rosticería: ${isRosticeria}`);
+  console.log(`Product code detected: ${productoCodigo}`);
+
+  return {
+    sucursales,
+    notas_generales: `Pedido ${isRosticeria ? "Rosticería" : "Lecaroz"} (${sucursales.length} sucursales)`,
+    confianza: sucursales.length > 0 ? 0.95 : 0.3,
+    esRosticeria: isRosticeria,
+    productoCodigo
+  };
+}
+
+// Original tabular parser for standard Lecaroz format
 function parseLecarozExcel(
   data: any[][], 
   productosCotizados: any[] = [],
@@ -185,6 +306,7 @@ function parseLecarozExcel(
           cantidad: cantidad,
           unidad_mencionada_cliente: extractUnit(prodCol.nombre),
           producto_cotizado_id: matchedProduct?.producto_id,
+          precio_unitario: matchedProduct?.precio_cotizado
         });
       }
     }
@@ -198,8 +320,8 @@ function parseLecarozExcel(
         rfc: rfc || undefined,
         razon_social: razonSocial || undefined,
         productos,
-        sucursal_id: matchedSucursal?.id,
-      } as ParsedSucursal & { sucursal_id?: string });
+        sucursal_id: matchedSucursal?.id
+      });
     }
   }
 
@@ -207,6 +329,7 @@ function parseLecarozExcel(
     sucursales,
     notas_generales: `Pedido importado desde archivo Excel (${sucursales.length} sucursales)`,
     confianza: sucursales.length > 0 ? 0.9 : 0,
+    esRosticeria: false
   };
 }
 
@@ -256,9 +379,10 @@ function parseAlternativeFormat(
           cantidad,
           unidad_mencionada_cliente: "UNIDADES",
           producto_cotizado_id: producto?.producto_id,
+          precio_unitario: producto?.precio_cotizado
         }],
-        sucursal_id: matchedSucursal?.id,
-      } as ParsedSucursal & { sucursal_id?: string });
+        sucursal_id: matchedSucursal?.id
+      });
     }
   }
 
@@ -266,6 +390,7 @@ function parseAlternativeFormat(
     sucursales,
     notas_generales: `Pedido importado desde archivo Excel (formato alternativo, ${sucursales.length} sucursales)`,
     confianza: sucursales.length > 0 ? 0.7 : 0,
+    esRosticeria: false
   };
 }
 
@@ -273,6 +398,18 @@ function findMatchingProduct(columnName: string, productosCotizados: any[]): any
   if (!productosCotizados || productosCotizados.length === 0) return null;
   
   const colNorm = columnName.toUpperCase().trim();
+  
+  // Extract code if present (e.g., "417" from "417 BOL.ROLLO...")
+  const codeMatch = columnName.match(/^(\d+)\s+/);
+  const productCode = codeMatch ? codeMatch[1] : null;
+  
+  // Match by code first
+  if (productCode) {
+    const codeMatch = productosCotizados.find(p => 
+      p.codigo?.includes(productCode) || String(p.codigo) === productCode
+    );
+    if (codeMatch) return codeMatch;
+  }
   
   // Exact code match
   const exactMatch = productosCotizados.find(p => 
@@ -303,7 +440,7 @@ function matchSucursal(nombre: string, sucursalesRegistradas: any[]): any | null
     .replace(/\s+/g, " ")
     .replace(/^(sucursal|suc\.?|s\.?)\s*/i, "");
   
-  // Extract number if present (e.g., "3 LAFAYETTE" -> "3")
+  // Extract number if present (e.g., "301 ROST. CRUCERO" -> "301")
   const numMatch = nombreNorm.match(/^(\d+)\s*/);
   const branchNumber = numMatch ? numMatch[1] : null;
   
@@ -311,7 +448,9 @@ function matchSucursal(nombre: string, sucursalesRegistradas: any[]): any | null
   if (branchNumber) {
     const matchByNum = sucursalesRegistradas.find(s => {
       const sNorm = s.nombre.toLowerCase().trim();
-      return sNorm.startsWith(branchNumber + " ") || sNorm === branchNumber;
+      return sNorm.startsWith(branchNumber + " ") || 
+             sNorm === branchNumber ||
+             sNorm.includes(branchNumber);
     });
     if (matchByNum) return matchByNum;
   }

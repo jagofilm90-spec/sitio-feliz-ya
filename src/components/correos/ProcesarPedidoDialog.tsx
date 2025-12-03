@@ -442,6 +442,23 @@ export default function ProcesarPedidoDialog({
       if (parseError) throw parseError;
       if (data.error) throw new Error(data.error);
 
+      // Auto-select Rosticería quotation if detected
+      if (data.order?.esRosticeria && cotizacionesRecientes) {
+        const rosticeriaCotizacion = cotizacionesRecientes.find(c => 
+          c.tipo_cotizacion === 'rosticeria' || 
+          c.nombre?.toLowerCase().includes('rosticeria') ||
+          c.nombre?.toLowerCase().includes('rosticería')
+        );
+        if (rosticeriaCotizacion && selectedCotizacionId === "__all__") {
+          console.log("Auto-selecting Rosticería quotation:", rosticeriaCotizacion.folio);
+          setSelectedCotizacionId(rosticeriaCotizacion.id);
+          toast({
+            title: "🍗 Pedido Rosticería detectado",
+            description: `Se seleccionó automáticamente la cotización ${rosticeriaCotizacion.folio}`,
+          });
+        }
+      }
+
       setParsedOrder(data.order);
 
       // Try to match products and sucursales
@@ -1410,6 +1427,22 @@ export default function ProcesarPedidoDialog({
               </p>
               <p className="text-xs text-blue-500 dark:text-blue-400 mt-1">
                 El sistema descargará y parseará el archivo Excel automáticamente
+              </p>
+            </div>
+          )}
+
+          {/* Rosticería detected indicator */}
+          {parsedOrder && (parsedOrder as any).esRosticeria && (
+            <div className="p-4 bg-orange-50 dark:bg-orange-950/30 border border-orange-500/30 rounded-lg">
+              <div className="flex items-center gap-2 text-orange-700 dark:text-orange-400 font-semibold">
+                <span className="text-xl">🍗</span>
+                <span>Pedido Rosticería detectado</span>
+                <Badge className="bg-orange-500/20 text-orange-700 dark:text-orange-400">
+                  {parsedOrder.sucursales.length} sucursales
+                </Badge>
+              </div>
+              <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">
+                Se detectaron {parsedOrder.sucursales.length} sucursales de Rosticería en el Excel
               </p>
             </div>
           )}

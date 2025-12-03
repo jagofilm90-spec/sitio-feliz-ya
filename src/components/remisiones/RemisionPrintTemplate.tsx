@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { abreviarUnidad } from "@/lib/utils";
 
 interface ProductoRemision {
   cantidad: number;
@@ -26,6 +27,7 @@ interface DatosRemision {
   productos: ProductoRemision[];
   subtotal: number;
   iva: number;
+  ieps: number;
   total: number;
   condiciones_credito: string;
   vendedor?: string;
@@ -121,7 +123,7 @@ export const RemisionPrintTemplate = ({ datos }: RemisionPrintTemplateProps) => 
           {datos.productos.map((producto, index) => (
             <tr key={index} className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}>
               <td className="p-2 border-b">{producto.cantidadDisplay || producto.cantidad}</td>
-              <td className="p-2 border-b font-semibold text-primary">{producto.unidad}</td>
+              <td className="p-2 border-b font-semibold text-primary">{abreviarUnidad(producto.unidad)}</td>
               <td className="p-2 border-b">{producto.descripcion}</td>
               <td className="p-2 border-b text-right">${producto.precio_unitario.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
               <td className="p-2 border-b text-right">${producto.total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
@@ -161,9 +163,15 @@ export const RemisionPrintTemplate = ({ datos }: RemisionPrintTemplateProps) => 
                 <td className="p-2 text-right w-32 border">${datos.subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
               </tr>
               <tr>
-                <td className="p-2 font-semibold text-right">I.V.A.:</td>
+                <td className="p-2 font-semibold text-right">IVA (16%):</td>
                 <td className="p-2 text-right border">${datos.iva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
               </tr>
+              {datos.ieps > 0 && (
+                <tr>
+                  <td className="p-2 font-semibold text-right">IEPS (8%):</td>
+                  <td className="p-2 text-right border">${datos.ieps.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+                </tr>
+              )}
               <tr className="bg-gray-800 text-white">
                 <td className="p-2 font-bold text-right">G. Total:</td>
                 <td className="p-2 text-right font-bold">${datos.total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>

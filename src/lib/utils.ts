@@ -40,3 +40,18 @@ export function calcularDesgloseImpuestos(
 export function validarTotales(subtotal: number, iva: number, ieps: number, total: number): boolean {
   return validarTotalesLegacy(subtotal, iva, ieps, total);
 }
+
+/**
+ * Abrevia unidades para presentación en PDFs
+ * bulto/bultos → BLTS, caja/cajas → CJS, balón/balones → BLS, bolsa/bolsas → BOL, cubeta/cubetas → CBTA
+ */
+export function abreviarUnidad(presentacion: string): string {
+  return presentacion
+    .replace(/\bbultos?\b/gi, 'BLTS')
+    .replace(/\bcajas?\b/gi, 'CJS')
+    .replace(/\bbalones?\b/gi, 'BLS')
+    .replace(/\bbalón\b/gi, 'BLS')
+    .replace(/\bbalon\b/gi, 'BLS')
+    .replace(/\bbolsas?\b/gi, 'BOL')
+    .replace(/\bcubetas?\b/gi, 'CBTA');
+}

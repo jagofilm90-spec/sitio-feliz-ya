@@ -398,7 +398,7 @@ const Pedidos = () => {
           pedidos_detalles (
             id, cantidad, precio_unitario, subtotal, unidades_manual,
             productos (
-              id, codigo, nombre, marca, presentacion, unidad, aplica_iva, kg_por_unidad, precio_por_kilo
+              id, codigo, nombre, marca, presentacion, unidad, aplica_iva, aplica_ieps, kg_por_unidad, precio_por_kilo
             )
           )
         `)
@@ -544,20 +544,33 @@ const Pedidos = () => {
         };
       });
 
-      let subtotalConIva = 0;
-      let subtotalSinIva = 0;
+      // Calcular impuestos desglosados: IVA (16%) e IEPS (8%)
+      let subtotalConIvaYIeps = 0; // Productos con IVA + IEPS
+      let subtotalConIva = 0;       // Productos solo con IVA
+      let subtotalSinImpuestos = 0; // Productos sin impuestos
       
       pedido.pedidos_detalles.forEach((detalle: any) => {
-        if (detalle.productos?.aplica_iva) {
+        const prod = detalle.productos;
+        if (prod?.aplica_iva && prod?.aplica_ieps) {
+          subtotalConIvaYIeps += detalle.subtotal;
+        } else if (prod?.aplica_iva) {
           subtotalConIva += detalle.subtotal;
         } else {
-          subtotalSinIva += detalle.subtotal;
+          subtotalSinImpuestos += detalle.subtotal;
         }
       });
 
+      // Productos con IVA (16%) + IEPS (8%) = divisor 1.24
+      const baseConIvaYIeps = subtotalConIvaYIeps / 1.24;
+      const iepsCalculado = baseConIvaYIeps * 0.08;
+      const ivaDeIeps = baseConIvaYIeps * 0.16;
+
+      // Productos solo con IVA (16%)
       const baseConIva = subtotalConIva / 1.16;
-      const ivaCalculado = subtotalConIva - baseConIva;
-      const subtotalReal = baseConIva + subtotalSinIva;
+      const ivaSolo = subtotalConIva - baseConIva;
+
+      const subtotalReal = baseConIvaYIeps + baseConIva + subtotalSinImpuestos;
+      const ivaTotal = ivaSolo + ivaDeIeps;
 
       const datosRemision = {
         folio: `REM-${pedido.folio}`,
@@ -574,8 +587,9 @@ const Pedidos = () => {
         } : undefined,
         productos,
         subtotal: subtotalReal,
-        iva: ivaCalculado,
-        total: pedido.total || (subtotalReal + ivaCalculado),
+        iva: ivaTotal,
+        ieps: iepsCalculado,
+        total: pedido.total || (subtotalReal + ivaTotal + iepsCalculado),
         condiciones_credito: getCreditLabel(pedido.clientes?.termino_credito || 'contado'),
         vendedor: pedido.profiles?.full_name,
         notas: pedido.notas,

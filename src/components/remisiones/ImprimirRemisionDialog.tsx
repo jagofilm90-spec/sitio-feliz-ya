@@ -32,6 +32,7 @@ interface DatosRemision {
   productos: ProductoRemision[];
   subtotal: number;
   iva: number;
+  ieps: number;
   total: number;
   condiciones_credito: string;
   vendedor?: string;

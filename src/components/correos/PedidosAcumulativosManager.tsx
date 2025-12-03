@@ -19,38 +19,26 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { calcularSubtotal, calcularDesgloseImpuestos as calcularDesgloseImpuestosNuevo, redondear } from "@/lib/calculos";
 import { formatCurrency } from "@/lib/utils";
 
-// Productos que SIEMPRE requieren verificación manual obligatoria
-const PRODUCTOS_VERIFICACION_OBLIGATORIA = [
-  'piloncillo',
-  'canela molida',
-  'anís',
-  'anis',
-  'bicarbonato'
-];
+// Solo Piloncillo requiere verificación manual obligatoria (peso variable por caja)
+// Anís, Canela Molida y Bicarbonato se convierten automáticamente usando kg_por_unidad
+const PRODUCTOS_VERIFICACION_OBLIGATORIA = ['piloncillo'];
 
 // Helper para detectar productos que requieren verificación manual obligatoria
 const esProductoVerificable = (nombre: string) => {
   const nombreLower = nombre?.toLowerCase() || '';
-  return PRODUCTOS_VERIFICACION_OBLIGATORIA.some(p => nombreLower.includes(p));
+  return nombreLower.includes('piloncillo');
 };
 
 // Determinar tipo de unidad según producto
 const getTipoUnidad = (nombre: string): 'caja' | 'bolsa' => {
-  const nombreLower = nombre?.toLowerCase() || '';
-  // Piloncillo = cajas, todo lo demás = bolsas
-  if (nombreLower.includes('piloncillo')) {
-    return 'caja';
-  }
-  return 'bolsa';
+  // Piloncillo siempre usa cajas
+  return 'caja';
 };
 
 // Obtener nombre amigable del producto para verificación
 const getNombreProductoVerificacion = (nombre: string): string => {
   const nombreLower = nombre?.toLowerCase() || '';
   if (nombreLower.includes('piloncillo')) return 'Piloncillo';
-  if (nombreLower.includes('canela molida')) return 'Canela Molida';
-  if (nombreLower.includes('anís') || nombreLower.includes('anis')) return 'Anís';
-  if (nombreLower.includes('bicarbonato')) return 'Bicarbonato';
   return nombre;
 };
 

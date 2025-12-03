@@ -18,10 +18,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Loader2, TrendingUp, TrendingDown, Minus, BarChart3, Users } from "lucide-react";
-import { format, subMonths } from "date-fns";
-import { es } from "date-fns/locale";
-import { formatCurrency } from "@/lib/utils";
+import { Loader2, BarChart3, Users } from "lucide-react";
+import { subMonths } from "date-fns";
 import ClienteHistorialAnalytics from "@/components/analytics/ClienteHistorialAnalytics";
 import {
   Dialog,
@@ -56,62 +54,81 @@ const CotizacionesAnalyticsTab = () => {
     },
   });
 
-  // Fetch summary stats
+  // Fetch summary stats from PEDIDOS (real sales) instead of cotizaciones
   const { data: stats, isLoading: loadingStats } = useQuery({
-    queryKey: ["cotizaciones-stats", mesesAtras],
+    queryKey: ["pedidos-stats-by-client", mesesAtras],
     queryFn: async () => {
       const meses = parseInt(mesesAtras);
       const fechaInicio = subMonths(new Date(), meses);
 
-      // Get cotizaciones count per client
-      const { data: cotizaciones, error } = await supabase
-        .from("cotizaciones")
+      // Get pedidos (real orders) per client
+      const { data: pedidos, error: pedidosError } = await supabase
+        .from("pedidos")
         .select(`
           id,
           cliente_id,
           cliente:clientes(nombre, codigo),
           total,
-          fecha_creacion,
-          status
+          fecha_pedido,
+          status,
+          facturado
         `)
-        .gte("fecha_creacion", fechaInicio.toISOString())
-        .order("fecha_creacion", { ascending: false });
+        .gte("fecha_pedido", fechaInicio.toISOString())
+        .not("status", "eq", "cancelado")
+        .order("fecha_pedido", { ascending: false });
 
-      if (error) throw error;
+      if (pedidosError) throw pedidosError;
 
-      // Aggregate by client
+      // Also get cotizaciones count for reference
+      const { data: cotizaciones, error: cotError } = await supabase
+        .from("cotizaciones")
+        .select("id, cliente_id, status")
+        .gte("fecha_creacion", fechaInicio.toISOString());
+
+      if (cotError) throw cotError;
+
+      // Count cotizaciones per client
+      const cotizacionesPorCliente = new Map<string, number>();
+      cotizaciones?.forEach((cot: any) => {
+        const count = cotizacionesPorCliente.get(cot.cliente_id) || 0;
+        cotizacionesPorCliente.set(cot.cliente_id, count + 1);
+      });
+
+      // Aggregate pedidos by client
       const clienteStats = new Map<string, {
         cliente_id: string;
         nombre: string;
         codigo: string;
-        totalCotizaciones: number;
+        totalPedidos: number;
         montoTotal: number;
-        enviadas: number;
-        aceptadas: number;
+        entregados: number;
+        facturados: number;
+        cotizaciones: number;
       }>();
 
-      cotizaciones?.forEach((cot: any) => {
-        if (!cot.cliente) return;
-        const key = cot.cliente_id;
+      pedidos?.forEach((pedido: any) => {
+        if (!pedido.cliente) return;
+        const key = pedido.cliente_id;
         if (!clienteStats.has(key)) {
           clienteStats.set(key, {
-            cliente_id: cot.cliente_id,
-            nombre: cot.cliente.nombre,
-            codigo: cot.cliente.codigo,
-            totalCotizaciones: 0,
+            cliente_id: pedido.cliente_id,
+            nombre: pedido.cliente.nombre,
+            codigo: pedido.cliente.codigo,
+            totalPedidos: 0,
             montoTotal: 0,
-            enviadas: 0,
-            aceptadas: 0,
+            entregados: 0,
+            facturados: 0,
+            cotizaciones: cotizacionesPorCliente.get(pedido.cliente_id) || 0,
           });
         }
         const stat = clienteStats.get(key)!;
-        stat.totalCotizaciones++;
-        stat.montoTotal += cot.total || 0;
-        if (cot.status === "enviada" || cot.status === "autorizada") stat.enviadas++;
-        if (cot.status === "aceptada") stat.aceptadas++;
+        stat.totalPedidos++;
+        stat.montoTotal += pedido.total || 0;
+        if (pedido.status === "entregado") stat.entregados++;
+        if (pedido.facturado) stat.facturados++;
       });
 
-      return Array.from(clienteStats.values()).sort((a, b) => b.totalCotizaciones - a.totalCotizaciones);
+      return Array.from(clienteStats.values()).sort((a, b) => b.montoTotal - a.montoTotal);
     },
   });
 
@@ -123,6 +140,10 @@ const CotizacionesAnalyticsTab = () => {
     );
   }
 
+  // Calculate totals
+  const totalGeneral = stats?.reduce((sum, s) => sum + s.montoTotal, 0) || 0;
+  const totalPedidos = stats?.reduce((sum, s) => sum + s.totalPedidos, 0) || 0;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -130,10 +151,10 @@ const CotizacionesAnalyticsTab = () => {
         <div>
           <h3 className="text-lg font-semibold flex items-center gap-2">
             <BarChart3 className="h-5 w-5" />
-            Análisis de Cotizaciones
+            Análisis de Ventas por Cliente
           </h3>
           <p className="text-sm text-muted-foreground">
-            Historial de precios y cantidades por cliente
+            Historial de pedidos, precios y cantidades por cliente
           </p>
         </div>
         <Select value={mesesAtras} onValueChange={setMesesAtras}>
@@ -146,6 +167,36 @@ const CotizacionesAnalyticsTab = () => {
             <SelectItem value="12">Último año</SelectItem>
           </SelectContent>
         </Select>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Total Vendido</p>
+              <p className="text-2xl font-bold text-green-600">
+                ${totalGeneral.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Total Pedidos</p>
+              <p className="text-2xl font-bold">{totalPedidos}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Clientes Activos</p>
+              <p className="text-2xl font-bold">{stats?.length || 0}</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Client summary */}
@@ -162,9 +213,10 @@ const CotizacionesAnalyticsTab = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Cliente</TableHead>
+                  <TableHead className="text-center">Pedidos</TableHead>
+                  <TableHead className="text-center">Entregados</TableHead>
+                  <TableHead className="text-center">Facturados</TableHead>
                   <TableHead className="text-center">Cotizaciones</TableHead>
-                  <TableHead className="text-center">Enviadas</TableHead>
-                  <TableHead className="text-center">Aceptadas</TableHead>
                   <TableHead className="text-right">Monto Total</TableHead>
                   <TableHead className="text-center">Acciones</TableHead>
                 </TableRow>
@@ -181,16 +233,19 @@ const CotizacionesAnalyticsTab = () => {
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant="secondary">{stat.totalCotizaciones}</Badge>
+                      <Badge variant="secondary">{stat.totalPedidos}</Badge>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge className="bg-blue-500/20 text-blue-700">{stat.enviadas}</Badge>
+                      <Badge className="bg-green-500/20 text-green-700">{stat.entregados}</Badge>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge className="bg-green-500/20 text-green-700">{stat.aceptadas}</Badge>
+                      <Badge className="bg-blue-500/20 text-blue-700">{stat.facturados}</Badge>
                     </TableCell>
-                    <TableCell className="text-right font-mono">
-                      ${formatCurrency(stat.montoTotal)}
+                    <TableCell className="text-center">
+                      <Badge variant="outline">{stat.cotizaciones}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-medium">
+                      ${stat.montoTotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                     </TableCell>
                     <TableCell className="text-center">
                       <Button
@@ -211,7 +266,7 @@ const CotizacionesAnalyticsTab = () => {
             </Table>
           ) : (
             <p className="text-center text-muted-foreground py-8">
-              No hay cotizaciones en el período seleccionado.
+              No hay pedidos en el período seleccionado.
             </p>
           )}
         </CardContent>

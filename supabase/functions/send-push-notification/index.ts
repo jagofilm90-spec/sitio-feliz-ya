@@ -54,7 +54,7 @@ serve(async (req) => {
       if (roleError) {
         console.error('Error obteniendo usuarios por rol:', roleError);
       } else if (roleUsers) {
-        const roleUserIds = roleUsers.map(r => r.user_id);
+        const roleUserIds = roleUsers.map((r: { user_id: string }) => r.user_id);
         targetUserIds = [...new Set([...targetUserIds, ...roleUserIds])];
       }
     }
@@ -89,7 +89,7 @@ serve(async (req) => {
     console.log(`Enviando a ${deviceTokens.length} dispositivos`);
 
     // Enviar notificación a cada dispositivo via FCM
-    const sendPromises = deviceTokens.map(async (device) => {
+    const sendPromises = deviceTokens.map(async (device: { token: string; platform: string; user_id: string }) => {
       try {
         const response = await fetch('https://fcm.googleapis.com/fcm/send', {
           method: 'POST',
@@ -125,9 +125,9 @@ serve(async (req) => {
         }
 
         return { success: result.success === 1, device: device.platform };
-      } catch (error) {
-        console.error('Error enviando a dispositivo:', error);
-        return { success: false, device: device.platform, error };
+      } catch (err) {
+        console.error('Error enviando a dispositivo:', err);
+        return { success: false, device: device.platform, error: String(err) };
       }
     });
 
@@ -148,8 +148,9 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error en send-push-notification:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ success: false, error: errorMessage }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }

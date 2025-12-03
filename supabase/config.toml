@@ -44,3 +44,9 @@ verify_jwt = true
 
 [functions.parse-excel-order]
 verify_jwt = true
+
+[functions.send-order-authorized-email]
+verify_jwt = true
+
+[functions.send-push-notification]
+verify_jwt = true

@@ -260,7 +260,7 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
       const timestamp = Date.now().toString().slice(-6);
       const folio = `PED-CLI-${timestamp}`;
 
-      // Crear pedido
+      // Crear pedido con status por_autorizar para revisión de precios
       const { data: pedido, error: pedidoError } = await supabase
         .from("pedidos")
         .insert({
@@ -272,7 +272,7 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
           subtotal: totalesGuardar.subtotal,
           impuestos: totalesGuardar.impuestos,
           total: totalesGuardar.total,
-          status: "pendiente",
+          status: "por_autorizar",
           notas: notas || null,
         })
         .select()
@@ -296,8 +296,8 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
       if (detallesError) throw detallesError;
 
       toast({
-        title: "Pedido creado",
-        description: `Tu pedido ${folio} ha sido creado exitosamente`,
+        title: "Pedido enviado",
+        description: `Tu pedido ${folio} ha sido enviado para autorización de precios. Te notificaremos cuando sea confirmado.`,
       });
 
       // Limpiar formulario

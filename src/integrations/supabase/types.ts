@@ -2466,7 +2466,12 @@ export type Database = {
         | "grupo_puesto"
         | "broadcast"
       credit_term: "contado" | "8_dias" | "15_dias" | "30_dias"
-      order_status: "pendiente" | "en_ruta" | "entregado" | "cancelado"
+      order_status:
+        | "por_autorizar"
+        | "pendiente"
+        | "en_ruta"
+        | "entregado"
+        | "cancelado"
       preferencia_facturacion:
         | "siempre_factura"
         | "siempre_remision"
@@ -2624,7 +2629,13 @@ export const Constants = {
         "broadcast",
       ],
       credit_term: ["contado", "8_dias", "15_dias", "30_dias"],
-      order_status: ["pendiente", "en_ruta", "entregado", "cancelado"],
+      order_status: [
+        "por_autorizar",
+        "pendiente",
+        "en_ruta",
+        "entregado",
+        "cancelado",
+      ],
       preferencia_facturacion: [
         "siempre_factura",
         "siempre_remision",

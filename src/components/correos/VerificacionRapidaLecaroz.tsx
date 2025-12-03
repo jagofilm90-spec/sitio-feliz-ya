@@ -24,7 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { calcularSubtotal, calcularDesgloseImpuestos, redondear } from "@/lib/calculos";
+import { calcularSubtotal, calcularDesgloseImpuestos, redondear, esProductoBolsas5kg, redondearABolsasCompletas, calcularNumeroBolsas, KG_POR_BOLSA } from "@/lib/calculos";
 import { cn } from "@/lib/utils";
 
 // Solo Piloncillo requiere verificación manual (peso variable por caja)
@@ -219,31 +219,41 @@ export function VerificacionRapidaLecaroz({ onClose }: VerificacionRapidaLecaroz
         return;
       }
 
-      // *** ALERTA PARA CANELA MOLIDA / ANÍS >12 KG ***
+      // *** ALERTA Y REDONDEO PARA CANELA MOLIDA / ANÍS >12 KG ***
       const productosConCantidadInusual = productosModificados.filter(p => {
-        const nombreLower = p.productoNombre?.toLowerCase() || '';
-        const esCanelaoAnis = nombreLower.includes('canela molida') || 
-                             nombreLower.includes('anís') || 
-                             nombreLower.includes('anis');
-        return esCanelaoAnis && p.cantidadKg > 12;
+        return esProductoBolsas5kg(p.productoNombre) && p.cantidadKg > 12;
       });
 
       if (productosConCantidadInusual.length > 0) {
-        const listaProductos = productosConCantidadInusual.map(p => 
-          `• ${p.sucursalCodigo} ${p.sucursalNombre}: ${p.productoNombre} - ${p.cantidadKg} kg`
-        ).join('\n');
+        const listaProductos = productosConCantidadInusual.map(p => {
+          const cantidadAjustada = redondearABolsasCompletas(p.cantidadKg, KG_POR_BOLSA);
+          const numBolsas = calcularNumeroBolsas(p.cantidadKg, KG_POR_BOLSA);
+          return `• ${p.sucursalCodigo} ${p.sucursalNombre}: ${p.productoNombre} - ${p.cantidadKg} kg → ${cantidadAjustada} kg (${numBolsas} bolsas)`;
+        }).join('\n');
         
         const confirmar = window.confirm(
           `⚠️ CANTIDADES INUSUALES DETECTADAS\n\n` +
           `${listaProductos}\n\n` +
           `Es muy raro que una panadería pida más de 12 kg de Canela Molida o Anís.\n` +
-          `¿Estás seguro de que las cantidades son correctas?`
+          `Las cantidades se ajustarán a bolsas completas de 5kg.\n` +
+          `¿Deseas continuar?`
         );
         
         if (!confirmar) {
           setGuardando(false);
           return;
         }
+        
+        // Aplicar redondeo a bolsas completas de 5kg
+        productosConCantidadInusual.forEach(p => {
+          p.cantidadKg = redondearABolsasCompletas(p.cantidadKg, KG_POR_BOLSA);
+        });
+        
+        // Actualizar estado local con los valores redondeados
+        setProductos(prev => prev.map(prod => {
+          const updated = productosConCantidadInusual.find(u => u.detalleId === prod.detalleId);
+          return updated ? { ...prod, cantidadKg: updated.cantidadKg } : prod;
+        }));
       }
 
       // Group by pedido to update totals efficiently

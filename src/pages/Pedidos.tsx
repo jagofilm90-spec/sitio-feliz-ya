@@ -480,22 +480,11 @@ const Pedidos = () => {
           const numBultos = cantidadParaCalculo / 10;
           presentacion = `${numBultos} ${pluralizar('bulto', numBultos)}`;
         }
-        // *** REGLA ESPECIAL CANELA MOLIDA / ANÍS: 1-6kg→5kg (1 bolsa), 7-12kg→10kg (1 bolsa) ***
+        // *** REGLA UNIFICADA CANELA MOLIDA / ANÍS: SIEMPRE redondear a bolsas completas de 5kg ***
         else if (nombreLower.includes('canela molida') || nombreLower.includes('anís') || nombreLower.includes('anis')) {
-          let cantidadAjustada = cantidadNum;
-          let numBolsas = 1;
-          
-          if (cantidadNum >= 1 && cantidadNum <= 6) {
-            cantidadAjustada = 5;
-            numBolsas = 1;
-          } else if (cantidadNum >= 7 && cantidadNum <= 12) {
-            cantidadAjustada = 10;
-            numBolsas = 1;
-          } else if (cantidadNum > 12) {
-            // Cantidad inusual >12kg - NO ajustar automáticamente
-            cantidadAjustada = cantidadNum;
-            numBolsas = Math.ceil(cantidadNum / 10);
-          }
+          // Importar lógica centralizada - siempre redondear hacia arriba a múltiplos de 5kg
+          const cantidadAjustada = Math.ceil(cantidadNum / 5) * 5; // redondearABolsasCompletas inline
+          const numBolsas = cantidadAjustada / 5; // calcularNumeroBolsas inline
           
           // Actualizar cantidad mostrada con el valor ajustado
           cantidadDisplay = `${formatearCantidad(cantidadAjustada)} kg`;

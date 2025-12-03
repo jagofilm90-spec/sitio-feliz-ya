@@ -16,6 +16,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/utils";
+import { esProductoBolsas5kg, redondearABolsasCompletas, calcularNumeroBolsas, KG_POR_BOLSA } from "@/lib/calculos";
 import { Loader2 } from "lucide-react";
 
 interface PedidoDetalleDialogProps {
@@ -230,7 +231,12 @@ export default function PedidoDetalleDialog({
                     // Calcular presentación para bodegueros - SIEMPRE en unidades comerciales, nunca solo kg
                     let presentacion = "";
                     
-                    if (producto.precio_por_kilo && producto.kg_por_unidad && producto.kg_por_unidad > 0) {
+                    // *** REGLA ESPECIAL ANÍS / CANELA MOLIDA: Bolsas de 5kg ***
+                    if (esProductoBolsas5kg(producto.nombre)) {
+                      const cantidadAjustada = redondearABolsasCompletas(detalle.cantidad, KG_POR_BOLSA);
+                      const numBolsas = calcularNumeroBolsas(detalle.cantidad, KG_POR_BOLSA);
+                      presentacion = `${numBolsas} bolsa${numBolsas !== 1 ? 's' : ''}`;
+                    } else if (producto.precio_por_kilo && producto.kg_por_unidad && producto.kg_por_unidad > 0) {
                       // Producto vendido por kilo con conversión conocida
                       const unidadesComerciales = Math.ceil(detalle.cantidad / producto.kg_por_unidad);
                       const plural = unidadesComerciales !== 1 ? 's' : '';

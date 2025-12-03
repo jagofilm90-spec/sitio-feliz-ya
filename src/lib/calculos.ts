@@ -16,6 +16,35 @@ const IVA_RATE = 0.16; // 16%
 const IEPS_RATE = 0.08; // 8%
 const DECIMAL_PRECISION = 2;
 
+// ==================== PRODUCTOS BOLSAS 5KG (ANÍS / CANELA MOLIDA) ====================
+export const PRODUCTOS_BOLSAS_5KG = ['anís', 'anis', 'canela molida'];
+export const KG_POR_BOLSA = 5;
+
+/**
+ * Detecta si un producto es Anís o Canela Molida (que se venden en bolsas de 5kg)
+ */
+export function esProductoBolsas5kg(nombre: string): boolean {
+  const nombreLower = nombre?.toLowerCase() || '';
+  return PRODUCTOS_BOLSAS_5KG.some(p => nombreLower.includes(p));
+}
+
+/**
+ * Redondea una cantidad de kg hacia arriba a bolsas completas
+ * REGLA: Siempre redondear hacia ARRIBA a múltiplos de kgPorBolsa
+ * Ejemplos con 5kg: 1kg→5kg, 6kg→10kg, 11kg→15kg, 17kg→20kg
+ */
+export function redondearABolsasCompletas(cantidadKg: number, kgPorBolsa: number = 5): number {
+  const bolsas = Math.ceil(cantidadKg / kgPorBolsa);
+  return bolsas * kgPorBolsa;
+}
+
+/**
+ * Calcula el número de bolsas necesarias para una cantidad de kg
+ */
+export function calcularNumeroBolsas(cantidadKg: number, kgPorBolsa: number = 5): number {
+  return Math.ceil(cantidadKg / kgPorBolsa);
+}
+
 // ==================== REDONDEO ====================
 
 /**

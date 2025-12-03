@@ -59,6 +59,7 @@ interface ProductoFrecuente {
   id: string;
   producto_id: string;
   es_especial: boolean;
+  ultimo_precio?: number;
   producto: {
     id: string;
     nombre: string;
@@ -126,6 +127,7 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
 
   const loadProductosFrecuentes = async () => {
     try {
+      // Get frequent products
       const { data, error } = await supabase
         .from("cliente_productos_frecuentes")
         .select(`
@@ -139,9 +141,36 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
         .order("orden_display");
 
       if (error) throw error;
+      
+      // Get last prices paid by this client for each product
+      const { data: ultimosPrecios } = await supabase
+        .from("pedidos_detalles")
+        .select(`
+          producto_id,
+          precio_unitario,
+          pedido:pedidos!inner(
+            cliente_id,
+            status,
+            fecha_pedido
+          )
+        `)
+        .eq("pedido.cliente_id", clienteId)
+        .neq("pedido.status", "por_autorizar")
+        .neq("pedido.status", "cancelado")
+        .order("pedido(fecha_pedido)", { ascending: false });
+
+      // Create a map of producto_id -> last price
+      const preciosPorProducto: Record<string, number> = {};
+      (ultimosPrecios || []).forEach((item: any) => {
+        if (!preciosPorProducto[item.producto_id]) {
+          preciosPorProducto[item.producto_id] = item.precio_unitario;
+        }
+      });
+
       setProductosFrecuentes((data || []).map(d => ({
         ...d,
-        producto: d.producto as unknown as ProductoFrecuente['producto']
+        producto: d.producto as unknown as ProductoFrecuente['producto'],
+        ultimo_precio: preciosPorProducto[d.producto_id]
       })));
     } catch (error: any) {
       console.error("Error loading frequent products:", error);
@@ -181,9 +210,11 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
       !productosFrecuentes.some(pf => pf.producto_id === p.id)
   );
 
-  const agregarProductoDesdeGrid = (producto: ProductoFrecuente['producto'], cantidad: number) => {
+  const agregarProductoDesdeGrid = (item: ProductoFrecuente, cantidad: number) => {
     if (cantidad <= 0) return;
     
+    const producto = item.producto;
+    const precio = item.ultimo_precio || producto.precio_venta;
     const existe = detalles.find((d) => d.productoId === producto.id);
     
     if (existe) {
@@ -196,9 +227,9 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
       nombre: producto.nombre,
       codigo: producto.codigo,
       unidad: producto.unidad,
-      precioUnitario: producto.precio_venta,
+      precioUnitario: precio,
       cantidad,
-      subtotal: producto.precio_venta * cantidad,
+      subtotal: precio * cantidad,
       aplica_iva: producto.aplica_iva || false,
       aplica_ieps: producto.aplica_ieps || false,
     };
@@ -520,6 +551,8 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {productosRegulares.map((item) => {
                   const cantidadActual = getCantidadEnPedido(item.producto.id);
+                  const precioMostrar = item.ultimo_precio || item.producto.precio_venta;
+                  const esUltimoPrecio = !!item.ultimo_precio;
                   return (
                     <div 
                       key={item.id} 
@@ -532,9 +565,14 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
                           <p className="font-medium text-sm truncate">{item.producto.nombre}</p>
                           <p className="text-xs text-muted-foreground">{item.producto.codigo}</p>
                         </div>
-                        <Badge variant="secondary" className="ml-2 shrink-0">
-                          ${item.producto.precio_venta.toFixed(2)}
-                        </Badge>
+                        <div className="ml-2 text-right">
+                          <Badge variant="secondary" className="shrink-0">
+                            ${precioMostrar.toFixed(2)}
+                          </Badge>
+                          {esUltimoPrecio && (
+                            <p className="text-[10px] text-muted-foreground mt-0.5">último precio</p>
+                          )}
+                        </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <Input
@@ -544,7 +582,7 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
                           value={cantidadActual || ""}
                           onChange={(e) => {
                             const val = parseInt(e.target.value) || 0;
-                            agregarProductoDesdeGrid(item.producto, val);
+                            agregarProductoDesdeGrid(item, val);
                           }}
                           className="h-8 text-center"
                         />
@@ -577,6 +615,8 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {productosEspeciales.map((item) => {
                       const cantidadActual = getCantidadEnPedido(item.producto.id);
+                      const precioMostrar = item.ultimo_precio || item.producto.precio_venta;
+                      const esUltimoPrecio = !!item.ultimo_precio;
                       return (
                         <div 
                           key={item.id} 
@@ -589,9 +629,14 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
                               <p className="font-medium text-sm truncate">{item.producto.nombre}</p>
                               <p className="text-xs text-muted-foreground">{item.producto.codigo}</p>
                             </div>
-                            <Badge variant="secondary" className="ml-2 shrink-0">
-                              ${item.producto.precio_venta.toFixed(2)}
-                            </Badge>
+                            <div className="ml-2 text-right">
+                              <Badge variant="secondary" className="shrink-0">
+                                ${precioMostrar.toFixed(2)}
+                              </Badge>
+                              {esUltimoPrecio && (
+                                <p className="text-[10px] text-muted-foreground mt-0.5">último precio</p>
+                              )}
+                            </div>
                           </div>
                           <div className="flex items-center gap-2">
                             <Input
@@ -601,7 +646,7 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
                               value={cantidadActual || ""}
                               onChange={(e) => {
                                 const val = parseInt(e.target.value) || 0;
-                                agregarProductoDesdeGrid(item.producto, val);
+                                agregarProductoDesdeGrid(item, val);
                               }}
                               className="h-8 text-center"
                             />

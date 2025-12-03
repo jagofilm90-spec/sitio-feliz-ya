@@ -51,7 +51,6 @@ const setupPushListeners = () => {
   // Notificación recibida con app en primer plano
   PushNotifications.addListener('pushNotificationReceived', (notification: PushNotificationSchema) => {
     console.log('Notificación recibida:', notification);
-    // Aquí podrías mostrar un toast o actualizar la UI
     handleForegroundNotification(notification);
   });
 
@@ -62,7 +61,7 @@ const setupPushListeners = () => {
   });
 };
 
-// Guardar token del dispositivo en la base de datos
+// Guardar token del dispositivo en la base de datos usando SQL directo
 const saveDeviceToken = async (token: string): Promise<void> => {
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -75,7 +74,10 @@ const saveDeviceToken = async (token: string): Promise<void> => {
     const platform = Capacitor.getPlatform();
     const deviceName = `${platform}-${Date.now()}`;
 
-    const { error } = await supabase
+    // Usar inserción directa con la tabla device_tokens
+    // La tabla existe pero los tipos no están regenerados aún
+    const client = supabase as any;
+    const { error } = await client
       .from('device_tokens')
       .upsert({
         user_id: user.id,
@@ -99,7 +101,6 @@ const saveDeviceToken = async (token: string): Promise<void> => {
 
 // Manejar notificación recibida en primer plano
 const handleForegroundNotification = (notification: PushNotificationSchema) => {
-  // Importar dinámicamente para evitar problemas de dependencias circulares
   import('@/hooks/use-toast').then(({ toast }) => {
     toast({
       title: notification.title || 'Nueva notificación',
@@ -114,7 +115,6 @@ const handleNotificationTap = (action: ActionPerformed) => {
   
   if (!data?.type) return;
 
-  // Navegar según el tipo de notificación
   switch (data.type) {
     case 'nuevo_pedido':
       window.location.href = '/pedidos?tab=por-autorizar';
@@ -149,8 +149,9 @@ export const removeDeviceToken = async (): Promise<void> => {
     if (!user) return;
 
     const platform = Capacitor.getPlatform();
+    const client = supabase as any;
 
-    await supabase
+    await client
       .from('device_tokens')
       .delete()
       .eq('user_id', user.id)
@@ -170,6 +171,32 @@ export const checkNotificationPermissions = async (): Promise<boolean> => {
     const status = await PushNotifications.checkPermissions();
     return status.receive === 'granted';
   } catch {
+    return false;
+  }
+};
+
+// Enviar notificación push (llamar desde el cliente)
+export const sendPushNotification = async (params: {
+  user_ids?: string[];
+  roles?: string[];
+  title: string;
+  body: string;
+  data?: Record<string, string>;
+}): Promise<boolean> => {
+  try {
+    const { data, error } = await supabase.functions.invoke('send-push-notification', {
+      body: params
+    });
+
+    if (error) {
+      console.error('Error enviando push notification:', error);
+      return false;
+    }
+
+    console.log('Push notification enviada:', data);
+    return data?.success || false;
+  } catch (error) {
+    console.error('Error en sendPushNotification:', error);
     return false;
   }
 };

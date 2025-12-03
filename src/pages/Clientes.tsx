@@ -30,13 +30,14 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Edit, Trash2, MapPin, X, Mail, BarChart3, Loader2, Sparkles, User } from "lucide-react";
+import { Plus, Search, Edit, Trash2, MapPin, X, Mail, BarChart3, Loader2, Sparkles, User, Package } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import ClienteSucursalesDialog from "@/components/clientes/ClienteSucursalesDialog";
 import GoogleMapsAddressAutocomplete from "@/components/GoogleMapsAddressAutocomplete";
 import ClienteHistorialAnalytics from "@/components/analytics/ClienteHistorialAnalytics";
 import { ClienteUsuarioTab } from "@/components/clientes/ClienteUsuarioTab";
 import { ClienteFormContent } from "@/components/clientes/ClienteFormContent";
+import { ClienteProductosTab } from "@/components/clientes/ClienteProductosTab";
 import { useUserRoles } from "@/hooks/useUserRoles";
 import {
   Dialog as HistorialDialog,
@@ -691,8 +692,12 @@ const Clientes = () => {
               
               {editingClient ? (
                 <Tabs defaultValue="datos" className="w-full">
-                  <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                  <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-3' : 'grid-cols-2'}`}>
                     <TabsTrigger value="datos">Datos del Cliente</TabsTrigger>
+                    <TabsTrigger value="productos" className="flex items-center gap-2">
+                      <Package className="h-4 w-4" />
+                      Productos
+                    </TabsTrigger>
                     {isAdmin && (
                       <TabsTrigger value="usuario" className="flex items-center gap-2">
                         <User className="h-4 w-4" />
@@ -703,6 +708,9 @@ const Clientes = () => {
                       </TabsTrigger>
                     )}
                   </TabsList>
+                  <TabsContent value="productos" className="mt-4">
+                    <ClienteProductosTab clienteId={editingClient.id} />
+                  </TabsContent>
                   {isAdmin && (
                     <TabsContent value="usuario" className="mt-4">
                       <ClienteUsuarioTab 

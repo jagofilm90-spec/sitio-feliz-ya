@@ -91,6 +91,54 @@ export type Database = {
           },
         ]
       }
+      cliente_productos_frecuentes: {
+        Row: {
+          activo: boolean | null
+          cliente_id: string
+          created_at: string
+          es_especial: boolean | null
+          id: string
+          orden_display: number | null
+          producto_id: string
+          updated_at: string
+        }
+        Insert: {
+          activo?: boolean | null
+          cliente_id: string
+          created_at?: string
+          es_especial?: boolean | null
+          id?: string
+          orden_display?: number | null
+          producto_id: string
+          updated_at?: string
+        }
+        Update: {
+          activo?: boolean | null
+          cliente_id?: string
+          created_at?: string
+          es_especial?: boolean | null
+          id?: string
+          orden_display?: number | null
+          producto_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cliente_productos_frecuentes_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cliente_productos_frecuentes_producto_id_fkey"
+            columns: ["producto_id"]
+            isOneToOne: false
+            referencedRelation: "productos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cliente_sucursales: {
         Row: {
           activo: boolean

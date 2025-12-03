@@ -42,7 +42,8 @@ import {
   History,
   Edit2,
   Save,
-  X
+  X,
+  AlertTriangle
 } from "lucide-react";
 import { format, subMonths } from "date-fns";
 import { es } from "date-fns/locale";
@@ -429,8 +430,18 @@ export function PedidosPorAutorizarTab() {
                 <TableCell>
                   <Badge variant="outline">{pedido.pedidos_detalles.length} productos</Badge>
                 </TableCell>
-                <TableCell className="text-right font-mono text-blue-600">
-                  {calcularPesoTotalPedido(pedido.pedidos_detalles).toLocaleString()} kg
+                <TableCell className="text-right">
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="font-mono text-blue-600">
+                      {calcularPesoTotalPedido(pedido.pedidos_detalles).toLocaleString()} kg
+                    </span>
+                    {calcularPesoTotalPedido(pedido.pedidos_detalles) > 15500 && (
+                      <Badge variant="destructive" className="gap-1 text-xs">
+                        <AlertTriangle className="h-3 w-3" />
+                        Excede 15,500 kg
+                      </Badge>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell className="text-right font-mono">${formatCurrency(pedido.total)}</TableCell>
                 <TableCell>

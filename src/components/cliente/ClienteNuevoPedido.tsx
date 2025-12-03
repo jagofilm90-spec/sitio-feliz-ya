@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Trash2, ShoppingCart, Search, MapPin, Calendar, Star, ChevronDown, Package } from "lucide-react";
+import { Plus, Trash2, ShoppingCart, Search, MapPin, Calendar, Star, ChevronDown, Package, AlertTriangle } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -881,6 +881,29 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
                 <span>Total:</span>
                 <span className="font-mono">${formatCurrency(total)}</span>
               </div>
+              
+              {/* Peso Total - siempre visible */}
+              <div className="flex justify-between text-lg font-bold text-blue-600 pt-2 border-t">
+                <span className="flex items-center gap-2">
+                  <Package className="h-4 w-4" />
+                  Peso Total:
+                </span>
+                <span className="font-mono">{calcularPesoTotal().toLocaleString()} kg</span>
+              </div>
+
+              {/* Alerta si excede 15,500 kg */}
+              {calcularPesoTotal() > 15500 && (
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 rounded-lg">
+                  <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+                    <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">Pedido requiere autorización especial</p>
+                      <p className="text-sm">El peso total excede los 15,500 kg permitidos por viaje</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {total > creditoDisponible && (
                 <p className="text-sm text-destructive">
                   ⚠️ El total excede tu crédito disponible

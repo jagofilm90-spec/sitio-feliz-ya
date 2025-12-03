@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.lovable.0a4fe6f267d54980a499e679897a2f15',
+  appId: 'com.almasa.erp',
   appName: 'ALMASA ERP',
   webDir: 'dist',
   server: {

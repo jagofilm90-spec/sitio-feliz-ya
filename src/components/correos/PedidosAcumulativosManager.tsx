@@ -454,6 +454,7 @@ export function PedidosAcumulativosManager() {
         cantidad: det.cantidad,
         precio_unitario: det.precio_unitario,
         subtotal: det.subtotal,
+        unidades_manual: det.unidades_manual,
       }));
 
       const { error: detallesError } = await supabase.from("pedidos_detalles").insert(detallesInsert);
@@ -544,6 +545,7 @@ export function PedidosAcumulativosManager() {
             cantidad: det.cantidad,
             precio_unitario: det.precio_unitario,
             subtotal: det.subtotal,
+            unidades_manual: det.unidades_manual,
           }));
 
           await supabase.from("pedidos_detalles").insert(detallesInsert);

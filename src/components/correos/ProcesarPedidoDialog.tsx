@@ -852,7 +852,7 @@ export default function ProcesarPedidoDialog({
         let subtotalNeto = 0;
 
         for (const prod of validProducts) {
-          const cantidadFinal = ajustarCantidad(prod.cantidad, prod.precio_por_kilo || false);
+          const cantidadFinal = ajustarCantidad(prod.cantidad, prod.precio_por_kilo || false, prod.kg_por_unidad, prod.nombre_producto);
           
           // USAR SISTEMA CENTRALIZADO: calcular subtotal con validación
           const resultadoSubtotal = calcularSubtotal({
@@ -924,7 +924,7 @@ export default function ProcesarPedidoDialog({
           const inserts: Array<any> = [];
 
           for (const prod of validProducts) {
-            const cantidadFinal = ajustarCantidad(prod.cantidad, prod.precio_por_kilo || false);
+            const cantidadFinal = ajustarCantidad(prod.cantidad, prod.precio_por_kilo || false, prod.kg_por_unidad, prod.nombre_producto);
             
             // USAR SISTEMA CENTRALIZADO para calcular subtotal
             const resultadoSubtotal = calcularSubtotal({
@@ -999,7 +999,7 @@ export default function ProcesarPedidoDialog({
 
           // Insertar detalles
           const detalles = validProducts.map(p => {
-            const cantidadFinal = ajustarCantidad(p.cantidad, p.precio_por_kilo || false);
+            const cantidadFinal = ajustarCantidad(p.cantidad, p.precio_por_kilo || false, p.kg_por_unidad, p.nombre_producto);
             
             // USAR SISTEMA CENTRALIZADO
             const resultadoSubtotal = calcularSubtotal({
@@ -1092,7 +1092,7 @@ export default function ProcesarPedidoDialog({
         let subtotalNeto = 0;
 
         for (const p of validProducts) {
-          const cantidadFinal = ajustarCantidad(p.cantidad, p.precio_por_kilo || false);
+          const cantidadFinal = ajustarCantidad(p.cantidad, p.precio_por_kilo || false, p.kg_por_unidad, p.nombre_producto);
           
           // USAR SISTEMA CENTRALIZADO
           const resultadoSubtotal = calcularSubtotal({
@@ -1136,7 +1136,7 @@ export default function ProcesarPedidoDialog({
 
           // Merge products: update quantities if product exists, add if new
           for (const newProd of validProducts) {
-            const cantidadFinal = ajustarCantidad(newProd.cantidad, newProd.precio_por_kilo || false);
+            const cantidadFinal = ajustarCantidad(newProd.cantidad, newProd.precio_por_kilo || false, newProd.kg_por_unidad, newProd.nombre_producto);
             
             // USAR SISTEMA CENTRALIZADO
             const resultadoSubtotal = calcularSubtotal({
@@ -1243,7 +1243,7 @@ export default function ProcesarPedidoDialog({
 
           // Create pedido detalles - usando sistema centralizado
           const detalles = validProducts.map(p => {
-            const cantidadFinal = ajustarCantidad(p.cantidad, p.precio_por_kilo || false);
+            const cantidadFinal = ajustarCantidad(p.cantidad, p.precio_por_kilo || false, p.kg_por_unidad, p.nombre_producto);
             const resultadoSubtotal = calcularSubtotal({
               cantidad: cantidadFinal,
               precio_unitario: p.precio_unitario || 0,

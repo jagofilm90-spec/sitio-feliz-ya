@@ -442,7 +442,9 @@ export default function ProcesarPedidoDialog({
       if (parseError) throw parseError;
       if (data.error) throw new Error(data.error);
 
-      // Auto-select Rosticería quotation if detected
+      // Auto-select Rosticería quotation if detected AND re-match products with correct quotation
+      let rosticeriaProductOverride: { producto_id: string; nombre: string; precio_unitario: number } | null = null;
+      
       if (data.order?.esRosticeria && cotizacionesRecientes) {
         const rosticeriaCotizacion = cotizacionesRecientes.find(c => 
           c.tipo_cotizacion === 'rosticeria' || 
@@ -452,6 +454,19 @@ export default function ProcesarPedidoDialog({
         if (rosticeriaCotizacion && selectedCotizacionId === "__all__") {
           console.log("Auto-selecting Rosticería quotation:", rosticeriaCotizacion.folio);
           setSelectedCotizacionId(rosticeriaCotizacion.id);
+          
+          // Get the product from this quotation to override the match
+          const detalles = rosticeriaCotizacion.cotizaciones_detalles;
+          if (detalles && detalles.length > 0) {
+            const primerDetalle = detalles[0];
+            rosticeriaProductOverride = {
+              producto_id: primerDetalle.producto_id,
+              nombre: primerDetalle.productos?.nombre || "Producto Rosticería",
+              precio_unitario: primerDetalle.precio_unitario
+            };
+            console.log("Rosticería product override:", rosticeriaProductOverride);
+          }
+          
           toast({
             title: "🍗 Pedido Rosticería detectado",
             description: `Se seleccionó automáticamente la cotización ${rosticeriaCotizacion.folio}`,
@@ -532,6 +547,29 @@ export default function ProcesarPedidoDialog({
               ...suc,
               sucursal_id: matchedSucursalId,
               productos: suc.productos.map((prod: ParsedProduct) => {
+              // ROSTICERÍA OVERRIDE: If we have a Rosticería product override, use it
+              if (rosticeriaProductOverride && data.order?.esRosticeria) {
+                const matchedByCotizacion = productos.find(p => p.id === rosticeriaProductOverride.producto_id);
+                if (matchedByCotizacion) {
+                  console.log('ROSTICERÍA OVERRIDE: Using product from quotation', {
+                    original: prod.nombre_producto,
+                    override: rosticeriaProductOverride.nombre,
+                    precio: rosticeriaProductOverride.precio_unitario
+                  });
+                  return {
+                    ...prod,
+                    cantidad: prod.cantidad,
+                    unidad: matchedByCotizacion.unidad,
+                    unidad_comercial: matchedByCotizacion.unidad,
+                    producto_id: rosticeriaProductOverride.producto_id,
+                    nombre_producto: rosticeriaProductOverride.nombre,
+                    precio_unitario: rosticeriaProductOverride.precio_unitario,
+                    kg_por_unidad: matchedByCotizacion.kg_por_unidad,
+                    precio_por_kilo: matchedByCotizacion.precio_por_kilo,
+                  };
+                }
+              }
+              
               if (prod.producto_cotizado_id) {
                 const matchedByCotizacion = productos.find(p => p.id === prod.producto_cotizado_id);
                 if (matchedByCotizacion) {

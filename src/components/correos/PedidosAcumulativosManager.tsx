@@ -146,6 +146,7 @@ export function PedidosAcumulativosManager() {
           id,
           pedido_acumulativo_id,
           cantidad,
+          verificado,
           productos:producto_id(nombre)
         `)
         .in("pedido_acumulativo_id", pedidoIds);
@@ -165,18 +166,14 @@ export function PedidosAcumulativosManager() {
           if (!nuevasVerificaciones[det.pedido_acumulativo_id]) {
             nuevasVerificaciones[det.pedido_acumulativo_id] = {};
           }
-          // Solo inicializar si no existe ya
-          if (!verificaciones[det.pedido_acumulativo_id]?.[det.id]) {
-            nuevasVerificaciones[det.pedido_acumulativo_id][det.id] = {
-              detalleId: det.id,
-              verificado: false,
-              cantidadUnidades: 1,
-              cantidadKg: det.cantidad || 0,
-              tipoUnidad: getTipoUnidad(det.productos?.nombre)
-            };
-          } else {
-            nuevasVerificaciones[det.pedido_acumulativo_id][det.id] = verificaciones[det.pedido_acumulativo_id][det.id];
-          }
+          // Inicializar desde BD (verificado viene de la BD ahora)
+          nuevasVerificaciones[det.pedido_acumulativo_id][det.id] = {
+            detalleId: det.id,
+            verificado: det.verificado || false,
+            cantidadUnidades: 1,
+            cantidadKg: det.cantidad || 0,
+            tipoUnidad: getTipoUnidad(det.productos?.nombre)
+          };
         }
       });
       

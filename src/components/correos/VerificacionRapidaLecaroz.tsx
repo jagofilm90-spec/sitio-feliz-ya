@@ -102,6 +102,7 @@ export function VerificacionRapidaLecaroz({ onClose }: VerificacionRapidaLecaroz
           cantidad,
           precio_unitario,
           subtotal,
+          verificado,
           productos:producto_id(nombre, codigo)
         `)
         .in("pedido_acumulativo_id", pedidoIds);
@@ -128,7 +129,7 @@ export function VerificacionRapidaLecaroz({ onClose }: VerificacionRapidaLecaroz
             cantidadKg: det.cantidad,
             cantidadUnidades: 1,
             precioUnitario: det.precio_unitario,
-            verificado: false,
+            verificado: det.verificado || false,
           });
         }
       });
@@ -224,18 +225,20 @@ export function VerificacionRapidaLecaroz({ onClose }: VerificacionRapidaLecaroz
       const pedidosAfectados = new Set<string>();
       
       for (const producto of productosModificados) {
-        if (producto.cantidadKg !== producto.cantidadOriginal) {
-          const nuevoSubtotal = producto.cantidadKg * producto.precioUnitario;
-          
-          const { error } = await supabase
-            .from("pedidos_acumulativos_detalles")
-            .update({ 
-              cantidad: producto.cantidadKg, 
-              subtotal: nuevoSubtotal 
-            })
-            .eq("id", producto.detalleId);
+        const nuevoSubtotal = producto.cantidadKg * producto.precioUnitario;
+        
+        const { error } = await supabase
+          .from("pedidos_acumulativos_detalles")
+          .update({ 
+            cantidad: producto.cantidadKg, 
+            subtotal: nuevoSubtotal,
+            verificado: producto.verificado
+          })
+          .eq("id", producto.detalleId);
 
-          if (error) throw error;
+        if (error) throw error;
+        
+        if (producto.cantidadKg !== producto.cantidadOriginal) {
           pedidosAfectados.add(producto.pedidoId);
         }
       }
@@ -268,9 +271,13 @@ export function VerificacionRapidaLecaroz({ onClose }: VerificacionRapidaLecaroz
         }).eq("id", pedidoId);
       }
 
-      toast.success(`${productosModificados.length} productos actualizados`);
-      queryClient.invalidateQueries({ queryKey: ["pedidos-acumulativos"] });
-      queryClient.invalidateQueries({ queryKey: ["verificacion-rapida-lecaroz"] });
+      const verificadosCount = productosModificados.filter(p => p.verificado).length;
+      const modificadosCount = productosModificados.filter(p => p.cantidadKg !== p.cantidadOriginal).length;
+      
+      toast.success(`${verificadosCount} verificados, ${modificadosCount} cantidades modificadas`);
+      await queryClient.invalidateQueries({ queryKey: ["pedidos-acumulativos"] });
+      await queryClient.invalidateQueries({ queryKey: ["verificacion-rapida-lecaroz"] });
+      await queryClient.invalidateQueries({ queryKey: ["pedidos-acumulativos-all-detalles-verificacion"] });
       
     } catch (error: any) {
       toast.error("Error al guardar: " + error.message);

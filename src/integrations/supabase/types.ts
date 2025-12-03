@@ -187,6 +187,7 @@ export type Database = {
           entre_calle: string | null
           id: string
           limite_credito: number | null
+          logo_url: string | null
           nombre: string
           nombre_colonia: string | null
           nombre_entidad_federativa: string | null
@@ -220,6 +221,7 @@ export type Database = {
           entre_calle?: string | null
           id?: string
           limite_credito?: number | null
+          logo_url?: string | null
           nombre: string
           nombre_colonia?: string | null
           nombre_entidad_federativa?: string | null
@@ -253,6 +255,7 @@ export type Database = {
           entre_calle?: string | null
           id?: string
           limite_credito?: number | null
+          logo_url?: string | null
           nombre?: string
           nombre_colonia?: string | null
           nombre_entidad_federativa?: string | null

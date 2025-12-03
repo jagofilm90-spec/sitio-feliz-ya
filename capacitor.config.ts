@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'ALMASA ERP',
   webDir: 'dist',
   server: {
-    url: 'https://0a4fe6f2-67d5-4980-a499-e679897a2f15.lovableproject.com?forceHideBadge=true',
+    url: 'https://erp.almasa.com.mx',
     cleartext: true
   },
   plugins: {

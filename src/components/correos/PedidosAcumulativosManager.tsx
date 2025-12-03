@@ -16,7 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { calcularSubtotal, calcularDesgloseImpuestos as calcularDesgloseImpuestosNuevo, redondear, esProductoBolsas5kg, redondearABolsasCompletas, calcularNumeroBolsas, KG_POR_BOLSA } from "@/lib/calculos";
+import { calcularSubtotal, calcularDesgloseImpuestos as calcularDesgloseImpuestosNuevo, redondear, esProductoBolsas5kg, redondearABolsasCompletas, calcularNumeroBolsas, KG_POR_BOLSA, ordenarProductosAzucarPrimero } from "@/lib/calculos";
 import { formatCurrency } from "@/lib/utils";
 
 // Solo Piloncillo requiere verificación manual obligatoria (peso variable por caja)
@@ -1098,7 +1098,7 @@ export function PedidosAcumulativosManager() {
           <ScrollArea className="h-[450px] pr-4">
             {detalles && detalles.length > 0 ? (
               <div className="space-y-2">
-                {detalles.map((detalle: any, idx: number) => {
+                {ordenarProductosAzucarPrimero(detalles, (d: any) => d.productos?.nombre || '').map((detalle: any, idx: number) => {
                   const requiereVerificacion = esProductoVerificable(detalle.productos?.nombre);
                   const tipoUnidadProducto = getTipoUnidad(detalle.productos?.nombre);
                   const isEditing = editingDetalle === detalle.id;

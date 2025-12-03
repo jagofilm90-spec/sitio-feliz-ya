@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Eye, ChevronDown, ChevronUp } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ordenarProductosAzucarPrimero } from "@/lib/calculos";
 
 interface ClientePedidosProps {
   clienteId: string;
@@ -183,7 +184,7 @@ const ClientePedidos = ({ clienteId }: ClientePedidosProps) => {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {detallesPedidos[pedido.id].map((detalle) => (
+                            {ordenarProductosAzucarPrimero(detallesPedidos[pedido.id], (d) => d.productos?.nombre || '').map((detalle) => (
                               <TableRow key={detalle.id}>
                                 <TableCell>{detalle.productos?.nombre}</TableCell>
                                 <TableCell>{detalle.productos?.codigo}</TableCell>

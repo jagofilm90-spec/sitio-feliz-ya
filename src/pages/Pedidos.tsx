@@ -30,11 +30,12 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Eye, ShoppingCart, FileText, Link2, Printer, Receipt, Send, CheckCircle2, Clock, BarChart3, Trash2 } from "lucide-react";
+import { Plus, Search, Eye, ShoppingCart, FileText, Link2, Printer, Receipt, Send, CheckCircle2, Clock, BarChart3, Trash2, AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 import CotizacionesTab from "@/components/cotizaciones/CotizacionesTab";
 import CotizacionesAnalyticsTab from "@/components/cotizaciones/CotizacionesAnalyticsTab";
+import { PedidosPorAutorizarTab } from "@/components/pedidos/PedidosPorAutorizarTab";
 import CotizacionDetalleDialog from "@/components/cotizaciones/CotizacionDetalleDialog";
 import { ImprimirRemisionDialog } from "@/components/remisiones/ImprimirRemisionDialog";
 import EditarEmailClienteDialog from "@/components/pedidos/EditarEmailClienteDialog";
@@ -241,6 +242,7 @@ const Pedidos = () => {
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, any> = {
+      por_autorizar: "outline",
       pendiente: "secondary",
       en_ruta: "default",
       entregado: "default",
@@ -248,6 +250,7 @@ const Pedidos = () => {
     };
 
     const labels: Record<string, string> = {
+      por_autorizar: "Por Autorizar",
       pendiente: "Pendiente",
       en_ruta: "En Ruta",
       entregado: "Entregado",
@@ -255,7 +258,7 @@ const Pedidos = () => {
     };
 
     return (
-      <Badge variant={variants[status] || "default"}>
+      <Badge variant={variants[status] || "default"} className={status === "por_autorizar" ? "border-amber-500 text-amber-600" : ""}>
         {labels[status] || status}
       </Badge>
     );
@@ -515,6 +518,10 @@ const Pedidos = () => {
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
+            <TabsTrigger value="por-autorizar" className="gap-2">
+              <AlertCircle className="h-4 w-4" />
+              Por Autorizar
+            </TabsTrigger>
             <TabsTrigger value="pedidos" className="gap-2">
               <ShoppingCart className="h-4 w-4" />
               Pedidos
@@ -724,6 +731,10 @@ const Pedidos = () => {
                 </TableBody>
               </Table>
             </div>
+          </TabsContent>
+
+          <TabsContent value="por-autorizar" className="mt-6">
+            <PedidosPorAutorizarTab />
           </TabsContent>
 
           <TabsContent value="cotizaciones" className="mt-6">

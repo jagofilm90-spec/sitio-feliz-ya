@@ -88,6 +88,16 @@ const Fumigaciones = () => {
         };
       });
 
+      // Ordenar: sin fecha primero (más urgentes), luego por fecha más antigua a más reciente
+      productosConEstado.sort((a, b) => {
+        if (a.fecha_ultima_fumigacion === null && b.fecha_ultima_fumigacion !== null) return -1;
+        if (a.fecha_ultima_fumigacion !== null && b.fecha_ultima_fumigacion === null) return 1;
+        if (a.fecha_ultima_fumigacion === null && b.fecha_ultima_fumigacion === null) {
+          return a.nombre.localeCompare(b.nombre);
+        }
+        return new Date(a.fecha_ultima_fumigacion!).getTime() - new Date(b.fecha_ultima_fumigacion!).getTime();
+      });
+
       setProductos(productosConEstado);
     } catch (error) {
       console.error("Error cargando productos:", error);

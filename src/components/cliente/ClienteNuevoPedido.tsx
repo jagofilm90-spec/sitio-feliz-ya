@@ -565,12 +565,19 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
                           <p className="font-medium text-sm truncate">{item.producto.nombre}</p>
                           <p className="text-xs text-muted-foreground">{item.producto.codigo}</p>
                         </div>
-                        <div className="ml-2 text-right">
+                        <div className="ml-2 text-right space-y-0.5">
                           <Badge variant="secondary" className="shrink-0">
                             ${precioMostrar.toFixed(2)}
                           </Badge>
-                          {esUltimoPrecio && (
-                            <p className="text-[10px] text-muted-foreground mt-0.5">último precio</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {esUltimoPrecio ? 'tu último precio' : 'precio actual'}
+                          </p>
+                          {esUltimoPrecio && item.ultimo_precio !== item.producto.precio_venta && (
+                            <p className="text-[10px]">
+                              Catálogo: <span className={item.producto.precio_venta > item.ultimo_precio! ? 'text-destructive' : 'text-green-600 dark:text-green-400'}>
+                                ${item.producto.precio_venta.toFixed(2)}
+                              </span>
+                            </p>
                           )}
                         </div>
                       </div>
@@ -629,12 +636,19 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
                               <p className="font-medium text-sm truncate">{item.producto.nombre}</p>
                               <p className="text-xs text-muted-foreground">{item.producto.codigo}</p>
                             </div>
-                            <div className="ml-2 text-right">
+                            <div className="ml-2 text-right space-y-0.5">
                               <Badge variant="secondary" className="shrink-0">
                                 ${precioMostrar.toFixed(2)}
                               </Badge>
-                              {esUltimoPrecio && (
-                                <p className="text-[10px] text-muted-foreground mt-0.5">último precio</p>
+                              <p className="text-[10px] text-muted-foreground">
+                                {esUltimoPrecio ? 'tu último precio' : 'precio actual'}
+                              </p>
+                              {esUltimoPrecio && item.ultimo_precio !== item.producto.precio_venta && (
+                                <p className="text-[10px]">
+                                  Catálogo: <span className={item.producto.precio_venta > item.ultimo_precio! ? 'text-destructive' : 'text-green-600 dark:text-green-400'}>
+                                    ${item.producto.precio_venta.toFixed(2)}
+                                  </span>
+                                </p>
                               )}
                             </div>
                           </div>

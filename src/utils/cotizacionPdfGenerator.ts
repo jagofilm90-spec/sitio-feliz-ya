@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { ordenarProductosAzucarPrimero } from "@/lib/calculos";
 
 interface ProductoCotizacion {
   codigo: string;
@@ -268,7 +269,8 @@ export const generarCotizacionPDF = async (datos: DatosCotizacion): Promise<stri
   doc.setFontSize(8);
 
   const rowHeight = 8;
-  datos.productos.forEach((producto, index) => {
+  const productosOrdenados = ordenarProductosAzucarPrimero(datos.productos, (p) => p.nombre);
+  productosOrdenados.forEach((producto, index) => {
     // Check for page break
     if (y > pageHeight - 70) {
       doc.addPage();

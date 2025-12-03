@@ -42,6 +42,7 @@ import EditarEmailClienteDialog from "@/components/pedidos/EditarEmailClienteDia
 import NuevoPedidoDialog from "@/components/pedidos/NuevoPedidoDialog";
 import PedidoDetalleDialog from "@/components/pedidos/PedidoDetalleDialog";
 import { formatCurrency } from "@/lib/utils";
+import { ordenarProductosAzucarPrimero } from "@/lib/calculos";
 
 interface PedidoConCotizacion {
   id: string;
@@ -574,7 +575,7 @@ const Pedidos = () => {
           nombre: pedido.cliente_sucursales.nombre,
           direccion: pedido.cliente_sucursales.direccion,
         } : undefined,
-        productos,
+        productos: ordenarProductosAzucarPrimero(productos, (p) => p.descripcion),
         subtotal: subtotalReal,
         iva: ivaTotal,
         ieps: iepsCalculado,

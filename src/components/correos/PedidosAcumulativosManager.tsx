@@ -16,7 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { calcularSubtotal, calcularDesgloseImpuestos as calcularDesgloseImpuestosNuevo, redondear } from "@/lib/calculos";
+import { calcularSubtotal, calcularDesgloseImpuestos as calcularDesgloseImpuestosNuevo, redondear, esProductoBolsas5kg, redondearABolsasCompletas, calcularNumeroBolsas, KG_POR_BOLSA } from "@/lib/calculos";
 import { formatCurrency } from "@/lib/utils";
 
 // Solo Piloncillo requiere verificación manual obligatoria (peso variable por caja)
@@ -402,29 +402,85 @@ export function PedidosAcumulativosManager() {
 
       if (pedidoError) throw pedidoError;
 
-      // *** ALERTA PARA CANELA MOLIDA / ANÍS >12 KG ***
+      // *** ALERTA Y REDONDEO PARA CANELA MOLIDA / ANÍS >12 KG ***
       const detallesSospechosos = pedidoAcum.pedidos_acumulativos_detalles.filter((det: any) => {
-        const nombreLower = det.productos?.nombre?.toLowerCase() || '';
-        const esCanelaoAnis = nombreLower.includes('canela molida') || 
-                             nombreLower.includes('anís') || 
-                             nombreLower.includes('anis');
-        return esCanelaoAnis && det.cantidad > 12;
+        return esProductoBolsas5kg(det.productos?.nombre) && det.cantidad > 12;
       });
 
       if (detallesSospechosos.length > 0) {
-        const productos = detallesSospechosos.map((d: any) => 
-          `• ${d.productos?.nombre || 'Producto'}: ${d.cantidad} kg`
-        ).join('\n');
+        const productos = detallesSospechosos.map((d: any) => {
+          const cantidadOriginal = d.cantidad;
+          const cantidadAjustada = redondearABolsasCompletas(cantidadOriginal, KG_POR_BOLSA);
+          const numBolsas = calcularNumeroBolsas(cantidadOriginal, KG_POR_BOLSA);
+          return `• ${d.productos?.nombre || 'Producto'}: ${cantidadOriginal} kg → ${cantidadAjustada} kg (${numBolsas} bolsas)`;
+        }).join('\n');
         
         const confirmar = window.confirm(
           `⚠️ ALERTA: Cantidades inusuales detectadas\n\n` +
           `${productos}\n\n` +
           `Normalmente las panaderías no piden más de 12 kg de estos productos.\n` +
-          `¿Deseas continuar de todos modos?`
+          `Las cantidades se ajustarán a bolsas completas de 5kg.\n` +
+          `¿Deseas continuar?`
         );
 
         if (!confirmar) {
           throw new Error("Pedido cancelado - revisar cantidades de Canela/Anís");
+        }
+        
+        // Aplicar redondeo a bolsas completas de 5kg para estos productos
+        for (const det of detallesSospechosos) {
+          const cantidadAjustada = redondearABolsasCompletas(det.cantidad, KG_POR_BOLSA);
+          const nuevoSubtotal = cantidadAjustada * det.precio_unitario;
+          
+          await supabase.from("pedidos_acumulativos_detalles")
+            .update({ cantidad: cantidadAjustada, subtotal: nuevoSubtotal })
+            .eq("id", det.id);
+          
+          // Actualizar el objeto local también
+          det.cantidad = cantidadAjustada;
+          det.subtotal = nuevoSubtotal;
+        }
+        
+        // Recalcular totales del pedido acumulativo después del ajuste
+        const { data: detallesActualizados } = await supabase
+          .from("pedidos_acumulativos_detalles")
+          .select(`*, productos:producto_id(aplica_iva, aplica_ieps, nombre)`)
+          .eq("pedido_acumulativo_id", pedidoAcumulativoId);
+        
+        let subtotalRecalc = 0, ivaRecalc = 0, iepsRecalc = 0;
+        for (const det of detallesActualizados || []) {
+          const desglose = calcularDesgloseImpuestosNuevo({
+            precio_con_impuestos: det.subtotal,
+            aplica_iva: det.productos?.aplica_iva || false,
+            aplica_ieps: det.productos?.aplica_ieps || false,
+            nombre_producto: det.productos?.nombre || ''
+          });
+          subtotalRecalc += desglose.base;
+          ivaRecalc += desglose.iva;
+          iepsRecalc += desglose.ieps;
+        }
+        
+        await supabase.from("pedidos_acumulativos").update({
+          subtotal: redondear(subtotalRecalc),
+          impuestos: redondear(ivaRecalc + iepsRecalc),
+          total: redondear(subtotalRecalc + ivaRecalc + iepsRecalc)
+        }).eq("id", pedidoAcumulativoId);
+        
+        // Re-fetch para obtener datos actualizados
+        const { data: pedidoActualizado } = await supabase
+          .from("pedidos_acumulativos")
+          .select(`
+            *, 
+            pedidos_acumulativos_detalles(
+              *,
+              productos:producto_id(nombre)
+            )
+          `)
+          .eq("id", pedidoAcumulativoId)
+          .single();
+        
+        if (pedidoActualizado) {
+          Object.assign(pedidoAcum, pedidoActualizado);
         }
       }
 

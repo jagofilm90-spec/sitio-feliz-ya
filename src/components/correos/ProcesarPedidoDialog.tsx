@@ -35,6 +35,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { calcularSubtotal, calcularDesgloseImpuestos as calcularDesgloseImpuestosNuevo, redondear } from "@/lib/calculos";
 
+// Helper: Redondeo condicional - preserva decimales para productos precio_por_kilo
+const ajustarCantidad = (cantidad: number, precioPorKilo: boolean): number => {
+  if (precioPorKilo) {
+    // Productos por kilo: mantener 2 decimales (22.68 → 22.68)
+    return Math.round(cantidad * 100) / 100;
+  }
+  // Productos por unidad: redondear a entero (2.1 → 2)
+  return Math.round(cantidad);
+};
+
 interface ParsedProduct {
   nombre_producto: string;
   cantidad: number;
@@ -664,11 +674,11 @@ export default function ProcesarPedidoDialog({
         let subtotalNeto = 0;
 
         for (const prod of validProducts) {
-          const cantidadEntera = Math.round(prod.cantidad);
+          const cantidadFinal = ajustarCantidad(prod.cantidad, prod.precio_por_kilo || false);
           
           // USAR SISTEMA CENTRALIZADO: calcular subtotal con validación
           const resultadoSubtotal = calcularSubtotal({
-            cantidad: cantidadEntera,
+            cantidad: cantidadFinal,
             precio_unitario: prod.precio_unitario || 0,
             nombre_producto: prod.nombre_producto
           });
@@ -736,11 +746,11 @@ export default function ProcesarPedidoDialog({
           const inserts: Array<any> = [];
 
           for (const prod of validProducts) {
-            const cantidadEntera = Math.round(prod.cantidad);
+            const cantidadFinal = ajustarCantidad(prod.cantidad, prod.precio_por_kilo || false);
             
             // USAR SISTEMA CENTRALIZADO para calcular subtotal
             const resultadoSubtotal = calcularSubtotal({
-              cantidad: cantidadEntera,
+              cantidad: cantidadFinal,
               precio_unitario: prod.precio_unitario || 0,
               nombre_producto: prod.nombre_producto
             });
@@ -756,14 +766,14 @@ export default function ProcesarPedidoDialog({
             if (existingDetalle) {
               updates.push({
                 id: existingDetalle.id,
-                cantidad: existingDetalle.cantidad + cantidadEntera,
+                cantidad: existingDetalle.cantidad + cantidadFinal,
                 subtotal: redondear(existingDetalle.subtotal + lineSubtotal),
               });
             } else {
               inserts.push({
                 pedido_acumulativo_id: existingAcumulativo.id,
                 producto_id: prod.producto_id!,
-                cantidad: cantidadEntera,
+                cantidad: cantidadFinal,
                 precio_unitario: prod.precio_unitario || 0,
                 subtotal: lineSubtotal,
               });
@@ -811,11 +821,11 @@ export default function ProcesarPedidoDialog({
 
           // Insertar detalles
           const detalles = validProducts.map(p => {
-            const cantidadEntera = Math.round(p.cantidad);
+            const cantidadFinal = ajustarCantidad(p.cantidad, p.precio_por_kilo || false);
             
             // USAR SISTEMA CENTRALIZADO
             const resultadoSubtotal = calcularSubtotal({
-              cantidad: cantidadEntera,
+              cantidad: cantidadFinal,
               precio_unitario: p.precio_unitario || 0,
               nombre_producto: p.nombre_producto
             });
@@ -827,7 +837,7 @@ export default function ProcesarPedidoDialog({
             return {
               pedido_acumulativo_id: acumulativo.id,
               producto_id: p.producto_id!,
-              cantidad: cantidadEntera,
+              cantidad: cantidadFinal,
               precio_unitario: p.precio_unitario || 0,
               subtotal: resultadoSubtotal.subtotal,
             };
@@ -904,11 +914,11 @@ export default function ProcesarPedidoDialog({
         let subtotalNeto = 0;
 
         for (const p of validProducts) {
-          const cantidadEntera = Math.round(p.cantidad);
+          const cantidadFinal = ajustarCantidad(p.cantidad, p.precio_por_kilo || false);
           
           // USAR SISTEMA CENTRALIZADO
           const resultadoSubtotal = calcularSubtotal({
-            cantidad: cantidadEntera,
+            cantidad: cantidadFinal,
             precio_unitario: p.precio_unitario || 0,
             nombre_producto: p.nombre_producto
           });
@@ -948,11 +958,11 @@ export default function ProcesarPedidoDialog({
 
           // Merge products: update quantities if product exists, add if new
           for (const newProd of validProducts) {
-            const cantidadEntera = Math.round(newProd.cantidad);
+            const cantidadFinal = ajustarCantidad(newProd.cantidad, newProd.precio_por_kilo || false);
             
             // USAR SISTEMA CENTRALIZADO
             const resultadoSubtotal = calcularSubtotal({
-              cantidad: cantidadEntera,
+              cantidad: cantidadFinal,
               precio_unitario: newProd.precio_unitario || 0,
               nombre_producto: newProd.nombre_producto
             });
@@ -962,7 +972,7 @@ export default function ProcesarPedidoDialog({
             
             if (existingDetalle) {
               // Update existing product - ADD quantities
-              const nuevaCantidad = existingDetalle.cantidad + cantidadEntera;
+              const nuevaCantidad = existingDetalle.cantidad + cantidadFinal;
               const nuevoSubtotal = Math.round(
                 (existingDetalle.subtotal + lineSubtotal) * 100
               ) / 100;
@@ -975,7 +985,7 @@ export default function ProcesarPedidoDialog({
                 })
                 .eq("id", existingDetalle.id);
               
-              console.log(`  ↳ Updated product ${newProd.producto_id}: ${existingDetalle.cantidad} + ${cantidadEntera} = ${nuevaCantidad}`);
+              console.log(`  ↳ Updated product ${newProd.producto_id}: ${existingDetalle.cantidad} + ${cantidadFinal} = ${nuevaCantidad}`);
             } else {
               // Insert new product
               await supabase
@@ -983,12 +993,12 @@ export default function ProcesarPedidoDialog({
                 .insert({
                   pedido_id: existingPedido.id,
                   producto_id: newProd.producto_id!,
-                  cantidad: cantidadEntera,
+                  cantidad: cantidadFinal,
                   precio_unitario: newProd.precio_unitario || 0,
                   subtotal: Math.round(lineSubtotal * 100) / 100,
                 });
               
-              console.log(`  ↳ Added new product ${newProd.producto_id}: ${cantidadEntera}`);
+              console.log(`  ↳ Added new product ${newProd.producto_id}: ${cantidadFinal}`);
             }
           }
 
@@ -1055,16 +1065,16 @@ export default function ProcesarPedidoDialog({
 
           // Create pedido detalles - usando sistema centralizado
           const detalles = validProducts.map(p => {
-            const cantidadEntera = Math.round(p.cantidad);
+            const cantidadFinal = ajustarCantidad(p.cantidad, p.precio_por_kilo || false);
             const resultadoSubtotal = calcularSubtotal({
-              cantidad: cantidadEntera,
+              cantidad: cantidadFinal,
               precio_unitario: p.precio_unitario || 0,
               nombre_producto: p.nombre_producto
             });
             return {
               pedido_id: pedido.id,
               producto_id: p.producto_id!,
-              cantidad: cantidadEntera,
+              cantidad: cantidadFinal,
               precio_unitario: p.precio_unitario || 0,
               subtotal: resultadoSubtotal.subtotal,
             };

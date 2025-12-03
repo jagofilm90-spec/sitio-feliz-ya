@@ -369,6 +369,7 @@ export type Database = {
           gmail_cuenta_id: string | null
           id: string
           impuestos: number
+          mes_vigencia: string | null
           motivo_rechazo: string | null
           nombre: string | null
           notas: string | null
@@ -377,6 +378,7 @@ export type Database = {
           status: string
           subtotal: number
           sucursal_id: string | null
+          tipo_cotizacion: string | null
           total: number
           updated_at: string
         }
@@ -394,6 +396,7 @@ export type Database = {
           gmail_cuenta_id?: string | null
           id?: string
           impuestos?: number
+          mes_vigencia?: string | null
           motivo_rechazo?: string | null
           nombre?: string | null
           notas?: string | null
@@ -402,6 +405,7 @@ export type Database = {
           status?: string
           subtotal?: number
           sucursal_id?: string | null
+          tipo_cotizacion?: string | null
           total?: number
           updated_at?: string
         }
@@ -419,6 +423,7 @@ export type Database = {
           gmail_cuenta_id?: string | null
           id?: string
           impuestos?: number
+          mes_vigencia?: string | null
           motivo_rechazo?: string | null
           nombre?: string | null
           notas?: string | null
@@ -427,6 +432,7 @@ export type Database = {
           status?: string
           subtotal?: number
           sucursal_id?: string | null
+          tipo_cotizacion?: string | null
           total?: number
           updated_at?: string
         }

@@ -74,6 +74,8 @@ interface Cotizacion {
   total: number;
   creado_por?: string;
   notas?: string;
+  tipo_cotizacion?: string;
+  mes_vigencia?: string;
 }
 
 const CotizacionesTab = () => {
@@ -111,7 +113,9 @@ const CotizacionesTab = () => {
           status,
           total,
           creado_por,
-          notas
+          notas,
+          tipo_cotizacion,
+          mes_vigencia
         `)
         .order("fecha_creacion", { ascending: false });
 
@@ -119,6 +123,22 @@ const CotizacionesTab = () => {
       return data as unknown as Cotizacion[];
     },
   });
+
+  const getTipoBadge = (tipo: string | undefined) => {
+    if (!tipo || tipo === 'general') return null;
+    const badges: Record<string, { icon: string; label: string; className: string }> = {
+      avio: { icon: '🍞', label: 'Avío', className: 'bg-yellow-500/20 text-yellow-700' },
+      azucar: { icon: '🍬', label: 'Azúcar', className: 'bg-blue-500/20 text-blue-700' },
+      rosticeria: { icon: '🍗', label: 'Rosticería', className: 'bg-orange-500/20 text-orange-700' },
+    };
+    const badge = badges[tipo];
+    if (!badge) return null;
+    return (
+      <Badge className={badge.className}>
+        {badge.icon} {badge.label}
+      </Badge>
+    );
+  };
 
   const getStatusBadge = (status: string, fechaVigencia: string) => {
     const hoy = new Date();
@@ -343,9 +363,8 @@ const CotizacionesTab = () => {
                     </TableHead>
                     <TableHead>Folio</TableHead>
                     <TableHead>Nombre</TableHead>
+                    <TableHead>Tipo</TableHead>
                     <TableHead>Cliente</TableHead>
-                    <TableHead>Sucursal</TableHead>
-                    <TableHead>Fecha</TableHead>
                     <TableHead>Vigencia</TableHead>
                     <TableHead>Total</TableHead>
                     <TableHead>Estado</TableHead>
@@ -375,15 +394,15 @@ const CotizacionesTab = () => {
                       <TableCell className="font-medium text-primary">
                         {c.nombre || <span className="text-muted-foreground">-</span>}
                       </TableCell>
-                      <TableCell>{c.cliente.nombre}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {c.sucursal?.nombre || "-"}
-                      </TableCell>
                       <TableCell>
-                        {format(new Date(c.fecha_creacion), "dd/MM/yyyy", {
-                          locale: es,
-                        })}
+                        {getTipoBadge(c.tipo_cotizacion)}
+                        {c.mes_vigencia && (
+                          <span className="text-xs text-muted-foreground ml-1">
+                            {format(new Date(c.mes_vigencia + "-01"), "MMM yyyy", { locale: es })}
+                          </span>
+                        )}
                       </TableCell>
+                      <TableCell>{c.cliente.nombre}</TableCell>
                       <TableCell>
                         {format(new Date(c.fecha_vigencia), "dd/MM/yyyy", {
                           locale: es,

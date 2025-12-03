@@ -174,6 +174,8 @@ export default function ProcesarPedidoDialog({
           nombre,
           fecha_creacion,
           status,
+          tipo_cotizacion,
+          mes_vigencia,
           cotizaciones_detalles (
             producto_id,
             cantidad,
@@ -201,6 +203,16 @@ export default function ProcesarPedidoDialog({
     },
     enabled: !!selectedClienteId,
   });
+
+  // Find monthly quotations for current month (for Lecaroz)
+  const cotizacionesMesActual = useMemo(() => {
+    if (!cotizacionesRecientes || !isLecarozEmail) return [];
+    const currentMonth = new Date().toISOString().slice(0, 7); // yyyy-MM
+    return cotizacionesRecientes.filter(c => 
+      c.mes_vigencia === currentMonth && 
+      (c.tipo_cotizacion === 'avio' || c.tipo_cotizacion === 'azucar' || c.tipo_cotizacion === 'rosticeria')
+    );
+  }, [cotizacionesRecientes, isLecarozEmail]);
 
   // Reset cotizacion selection when cliente changes
   useEffect(() => {
@@ -1264,6 +1276,11 @@ export default function ProcesarPedidoDialog({
                   {cotizacionesRecientes.map(cot => (
                     <SelectItem key={cot.id} value={cot.id}>
                       {cot.folio} - {cot.nombre || new Date(cot.fecha_creacion).toLocaleDateString('es-MX')}
+                      {(cot as any).tipo_cotizacion && (cot as any).tipo_cotizacion !== 'general' && (
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          ({(cot as any).tipo_cotizacion})
+                        </span>
+                      )}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1273,6 +1290,47 @@ export default function ProcesarPedidoDialog({
                   Se usarán los productos y precios de esta cotización específica
                 </p>
               )}
+            </div>
+          )}
+
+          {/* Monthly quotation banner for Lecaroz */}
+          {isLecarozEmail && cotizacionesMesActual.length > 0 && (
+            <div className="p-4 bg-green-50 dark:bg-green-950/30 border border-green-500/30 rounded-lg space-y-2">
+              <div className="flex items-center gap-2 text-green-700 dark:text-green-400 font-semibold">
+                <CheckCircle2 className="h-5 w-5" />
+                <span>Cotización(es) del mes detectada(s)</span>
+              </div>
+              <div className="space-y-1">
+                {cotizacionesMesActual.map(cot => (
+                  <div key={cot.id} className="flex items-center gap-2 text-sm">
+                    <Badge className={
+                      (cot as any).tipo_cotizacion === 'avio' ? 'bg-yellow-500/20 text-yellow-700' :
+                      (cot as any).tipo_cotizacion === 'azucar' ? 'bg-blue-500/20 text-blue-700' :
+                      (cot as any).tipo_cotizacion === 'rosticeria' ? 'bg-orange-500/20 text-orange-700' :
+                      ''
+                    }>
+                      {(cot as any).tipo_cotizacion === 'avio' && '🍞 Avío'}
+                      {(cot as any).tipo_cotizacion === 'azucar' && '🍬 Azúcar'}
+                      {(cot as any).tipo_cotizacion === 'rosticeria' && '🍗 Rosticería'}
+                    </Badge>
+                    <span className="font-mono text-xs">{cot.folio}</span>
+                    <span className="text-muted-foreground">({(cot as any).cotizaciones_detalles?.length || 0} productos)</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-green-600 dark:text-green-400">
+                ✓ Los precios se tomarán automáticamente de estas cotizaciones
+              </p>
+            </div>
+          )}
+
+          {/* Warning if Lecaroz but no monthly quotations */}
+          {isLecarozEmail && cotizacionesMesActual.length === 0 && cotizacionesRecientes && cotizacionesRecientes.length > 0 && (
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-500/30 rounded-lg">
+              <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 text-sm">
+                <AlertCircle className="h-4 w-4" />
+                <span>No se encontraron cotizaciones del mes actual. Se usarán cotizaciones anteriores.</span>
+              </div>
             </div>
           )}
 

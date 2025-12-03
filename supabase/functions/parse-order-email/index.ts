@@ -311,6 +311,7 @@ function parseLecarozEmail(emailBody: string, productosCotizados?: ProductoCotiz
     'girasol pelado': ['semilla de girasol pelado', 'semilla girasol pelado', 'girasol sin cascara'],
     'fruty rueda': ['frutirueda', 'fruti rueda', 'fruty ruedas'],
     'hojuela natural': ['hojuela s/azucar', 'hojuela sin azucar', 'hojuela s/azúcar'],
+    'hojuela azucarada': ['hojuela c/azucar', 'hojuela con azucar', 'hojuela c/azúcar', 'hojuela azucarada', 'hojuela con azúcar'],
     'arroz 25/1kg': ['arroz morelos', 'arroz de morelos', 'morelos'],
     'canela': ['canela entera', 'canela molida', 'raja de canela'],
     'ajonjoli': ['ajonjolí', 'sesamo', 'sésamo'],

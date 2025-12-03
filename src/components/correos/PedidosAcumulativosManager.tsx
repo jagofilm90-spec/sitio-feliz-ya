@@ -23,6 +23,24 @@ import { formatCurrency } from "@/lib/utils";
 // Anís, Canela Molida y Bicarbonato se convierten automáticamente usando kg_por_unidad
 const PRODUCTOS_VERIFICACION_OBLIGATORIA = ['piloncillo'];
 
+// Helper para calcular peso total de un pedido basado en sus detalles
+const calcularPesoTotalKg = (detalles: any[]): number => {
+  let pesoTotal = 0;
+  for (const det of detalles) {
+    const precioPorKilo = det.productos?.precio_por_kilo ?? false;
+    const kgPorUnidad = det.productos?.kg_por_unidad ?? 1;
+    
+    if (precioPorKilo) {
+      // Si es precio por kilo, la cantidad ya está en kg
+      pesoTotal += det.cantidad;
+    } else {
+      // Si no es precio por kilo, multiplicar cantidad por kg_por_unidad
+      pesoTotal += det.cantidad * kgPorUnidad;
+    }
+  }
+  return redondear(pesoTotal);
+};
+
 // Helper para detectar productos que requieren verificación manual obligatoria
 const esProductoVerificable = (nombre: string) => {
   const nombreLower = nombre?.toLowerCase() || '';
@@ -394,7 +412,7 @@ export function PedidosAcumulativosManager() {
           *, 
           pedidos_acumulativos_detalles(
             *,
-            productos:producto_id(nombre)
+            productos:producto_id(nombre, precio_por_kilo, kg_por_unidad)
           )
         `)
         .eq("id", pedidoAcumulativoId)
@@ -473,7 +491,7 @@ export function PedidosAcumulativosManager() {
             *, 
             pedidos_acumulativos_detalles(
               *,
-              productos:producto_id(nombre)
+              productos:producto_id(nombre, precio_por_kilo, kg_por_unidad)
             )
           `)
           .eq("id", pedidoAcumulativoId)
@@ -504,6 +522,9 @@ export function PedidosAcumulativosManager() {
       }
       const folio = `PED-${yearMonth}-${String(newFolioNumber).padStart(4, "0")}`;
 
+      // Calcular peso total
+      const pesoTotalKg = calcularPesoTotalKg(pedidoAcum.pedidos_acumulativos_detalles);
+
       const { data: newPedido, error: pedidoInsertError } = await supabase
         .from("pedidos")
         .insert({
@@ -516,6 +537,7 @@ export function PedidosAcumulativosManager() {
           subtotal: pedidoAcum.subtotal,
           impuestos: pedidoAcum.impuestos,
           total: pedidoAcum.total,
+          peso_total_kg: pesoTotalKg,
           notas: pedidoAcum.notas || "Pedido consolidado de Lecaroz",
           status: "pendiente",
         })
@@ -573,7 +595,7 @@ export function PedidosAcumulativosManager() {
           *, 
           pedidos_acumulativos_detalles(
             *,
-            productos:producto_id(nombre)
+            productos:producto_id(nombre, precio_por_kilo, kg_por_unidad)
           )
         `)
         .in("id", pedidoIds);
@@ -637,6 +659,9 @@ export function PedidosAcumulativosManager() {
         const folio = `PED-${yearMonth}-${String(nextFolioNumber++).padStart(4, "0")}`;
         
         try {
+          // Calcular peso total para este pedido
+          const pesoTotalKg = calcularPesoTotalKg(pedidoAcum.pedidos_acumulativos_detalles);
+
           const { data: newPedido, error: pedidoInsertError } = await supabase
             .from("pedidos")
             .insert({
@@ -649,6 +674,7 @@ export function PedidosAcumulativosManager() {
               subtotal: pedidoAcum.subtotal,
               impuestos: pedidoAcum.impuestos,
               total: pedidoAcum.total,
+              peso_total_kg: pesoTotalKg,
               notas: pedidoAcum.notas || "Pedido consolidado de Lecaroz",
               status: "pendiente",
             })

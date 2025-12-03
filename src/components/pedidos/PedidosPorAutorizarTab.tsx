@@ -52,6 +52,7 @@ interface PedidoPorAutorizar {
   id: string;
   folio: string;
   fecha_pedido: string;
+  fecha_entrega_estimada: string | null;
   total: number;
   notas: string | null;
   clientes: { id: string; nombre: string; email: string | null } | null;
@@ -97,6 +98,7 @@ export function PedidosPorAutorizarTab() {
           id,
           folio,
           fecha_pedido,
+          fecha_entrega_estimada,
           total,
           notas,
           clientes (id, nombre, email),
@@ -192,11 +194,22 @@ export function PedidosPorAutorizarTab() {
   // Mutation to authorize order
   const authorizeMutation = useMutation({
     mutationFn: async (pedidoId: string) => {
+      if (!selectedPedido) throw new Error("No hay pedido seleccionado");
+      
+      // Track which prices were changed
+      const preciosOriginales: Record<string, number> = {};
+      selectedPedido.pedidos_detalles.forEach(d => {
+        preciosOriginales[d.id] = d.precio_unitario;
+      });
+
+      let ajustesPrecio = 0;
+      
       // Update prices if edited
-      if (Object.keys(editingPrices).length > 0 && selectedPedido) {
+      if (Object.keys(editingPrices).length > 0) {
         for (const [detalleId, newPrice] of Object.entries(editingPrices)) {
           const detalle = selectedPedido.pedidos_detalles.find(d => d.id === detalleId);
-          if (detalle) {
+          if (detalle && newPrice !== detalle.precio_unitario) {
+            ajustesPrecio++;
             const newSubtotal = detalle.cantidad * newPrice;
             await supabase
               .from("pedidos_detalles")
@@ -227,12 +240,52 @@ export function PedidosPorAutorizarTab() {
           .eq("id", pedidoId);
       }
 
-      // TODO: Send notification email to client
-      // For now just log it
-      console.log("Order authorized, should send email to client");
+      // Send notification email to client if email exists
+      const clienteEmail = selectedPedido.clientes?.email;
+      if (clienteEmail) {
+        try {
+          const detallesEmail = selectedPedido.pedidos_detalles.map(d => {
+            const precioOriginal = preciosOriginales[d.id];
+            const precioNuevo = editingPrices[d.id] ?? d.precio_unitario;
+            const fueAjustado = precioNuevo !== precioOriginal;
+            return {
+              producto: d.productos?.nombre || "Producto",
+              cantidad: d.cantidad,
+              unidad: d.productos?.unidad || "pza",
+              precioUnitario: precioNuevo,
+              subtotal: d.cantidad * precioNuevo,
+              precioAnterior: fueAjustado ? precioOriginal : undefined,
+              fueAjustado
+            };
+          });
+
+          const newTotal = detallesEmail.reduce((sum, d) => sum + d.subtotal, 0);
+
+          await supabase.functions.invoke("send-order-authorized-email", {
+            body: {
+              clienteEmail,
+              clienteNombre: selectedPedido.clientes?.nombre || "Cliente",
+              pedidoFolio: selectedPedido.folio,
+              total: newTotal,
+              fechaEntrega: selectedPedido.fecha_entrega_estimada || new Date().toISOString(),
+              ajustesPrecio,
+              detalles: detallesEmail
+            }
+          });
+          console.log("Email de autorización enviado al cliente");
+        } catch (emailError) {
+          console.error("Error enviando email:", emailError);
+          // Don't fail the mutation if email fails
+        }
+      }
+
+      return { ajustesPrecio };
     },
-    onSuccess: () => {
-      toast({ title: "Pedido autorizado", description: "El cliente será notificado" });
+    onSuccess: (result) => {
+      const msg = result.ajustesPrecio > 0 
+        ? `Pedido autorizado con ${result.ajustesPrecio} ajuste${result.ajustesPrecio > 1 ? 's' : ''} de precio` 
+        : "Pedido autorizado";
+      toast({ title: msg, description: "El cliente será notificado por correo" });
       queryClient.invalidateQueries({ queryKey: ["pedidos-por-autorizar"] });
       setSelectedPedido(null);
       setEditingPrices({});

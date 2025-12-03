@@ -14,6 +14,90 @@ interface PushNotificationRequest {
   data?: Record<string, string>;
 }
 
+interface ServiceAccount {
+  project_id: string;
+  private_key: string;
+  client_email: string;
+}
+
+// Base64URL encode
+function base64UrlEncode(input: Uint8Array | string): string {
+  const bytes = typeof input === 'string' ? new TextEncoder().encode(input) : input;
+  const base64 = btoa(String.fromCharCode(...bytes));
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+// Create JWT for Google OAuth2
+async function createJWT(serviceAccount: ServiceAccount): Promise<string> {
+  const header = {
+    alg: 'RS256',
+    typ: 'JWT',
+  };
+
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    iss: serviceAccount.client_email,
+    sub: serviceAccount.client_email,
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now,
+    exp: now + 3600,
+    scope: 'https://www.googleapis.com/auth/firebase.messaging',
+  };
+
+  const headerEncoded = base64UrlEncode(JSON.stringify(header));
+  const payloadEncoded = base64UrlEncode(JSON.stringify(payload));
+  const unsignedToken = `${headerEncoded}.${payloadEncoded}`;
+
+  // Import the private key
+  const pemContents = serviceAccount.private_key
+    .replace(/-----BEGIN PRIVATE KEY-----/, '')
+    .replace(/-----END PRIVATE KEY-----/, '')
+    .replace(/\n/g, '');
+  
+  const binaryKey = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+  
+  const cryptoKey = await crypto.subtle.importKey(
+    'pkcs8',
+    binaryKey,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+
+  // Sign the token
+  const signature = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5',
+    cryptoKey,
+    new TextEncoder().encode(unsignedToken)
+  );
+
+  const signatureEncoded = base64UrlEncode(new Uint8Array(signature));
+  return `${unsignedToken}.${signatureEncoded}`;
+}
+
+// Get OAuth2 access token
+async function getAccessToken(serviceAccount: ServiceAccount): Promise<string> {
+  const jwt = await createJWT(serviceAccount);
+
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: jwt,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error('OAuth2 token error:', error);
+    throw new Error(`Failed to get access token: ${error}`);
+  }
+
+  const data = await response.json();
+  return data.access_token;
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -23,16 +107,27 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const fcmServerKey = Deno.env.get('FCM_SERVER_KEY');
+    const firebaseServiceAccountJson = Deno.env.get('FIREBASE_SERVICE_ACCOUNT');
 
-    if (!fcmServerKey) {
-      console.log('FCM_SERVER_KEY no configurada - notificaciones push deshabilitadas');
+    if (!firebaseServiceAccountJson) {
+      console.log('FIREBASE_SERVICE_ACCOUNT no configurada - notificaciones push deshabilitadas');
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: 'FCM_SERVER_KEY no configurada. Las notificaciones push requieren configuración de Firebase.' 
+          message: 'FIREBASE_SERVICE_ACCOUNT no configurada. Las notificaciones push requieren configuración de Firebase.' 
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      );
+    }
+
+    let serviceAccount: ServiceAccount;
+    try {
+      serviceAccount = JSON.parse(firebaseServiceAccountJson);
+    } catch (parseError) {
+      console.error('Error parsing FIREBASE_SERVICE_ACCOUNT:', parseError);
+      return new Response(
+        JSON.stringify({ success: false, message: 'Error parsing Firebase service account JSON' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
@@ -40,7 +135,7 @@ serve(async (req) => {
     
     const { user_ids, roles, title, body, data }: PushNotificationRequest = await req.json();
 
-    console.log('Enviando notificación push:', { user_ids, roles, title });
+    console.log('Enviando notificación push FCM V1:', { user_ids, roles, title });
 
     let targetUserIds: string[] = user_ids || [];
 
@@ -86,45 +181,80 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Enviando a ${deviceTokens.length} dispositivos`);
+    console.log(`Enviando a ${deviceTokens.length} dispositivos via FCM V1`);
 
-    // Enviar notificación a cada dispositivo via FCM
+    // Get OAuth2 access token
+    const accessToken = await getAccessToken(serviceAccount);
+    const fcmEndpoint = `https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`;
+
+    // Enviar notificación a cada dispositivo via FCM V1
     const sendPromises = deviceTokens.map(async (device: { token: string; platform: string; user_id: string }) => {
       try {
-        const response = await fetch('https://fcm.googleapis.com/fcm/send', {
-          method: 'POST',
-          headers: {
-            'Authorization': `key=${fcmServerKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            to: device.token,
+        const message: any = {
+          message: {
+            token: device.token,
             notification: {
               title,
               body,
-              sound: 'default',
-              badge: 1
             },
             data: {
               ...data,
               click_action: 'FLUTTER_NOTIFICATION_CLICK'
             },
-            priority: 'high'
-          })
+          }
+        };
+
+        // Add platform-specific configurations
+        if (device.platform === 'android') {
+          message.message.android = {
+            priority: 'high',
+            notification: {
+              sound: 'default',
+              default_sound: true,
+              default_vibrate_timings: true,
+            }
+          };
+        } else if (device.platform === 'ios') {
+          message.message.apns = {
+            payload: {
+              aps: {
+                sound: 'default',
+                badge: 1,
+              }
+            }
+          };
+        }
+
+        const response = await fetch(fcmEndpoint, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(message)
         });
 
         const result = await response.json();
         
-        // Si el token es inválido, eliminarlo
-        if (result.failure === 1 && result.results?.[0]?.error === 'NotRegistered') {
-          console.log('Token inválido, eliminando:', device.token.substring(0, 20) + '...');
-          await supabase
-            .from('device_tokens')
-            .delete()
-            .eq('token', device.token);
+        if (!response.ok) {
+          console.error('FCM V1 error for device:', result);
+          
+          // Si el token es inválido, eliminarlo
+          if (result.error?.details?.some((d: any) => 
+            d.errorCode === 'UNREGISTERED' || d.errorCode === 'INVALID_ARGUMENT'
+          )) {
+            console.log('Token inválido, eliminando:', device.token.substring(0, 20) + '...');
+            await supabase
+              .from('device_tokens')
+              .delete()
+              .eq('token', device.token);
+          }
+          
+          return { success: false, device: device.platform, error: result.error?.message };
         }
 
-        return { success: result.success === 1, device: device.platform };
+        console.log('FCM V1 success:', result);
+        return { success: true, device: device.platform, messageId: result.name };
       } catch (err) {
         console.error('Error enviando a dispositivo:', err);
         return { success: false, device: device.platform, error: String(err) };

@@ -424,6 +424,24 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
 
       if (detallesError) throw detallesError;
 
+      // Enviar notificación push a admins y secretarias
+      try {
+        const { sendPushNotification } = await import('@/services/pushNotifications');
+        await sendPushNotification({
+          roles: ['admin', 'secretaria'],
+          title: '🛒 Nuevo Pedido del Portal',
+          body: `Pedido ${folio} - ${new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(totalesGuardar.total)}`,
+          data: {
+            type: 'nuevo_pedido',
+            pedido_id: pedido.id,
+            folio: folio
+          }
+        });
+      } catch (pushError) {
+        console.error('Error enviando notificación push:', pushError);
+        // No interrumpir el flujo si falla la notificación
+      }
+
       toast({
         title: "Pedido enviado",
         description: `Tu pedido ${folio} ha sido enviado para autorización. Fecha de entrega: ${format(new Date(fechaEntrega), "EEEE d 'de' MMMM", { locale: es })}`,

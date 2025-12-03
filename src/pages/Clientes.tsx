@@ -38,6 +38,7 @@ import ClienteHistorialAnalytics from "@/components/analytics/ClienteHistorialAn
 import { ClienteUsuarioTab } from "@/components/clientes/ClienteUsuarioTab";
 import { ClienteFormContent } from "@/components/clientes/ClienteFormContent";
 import { ClienteProductosTab } from "@/components/clientes/ClienteProductosTab";
+import { ClienteProductosDialog } from "@/components/clientes/ClienteProductosDialog";
 import { useUserRoles } from "@/hooks/useUserRoles";
 import {
   Dialog as HistorialDialog,
@@ -80,6 +81,8 @@ const Clientes = () => {
   const [selectedClienteForSucursales, setSelectedClienteForSucursales] = useState<{ id: string; nombre: string } | null>(null);
   const [historialDialogOpen, setHistorialDialogOpen] = useState(false);
   const [selectedClienteForHistorial, setSelectedClienteForHistorial] = useState<{ id: string; nombre: string } | null>(null);
+  const [productosDialogOpen, setProductosDialogOpen] = useState(false);
+  const [selectedClienteForProductos, setSelectedClienteForProductos] = useState<{ id: string; nombre: string } | null>(null);
   const { toast } = useToast();
   const { isAdmin } = useUserRoles();
 
@@ -162,7 +165,8 @@ const Clientes = () => {
         .select(`
           *,
           zona:zona_id (id, nombre),
-          cliente_sucursales (count)
+          cliente_sucursales (count),
+          cliente_productos_frecuentes (count)
         `)
         .order("nombre");
 
@@ -894,6 +898,26 @@ const Clientes = () => {
                         <Button
                           variant="ghost"
                           size="icon"
+                          onClick={() => {
+                            setSelectedClienteForProductos({ id: cliente.id, nombre: cliente.nombre });
+                            setProductosDialogOpen(true);
+                          }}
+                          title={`Productos frecuentes (${cliente.cliente_productos_frecuentes?.[0]?.count || 0})`}
+                          className="relative"
+                        >
+                          <Package className="h-4 w-4" />
+                          {cliente.cliente_productos_frecuentes?.[0]?.count > 0 && (
+                            <Badge 
+                              variant="secondary" 
+                              className="absolute -top-1 -right-1 h-5 min-w-5 flex items-center justify-center px-1 text-xs"
+                            >
+                              {cliente.cliente_productos_frecuentes[0].count}
+                            </Badge>
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => handleEdit(cliente)}
                           title="Editar cliente"
                         >
@@ -937,6 +961,12 @@ const Clientes = () => {
           )}
         </HistorialDialogContent>
       </HistorialDialog>
+
+      <ClienteProductosDialog
+        open={productosDialogOpen}
+        onOpenChange={setProductosDialogOpen}
+        cliente={selectedClienteForProductos}
+      />
     </Layout>
   );
 };

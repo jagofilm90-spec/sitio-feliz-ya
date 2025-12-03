@@ -432,6 +432,16 @@ const CrearCotizacionDialog = ({
       return;
     }
 
+    // Validación: Lecaroz requiere tipo específico
+    if (isLecarozClient && tipoCotizacion === 'general') {
+      toast({
+        title: "Selecciona el tipo de cotización",
+        description: "Las cotizaciones de Lecaroz requieren un tipo específico (Avío, Azúcar o Rosticería)",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
     try {
       const { data: session } = await supabase.auth.getSession();
@@ -677,26 +687,29 @@ const CrearCotizacionDialog = ({
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label>Cotización para el mes de *</Label>
-              <Select value={mesCotizacion} onValueChange={setMesCotizacion}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar mes" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 12 }, (_, i) => {
-                    const fecha = new Date();
-                    fecha.setMonth(fecha.getMonth() + i - 1);
-                    const mesNombre = format(fecha, "MMMM yyyy", { locale: es });
-                    return (
-                      <SelectItem key={mesNombre} value={mesNombre}>
-                        {mesNombre.charAt(0).toUpperCase() + mesNombre.slice(1)}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Solo mostrar si NO es Lecaroz - evita confusión con campo duplicado */}
+            {!isLecarozClient && (
+              <div className="space-y-2">
+                <Label>Cotización para el mes de *</Label>
+                <Select value={mesCotizacion} onValueChange={setMesCotizacion}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar mes" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 12 }, (_, i) => {
+                      const fecha = new Date();
+                      fecha.setMonth(fecha.getMonth() + i - 1);
+                      const mesNombre = format(fecha, "MMMM yyyy", { locale: es });
+                      return (
+                        <SelectItem key={mesNombre} value={mesNombre}>
+                          {mesNombre.charAt(0).toUpperCase() + mesNombre.slice(1)}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>Nombre de cotización <span className="text-muted-foreground text-xs">(opcional)</span></Label>
@@ -721,30 +734,36 @@ const CrearCotizacionDialog = ({
                   <Label>Tipo de cotización *</Label>
                   <Select value={tipoCotizacion} onValueChange={(value) => {
                     setTipoCotizacion(value);
-                    // Auto-set nombre based on tipo
+                    // Auto-set nombre and sync mesCotizacion
                     const mesLabel = format(new Date(mesVigencia + "-01"), "MMMM yyyy", { locale: es });
+                    const mesLabelCapitalizado = mesLabel.charAt(0).toUpperCase() + mesLabel.slice(1);
+                    setMesCotizacion(mesLabelCapitalizado);
                     if (value === 'avio') setNombreCotizacion(`Avío ${mesLabel}`);
                     else if (value === 'azucar') setNombreCotizacion(`Azúcares ${mesLabel}`);
                     else if (value === 'rosticeria') setNombreCotizacion(`Rosticería ${mesLabel}`);
                   }}>
-                    <SelectTrigger>
+                    <SelectTrigger className={tipoCotizacion === 'general' ? 'border-destructive' : ''}>
                       <SelectValue placeholder="Seleccionar tipo" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="avio">🍞 Avío (ingredientes panadería)</SelectItem>
                       <SelectItem value="azucar">🍬 Azúcar</SelectItem>
                       <SelectItem value="rosticeria">🍗 Rosticería</SelectItem>
-                      <SelectItem value="general">📋 General</SelectItem>
                     </SelectContent>
                   </Select>
+                  {tipoCotizacion === 'general' && (
+                    <p className="text-xs text-destructive">⚠️ Selecciona un tipo específico para Lecaroz</p>
+                  )}
                 </div>
                 
                 <div className="space-y-2">
                   <Label>Mes de vigencia *</Label>
                   <Select value={mesVigencia} onValueChange={(value) => {
                     setMesVigencia(value);
-                    // Update nombre with new month
+                    // Sync mesCotizacion and update nombre with new month
                     const mesLabel = format(new Date(value + "-01"), "MMMM yyyy", { locale: es });
+                    const mesLabelCapitalizado = mesLabel.charAt(0).toUpperCase() + mesLabel.slice(1);
+                    setMesCotizacion(mesLabelCapitalizado);
                     if (tipoCotizacion === 'avio') setNombreCotizacion(`Avío ${mesLabel}`);
                     else if (tipoCotizacion === 'azucar') setNombreCotizacion(`Azúcares ${mesLabel}`);
                     else if (tipoCotizacion === 'rosticeria') setNombreCotizacion(`Rosticería ${mesLabel}`);
@@ -1069,7 +1088,7 @@ const CrearCotizacionDialog = ({
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleGuardar} disabled={loading}>
+            <Button onClick={handleGuardar} disabled={loading || (isLecarozClient && tipoCotizacion === 'general')}>
               {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {isEditMode ? "Guardar Cambios" : "Crear Cotización"}
             </Button>

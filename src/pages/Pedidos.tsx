@@ -480,6 +480,27 @@ const Pedidos = () => {
           const numBultos = cantidadParaCalculo / 10;
           presentacion = `${numBultos} ${pluralizar('bulto', numBultos)}`;
         }
+        // *** REGLA ESPECIAL CANELA MOLIDA / ANÍS: 1-6kg→5kg (1 bolsa), 7-12kg→10kg (1 bolsa) ***
+        else if (nombreLower.includes('canela molida') || nombreLower.includes('anís') || nombreLower.includes('anis')) {
+          let cantidadAjustada = cantidadNum;
+          let numBolsas = 1;
+          
+          if (cantidadNum >= 1 && cantidadNum <= 6) {
+            cantidadAjustada = 5;
+            numBolsas = 1;
+          } else if (cantidadNum >= 7 && cantidadNum <= 12) {
+            cantidadAjustada = 10;
+            numBolsas = 1;
+          } else if (cantidadNum > 12) {
+            // Cantidad inusual >12kg - NO ajustar automáticamente
+            cantidadAjustada = cantidadNum;
+            numBolsas = Math.ceil(cantidadNum / 10);
+          }
+          
+          // Actualizar cantidad mostrada con el valor ajustado
+          cantidadDisplay = `${formatearCantidad(cantidadAjustada)} kg`;
+          presentacion = `${numBolsas} ${pluralizar('bolsa', numBolsas)}`;
+        }
         // Calcular presentación para bodegueros - SIEMPRE unidades comerciales, SIN "de X kg"
         // Regla especial para ALMENDRA FILETEADA (11.34 kg/caja) - PRIORIDAD ALTA
         else if (nombreLower.includes('almendra fileteada')) {

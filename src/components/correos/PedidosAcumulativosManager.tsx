@@ -402,11 +402,43 @@ export function PedidosAcumulativosManager() {
 
       const { data: pedidoAcum, error: pedidoError } = await supabase
         .from("pedidos_acumulativos")
-        .select("*, pedidos_acumulativos_detalles(*)")
+        .select(`
+          *, 
+          pedidos_acumulativos_detalles(
+            *,
+            productos:producto_id(nombre)
+          )
+        `)
         .eq("id", pedidoAcumulativoId)
         .single();
 
       if (pedidoError) throw pedidoError;
+
+      // *** ALERTA PARA CANELA MOLIDA / ANÍS >12 KG ***
+      const detallesSospechosos = pedidoAcum.pedidos_acumulativos_detalles.filter((det: any) => {
+        const nombreLower = det.productos?.nombre?.toLowerCase() || '';
+        const esCanelaoAnis = nombreLower.includes('canela molida') || 
+                             nombreLower.includes('anís') || 
+                             nombreLower.includes('anis');
+        return esCanelaoAnis && det.cantidad > 12;
+      });
+
+      if (detallesSospechosos.length > 0) {
+        const productos = detallesSospechosos.map((d: any) => 
+          `• ${d.productos?.nombre || 'Producto'}: ${d.cantidad} kg`
+        ).join('\n');
+        
+        const confirmar = window.confirm(
+          `⚠️ ALERTA: Cantidades inusuales detectadas\n\n` +
+          `${productos}\n\n` +
+          `Normalmente las panaderías no piden más de 12 kg de estos productos.\n` +
+          `¿Deseas continuar de todos modos?`
+        );
+
+        if (!confirmar) {
+          throw new Error("Pedido cancelado - revisar cantidades de Canela/Anís");
+        }
+      }
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No authenticated user");
@@ -493,10 +525,52 @@ export function PedidosAcumulativosManager() {
 
       const { data: pedidosAcumulativos, error: fetchError } = await supabase
         .from("pedidos_acumulativos")
-        .select("*, pedidos_acumulativos_detalles(*)")
+        .select(`
+          *, 
+          pedidos_acumulativos_detalles(
+            *,
+            productos:producto_id(nombre)
+          )
+        `)
         .in("id", pedidoIds);
 
       if (fetchError) throw fetchError;
+
+      // *** ALERTA PARA CANELA MOLIDA / ANÍS >12 KG EN MÚLTIPLES PEDIDOS ***
+      const todosDetallesSospechosos: Array<{ sucursal: string; producto: string; cantidad: number }> = [];
+      
+      for (const pedido of pedidosAcumulativos || []) {
+        for (const det of pedido.pedidos_acumulativos_detalles || []) {
+          const nombreLower = det.productos?.nombre?.toLowerCase() || '';
+          const esCanelaoAnis = nombreLower.includes('canela molida') || 
+                               nombreLower.includes('anís') || 
+                               nombreLower.includes('anis');
+          if (esCanelaoAnis && det.cantidad > 12) {
+            todosDetallesSospechosos.push({
+              sucursal: pedido.id,
+              producto: det.productos?.nombre || 'Producto',
+              cantidad: det.cantidad
+            });
+          }
+        }
+      }
+
+      if (todosDetallesSospechosos.length > 0) {
+        const listaProductos = todosDetallesSospechosos.map(d => 
+          `• ${d.producto}: ${d.cantidad} kg`
+        ).join('\n');
+        
+        const confirmar = window.confirm(
+          `⚠️ ALERTA: Cantidades inusuales detectadas en ${todosDetallesSospechosos.length} producto(s)\n\n` +
+          `${listaProductos}\n\n` +
+          `Normalmente las panaderías no piden más de 12 kg de Canela Molida o Anís.\n` +
+          `¿Deseas continuar de todos modos?`
+        );
+
+        if (!confirmar) {
+          throw new Error("Generación cancelada - revisar cantidades de Canela/Anís");
+        }
+      }
 
       const currentDate = new Date();
       const yearMonth = `${currentDate.getFullYear()}${String(currentDate.getMonth() + 1).padStart(2, "0")}`;

@@ -29,6 +29,7 @@ import {
   CheckCircle2,
   Trash2,
   ChevronDown,
+  FileSpreadsheet,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -77,6 +78,13 @@ interface ParsedOrder {
   confianza: number;
 }
 
+interface EmailAttachment {
+  filename: string;
+  mimeType: string;
+  attachmentId: string;
+  size: number;
+}
+
 interface ProcesarPedidoDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -84,6 +92,8 @@ interface ProcesarPedidoDialogProps {
   emailSubject: string;
   emailFrom: string;
   emailId: string;
+  emailAttachments?: EmailAttachment[];
+  cuentaEmail?: string;
   onSuccess?: () => void;
 }
 
@@ -97,6 +107,8 @@ export default function ProcesarPedidoDialog({
   emailSubject,
   emailFrom,
   emailId,
+  emailAttachments,
+  cuentaEmail,
   onSuccess,
 }: ProcesarPedidoDialogProps) {
   const { toast } = useToast();
@@ -113,6 +125,15 @@ export default function ProcesarPedidoDialog({
   const [processedOrdersInfo, setProcessedOrdersInfo] = useState<{ folio: string; tipo: string }[]>([]);
   const [isLecarozEmail, setIsLecarozEmail] = useState(false);
   const [acumulativoMode, setAcumulativoMode] = useState(false);
+
+  // Detect Excel attachment
+  const excelAttachment = emailAttachments?.find(att => 
+    att.filename.endsWith('.xlsx') || 
+    att.filename.endsWith('.xls') ||
+    att.mimeType.includes('spreadsheet') ||
+    att.mimeType.includes('excel')
+  );
+  const hasExcelAttachment = !!excelAttachment;
 
   // Fetch clientes
   const { data: clientes } = useQuery({
@@ -364,18 +385,61 @@ export default function ProcesarPedidoDialog({
         nombre: s.nombre,
       }));
 
-      const { data, error } = await supabase.functions.invoke("parse-order-email", {
-        body: {
-          emailBody,
-          emailSubject,
-          emailFrom,
-          clienteId: selectedClienteId,
-          productosCotizados: productosUnicos,
-          sucursalesRegistradas, // Send registered branches for strict validation
-        },
-      });
+      let data: any;
+      let parseError: any;
 
-      if (error) throw error;
+      // If Excel attachment exists, parse it instead of email body
+      if (hasExcelAttachment && excelAttachment && cuentaEmail) {
+        console.log("Parsing Excel attachment:", excelAttachment.filename);
+        
+        // First, download the Excel attachment
+        const downloadResponse = await supabase.functions.invoke("gmail-api", {
+          body: {
+            action: "downloadAttachment",
+            email: cuentaEmail,
+            messageId: emailId,
+            attachmentId: excelAttachment.attachmentId,
+            filename: excelAttachment.filename,
+          },
+        });
+
+        if (downloadResponse.error) {
+          throw new Error(`Error al descargar Excel: ${downloadResponse.error.message}`);
+        }
+
+        // Parse the Excel file
+        const excelResponse = await supabase.functions.invoke("parse-excel-order", {
+          body: {
+            excelBase64: downloadResponse.data.data,
+            clienteId: selectedClienteId,
+            productosCotizados: productosUnicos,
+            sucursalesRegistradas,
+          },
+        });
+
+        if (excelResponse.error) {
+          throw new Error(`Error al parsear Excel: ${excelResponse.error.message}`);
+        }
+
+        data = excelResponse.data;
+        parseError = excelResponse.error;
+      } else {
+        // Parse email body (existing logic)
+        const response = await supabase.functions.invoke("parse-order-email", {
+          body: {
+            emailBody,
+            emailSubject,
+            emailFrom,
+            clienteId: selectedClienteId,
+            productosCotizados: productosUnicos,
+            sucursalesRegistradas,
+          },
+        });
+        data = response.data;
+        parseError = response.error;
+      }
+
+      if (parseError) throw parseError;
       if (data.error) throw new Error(data.error);
 
       setParsedOrder(data.order);
@@ -1334,6 +1398,22 @@ export default function ProcesarPedidoDialog({
             </div>
           )}
 
+          {/* Excel attachment indicator */}
+          {hasExcelAttachment && excelAttachment && (
+            <div className="p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-500/30 rounded-lg">
+              <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 font-semibold">
+                <FileSpreadsheet className="h-5 w-5" />
+                <span>Pedido detectado en archivo Excel</span>
+              </div>
+              <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+                📎 {excelAttachment.filename}
+              </p>
+              <p className="text-xs text-blue-500 dark:text-blue-400 mt-1">
+                El sistema descargará y parseará el archivo Excel automáticamente
+              </p>
+            </div>
+          )}
+
           {/* Parse button */}
           {/* Alerta de correo ya procesado */}
           {emailAlreadyProcessed && (
@@ -1370,12 +1450,17 @@ export default function ProcesarPedidoDialog({
               {parsing ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Analizando correo con IA...
+                  {hasExcelAttachment ? "Descargando y analizando Excel..." : "Analizando correo con IA..."}
                 </>
               ) : emailAlreadyProcessed ? (
                 <>
                   <AlertCircle className="h-4 w-4 mr-2" />
                   Correo Ya Procesado
+                </>
+              ) : hasExcelAttachment ? (
+                <>
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Parsear Excel
                 </>
               ) : (
                 <>

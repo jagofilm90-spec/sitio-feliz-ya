@@ -411,10 +411,24 @@ const Pedidos = () => {
       // Detectar si es cliente Lecaroz para reglas especiales de presentación
       const esLecaroz = pedido.clientes?.nombre?.toLowerCase().includes('lecaroz');
       
+      // Función para pluralizar correctamente en español
+      const pluralizar = (unidad: string, cantidad: number): string => {
+        if (cantidad === 1) return unidad;
+        if (unidad === 'balón') return 'balones';
+        if (unidad.endsWith('z')) return unidad.slice(0, -1) + 'ces';
+        return unidad + 's';
+      };
+      
+      // Función para formatear cantidad manteniendo decimales
+      const formatearCantidad = (cantidad: number): string => {
+        return cantidad % 1 === 0 ? String(cantidad) : cantidad.toFixed(2);
+      };
+      
       const productos = pedido.pedidos_detalles.map((detalle: any) => {
         const producto = detalle.productos;
         const descripcion = `${producto.nombre}${producto.marca ? ` ${producto.marca}` : ''}${producto.presentacion ? ` (${producto.presentacion}KG)` : ''}`;
         const nombreLower = producto.nombre.toLowerCase();
+        const cantidadNum = Number(detalle.cantidad);
         
         // Calcular presentación para bodegueros - SIEMPRE en unidades comerciales, nunca solo kg
         let presentacion = "";
@@ -433,34 +447,44 @@ const Pedidos = () => {
           }
         }
         
-        // Mostrar cantidad con su unidad original
-        let cantidadDisplay = "";
-        if (producto.precio_por_kilo) {
-          cantidadDisplay = `${detalle.cantidad} kg`;
-        } else {
-          cantidadDisplay = `${detalle.cantidad} ${unidadComercial}`;
+        // Regla especial para Coco: siempre caja con 20 kg
+        if (nombreLower.includes('coco')) {
+          unidadComercial = 'caja';
         }
         
-        // Calcular presentación para bodegueros - SIEMPRE unidades comerciales, NUNCA solo kg
-        // Regla especial Lecaroz: Arándano y Avellana siempre "1 caja" sin importar cantidad
-        if (esLecaroz && (nombreLower.includes('arándano') || nombreLower.includes('arandano') || nombreLower.includes('avellana'))) {
-          // Calcular cuántas cajas (dividir kg entre kg_por_unidad si existe, sino 1)
-          const kgPorCaja = producto.kg_por_unidad || 11.34; // Default para Arándano Nutri Grand
-          const numCajas = Math.ceil(detalle.cantidad / kgPorCaja);
-          presentacion = numCajas === 1 ? '1 caja' : `${numCajas} cajas`;
-        } else if (producto.precio_por_kilo && producto.kg_por_unidad && producto.kg_por_unidad > 0) {
-          // Producto vendido por kilo con conversión conocida (ej: coco rallado 20kg/caja)
-          const unidadesComerciales = Math.ceil(detalle.cantidad / producto.kg_por_unidad);
-          const plural = unidadesComerciales !== 1 ? 's' : '';
-          presentacion = `${unidadesComerciales} ${unidadComercial}${plural}`;
-        } else if (producto.precio_por_kilo && (!producto.kg_por_unidad || producto.kg_por_unidad === 0)) {
-          // Producto vendido por kilo sin conversión fija (ej: piloncillo, anís)
-          // Mostrar como "1 {unidad} de X kg"
-          presentacion = `1 ${unidadComercial} de ${detalle.cantidad} kg`;
+        // Mostrar cantidad con su unidad original - SIN REDONDEAR
+        let cantidadDisplay = "";
+        if (producto.precio_por_kilo) {
+          cantidadDisplay = `${formatearCantidad(cantidadNum)} kg`;
         } else {
-          // Producto vendido por unidad comercial directamente
-          const plural = detalle.cantidad !== 1 ? 's' : '';
-          presentacion = `${detalle.cantidad} ${unidadComercial}${plural}`;
+          cantidadDisplay = `${formatearCantidad(cantidadNum)} ${pluralizar(unidadComercial, cantidadNum)}`;
+        }
+        
+        // Calcular presentación para bodegueros - SIEMPRE unidades comerciales, SIN "de X kg"
+        // Regla especial Lecaroz: Arándano y Avellana
+        if (esLecaroz && (nombreLower.includes('arándano') || nombreLower.includes('arandano') || nombreLower.includes('avellana'))) {
+          const kgPorCaja = producto.kg_por_unidad || 11.34;
+          const numCajas = Math.ceil(cantidadNum / kgPorCaja);
+          presentacion = `${numCajas} ${pluralizar('caja', numCajas)}`;
+        } 
+        // Regla especial para Coco (20 kg/caja)
+        else if (nombreLower.includes('coco')) {
+          const kgPorCaja = producto.kg_por_unidad || 20;
+          const numCajas = Math.ceil(cantidadNum / kgPorCaja);
+          presentacion = `${numCajas} ${pluralizar('caja', numCajas)}`;
+        }
+        // Producto vendido por kilo con conversión conocida
+        else if (producto.precio_por_kilo && producto.kg_por_unidad && producto.kg_por_unidad > 0) {
+          const unidadesComerciales = Math.ceil(cantidadNum / producto.kg_por_unidad);
+          presentacion = `${unidadesComerciales} ${pluralizar(unidadComercial, unidadesComerciales)}`;
+        } 
+        // Producto vendido por kilo sin conversión fija - SOLO mostrar unidad, SIN "de X kg"
+        else if (producto.precio_por_kilo && (!producto.kg_por_unidad || producto.kg_por_unidad === 0)) {
+          presentacion = `1 ${unidadComercial}`;
+        } 
+        // Producto vendido por unidad comercial directamente
+        else {
+          presentacion = `${Math.round(cantidadNum)} ${pluralizar(unidadComercial, cantidadNum)}`;
         }
         
         return {

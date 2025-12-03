@@ -68,9 +68,27 @@ interface PedidoPorAutorizar {
       codigo: string;
       precio_venta: number;
       unidad: string;
+      kg_por_unidad: number | null;
+      precio_por_kilo: boolean;
     } | null;
   }[];
 }
+
+// Calcular peso total de un pedido
+const calcularPesoTotalPedido = (detalles: PedidoPorAutorizar["pedidos_detalles"]) => {
+  let pesoTotal = 0;
+  for (const det of detalles) {
+    const precioPorKilo = det.productos?.precio_por_kilo ?? false;
+    const kgPorUnidad = det.productos?.kg_por_unidad ?? 1;
+    
+    if (precioPorKilo) {
+      pesoTotal += det.cantidad;
+    } else {
+      pesoTotal += det.cantidad * kgPorUnidad;
+    }
+  }
+  return Math.round(pesoTotal * 100) / 100;
+};
 
 interface PrecioHistorialProducto {
   fecha: string;
@@ -108,7 +126,7 @@ export function PedidosPorAutorizarTab() {
             cantidad,
             precio_unitario,
             subtotal,
-            productos (id, nombre, codigo, precio_venta, unidad)
+            productos (id, nombre, codigo, precio_venta, unidad, kg_por_unidad, precio_por_kilo)
           )
         `)
         .eq("status", "por_autorizar")
@@ -228,15 +246,17 @@ export function PedidosPorAutorizarTab() {
           .eq("pedido_id", pedidoId);
         
         const newTotal = detalles?.reduce((sum, d) => sum + d.subtotal, 0) || 0;
+        const pesoTotal = calcularPesoTotalPedido(selectedPedido.pedidos_detalles);
         
         await supabase
           .from("pedidos")
-          .update({ total: newTotal, status: "pendiente" })
+          .update({ total: newTotal, status: "pendiente", peso_total_kg: pesoTotal > 0 ? pesoTotal : null })
           .eq("id", pedidoId);
       } else {
+        const pesoTotal = calcularPesoTotalPedido(selectedPedido.pedidos_detalles);
         await supabase
           .from("pedidos")
-          .update({ status: "pendiente" })
+          .update({ status: "pendiente", peso_total_kg: pesoTotal > 0 ? pesoTotal : null })
           .eq("id", pedidoId);
       }
 
@@ -394,6 +414,7 @@ export function PedidosPorAutorizarTab() {
               <TableHead>Sucursal</TableHead>
               <TableHead>Fecha</TableHead>
               <TableHead>Productos</TableHead>
+              <TableHead className="text-right">Peso</TableHead>
               <TableHead className="text-right">Total</TableHead>
               <TableHead>Acciones</TableHead>
             </TableRow>
@@ -407,6 +428,9 @@ export function PedidosPorAutorizarTab() {
                 <TableCell>{format(new Date(pedido.fecha_pedido), "dd/MM/yyyy", { locale: es })}</TableCell>
                 <TableCell>
                   <Badge variant="outline">{pedido.pedidos_detalles.length} productos</Badge>
+                </TableCell>
+                <TableCell className="text-right font-mono text-blue-600">
+                  {calcularPesoTotalPedido(pedido.pedidos_detalles).toLocaleString()} kg
                 </TableCell>
                 <TableCell className="text-right font-mono">${formatCurrency(pedido.total)}</TableCell>
                 <TableCell>

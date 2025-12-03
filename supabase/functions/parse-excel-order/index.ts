@@ -433,41 +433,151 @@ function findMatchingProduct(columnName: string, productosCotizados: any[]): any
   return null;
 }
 
+// Prefijos comunes a remover para comparación de sucursales
+const SUCURSAL_PREFIXES = [
+  /^rost\.?\s*/i,
+  /^rosticeria\s*/i,
+  /^rosticería\s*/i,
+  /^pan\s*/i,
+  /^panaderia\s*/i,
+  /^panadería\s*/i,
+  /^pollos\s*/i,
+  /^la\s+/i,
+  /^el\s+/i,
+  /^los\s+/i,
+  /^las\s+/i,
+  /^v\.\s*de\s*/i,  // "V. DE" -> Villa de
+  /^villa\s+de\s*/i,
+  /^av\.\s*/i,      // "AV." -> Avenida
+  /^avenida\s*/i,
+  /^sucursal\s*/i,
+  /^suc\.?\s*/i,
+  /^s\.?\s+/i,
+];
+
+// Función para extraer nombre clave (sin número ni prefijos)
+function extractKeyName(str: string): string {
+  let key = str.toLowerCase().trim();
+  // Quitar número inicial (ej: "303 ROST. AMATRIAS" -> "ROST. AMATRIAS")
+  key = key.replace(/^\d+\s*/, '');
+  // Quitar todos los prefijos iterativamente
+  let prevKey = "";
+  while (prevKey !== key) {
+    prevKey = key;
+    for (const prefix of SUCURSAL_PREFIXES) {
+      key = key.replace(prefix, '').trim();
+    }
+  }
+  return key.trim();
+}
+
+// Función de similitud (Dice coefficient)
+function calculateSimilarity(str1: string, str2: string): number {
+  if (str1 === str2) return 1;
+  if (str1.length < 2 || str2.length < 2) return 0;
+  
+  const bigrams1 = new Set<string>();
+  const bigrams2 = new Set<string>();
+  
+  for (let i = 0; i < str1.length - 1; i++) {
+    bigrams1.add(str1.substring(i, i + 2));
+  }
+  for (let i = 0; i < str2.length - 1; i++) {
+    bigrams2.add(str2.substring(i, i + 2));
+  }
+  
+  let intersection = 0;
+  for (const bigram of bigrams1) {
+    if (bigrams2.has(bigram)) intersection++;
+  }
+  
+  return (2 * intersection) / (bigrams1.size + bigrams2.size);
+}
+
 function matchSucursal(nombre: string, sucursalesRegistradas: any[]): any | null {
   if (!sucursalesRegistradas || sucursalesRegistradas.length === 0) return null;
   
-  const nombreNorm = nombre.toLowerCase().trim()
-    .replace(/\s+/g, " ")
-    .replace(/^(sucursal|suc\.?|s\.?)\s*/i, "");
+  const nombreNorm = nombre.toLowerCase().trim().replace(/\s+/g, " ");
   
-  // Extract number if present (e.g., "301 ROST. CRUCERO" -> "301")
+  // Extraer número si existe (ej: "303 ROST. AMATRIAS" -> "303")
   const numMatch = nombreNorm.match(/^(\d+)\s*/);
   const branchNumber = numMatch ? numMatch[1] : null;
   
-  // Try to match by number first
+  // Extraer nombre clave del Excel
+  const keyName = extractKeyName(nombreNorm);
+  
+  console.log(`Matching: "${nombre}" -> keyName: "${keyName}", branchNum: ${branchNumber}`);
+  
+  // === PASO 1: Match exacto por número (si ambos tienen número) ===
   if (branchNumber) {
     const matchByNum = sucursalesRegistradas.find(s => {
       const sNorm = s.nombre.toLowerCase().trim();
-      return sNorm.startsWith(branchNumber + " ") || 
-             sNorm === branchNumber ||
-             sNorm.includes(branchNumber);
+      return sNorm.startsWith(branchNumber + " ") || sNorm === branchNumber;
     });
-    if (matchByNum) return matchByNum;
+    if (matchByNum) {
+      console.log(`  → Matched by number: ${matchByNum.nombre}`);
+      return matchByNum;
+    }
   }
   
-  // Try exact match
-  const exactMatch = sucursalesRegistradas.find(s => 
-    s.nombre.toLowerCase().trim() === nombreNorm
-  );
-  if (exactMatch) return exactMatch;
-  
-  // Try partial match
-  const partialMatch = sucursalesRegistradas.find(s => {
-    const sNorm = s.nombre.toLowerCase().trim();
-    return sNorm.includes(nombreNorm) || nombreNorm.includes(sNorm);
+  // === PASO 2: Match por nombre clave exacto ===
+  const exactKeyMatch = sucursalesRegistradas.find(s => {
+    const sKeyName = extractKeyName(s.nombre);
+    return sKeyName === keyName && keyName.length > 0;
   });
-  if (partialMatch) return partialMatch;
+  if (exactKeyMatch) {
+    console.log(`  → Matched by exact key: ${exactKeyMatch.nombre}`);
+    return exactKeyMatch;
+  }
   
+  // === PASO 3: Match si una contiene a la otra (después de normalizar) ===
+  if (keyName.length >= 3) {
+    const partialKeyMatch = sucursalesRegistradas.find(s => {
+      const sKeyName = extractKeyName(s.nombre);
+      return (sKeyName.includes(keyName) || keyName.includes(sKeyName)) && sKeyName.length > 0;
+    });
+    if (partialKeyMatch) {
+      console.log(`  → Matched by partial key: ${partialKeyMatch.nombre}`);
+      return partialKeyMatch;
+    }
+  }
+  
+  // === PASO 4: Match por similitud de palabras ===
+  const keyWords = keyName.split(/\s+/).filter(w => w.length > 2);
+  if (keyWords.length > 0) {
+    const wordMatch = sucursalesRegistradas.find(s => {
+      const sKeyName = extractKeyName(s.nombre);
+      const sWords = sKeyName.split(/\s+/).filter(w => w.length > 2);
+      // Si alguna palabra clave coincide exactamente
+      return keyWords.some(kw => sWords.some(sw => sw === kw));
+    });
+    if (wordMatch) {
+      console.log(`  → Matched by word: ${wordMatch.nombre}`);
+      return wordMatch;
+    }
+  }
+  
+  // === PASO 5: Match por similitud de texto (Dice coefficient) ===
+  let bestMatch = null;
+  let bestScore = 0;
+  
+  for (const s of sucursalesRegistradas) {
+    const sKeyName = extractKeyName(s.nombre);
+    if (sKeyName.length < 2) continue;
+    
+    const score = calculateSimilarity(keyName, sKeyName);
+    if (score > 0.7 && score > bestScore) { // 70% similitud mínima
+      bestScore = score;
+      bestMatch = s;
+    }
+  }
+  
+  if (bestMatch) {
+    console.log(`  → Matched by similarity (${(bestScore * 100).toFixed(0)}%): ${bestMatch.nombre}`);
+    return bestMatch;
+  }
+  
+  console.log(`  → No match found for: "${nombre}"`);
   return null;
 }
 

@@ -4,7 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Package, MapPin, Calendar, Trash2, Check, CheckSquare, Square, AlertTriangle, Edit2, Save, X, Lock, Unlock } from "lucide-react";
+import { Loader2, Package, MapPin, Calendar, Trash2, Check, CheckSquare, Square, AlertTriangle, Edit2, Save, X, Lock, Unlock, Zap } from "lucide-react";
+import { VerificacionRapidaLecaroz } from "./VerificacionRapidaLecaroz";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -78,6 +79,7 @@ export function PedidosAcumulativosManager() {
   const [selectedForBatch, setSelectedForBatch] = useState<Set<string>>(new Set());
   const [editingDetalle, setEditingDetalle] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<{ cantidadKg: number; cantidadUnidades: number }>({ cantidadKg: 0, cantidadUnidades: 1 });
+  const [showVerificacionRapida, setShowVerificacionRapida] = useState(false);
   
   // Estado para rastrear verificaciones de productos especiales por pedido
   const [verificaciones, setVerificaciones] = useState<Record<string, Record<string, VerificacionProducto>>>({});
@@ -641,6 +643,11 @@ export function PedidosAcumulativosManager() {
     );
   }
 
+  // Show quick verification view
+  if (showVerificacionRapida) {
+    return <VerificacionRapidaLecaroz onClose={() => setShowVerificacionRapida(false)} />;
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -710,6 +717,17 @@ export function PedidosAcumulativosManager() {
                 </>
               )}
             </>
+          )}
+          {pedidosConVerificacionCount > 0 && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => setShowVerificacionRapida(true)}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              <Zap className="h-4 w-4 mr-1" />
+              Verificación Rápida ({pedidosConVerificacionCount})
+            </Button>
           )}
           <Badge variant="secondary">
             {pedidosAcumulativos?.length || 0} en borrador

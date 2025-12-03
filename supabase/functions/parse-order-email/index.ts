@@ -142,8 +142,12 @@ function convertToSellingUnit(
   );
   
   if (shouldConvertFromKilos) {
-    const cantidadConvertida = Math.round(cantidadPedida / kgPorUnidad!);
-    console.log(`  -> CONVERSION: ${cantidadPedida} kg ÷ ${kgPorUnidad} kg/unidad = ${cantidadConvertida} ${unidadVenta}`);
+    // Preservar decimales si producto es por kilo (unidadVenta === 'kg'), redondear si no
+    const esPorKilo = unidadVentaLower === 'kg' || unidadVentaLower === 'kilo';
+    const cantidadConvertida = esPorKilo 
+      ? Math.round((cantidadPedida / kgPorUnidad!) * 100) / 100  // 2 decimales
+      : Math.round(cantidadPedida / kgPorUnidad!);               // entero
+    console.log(`  -> CONVERSION: ${cantidadPedida} kg ÷ ${kgPorUnidad} kg/unidad = ${cantidadConvertida} ${unidadVenta} (decimales=${esPorKilo})`);
     return { 
       cantidad: cantidadConvertida,
       cantidadOriginalKg: cantidadPedida

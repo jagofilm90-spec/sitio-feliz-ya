@@ -26,11 +26,13 @@ import {
   Building2,
   Package,
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   Trash2,
   ChevronDown,
   FileSpreadsheet,
 } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -1337,6 +1339,32 @@ export default function ProcesarPedidoDialog({
     return { matchedCount: matched, unmatchedCount: unmatched };
   }, [parsedOrder]);
 
+  // Contar sucursales no registradas
+  const { matchedSucursales, unmatchedSucursales, unmatchedSucursalNames } = useMemo(() => {
+    if (!parsedOrder) return { matchedSucursales: 0, unmatchedSucursales: 0, unmatchedSucursalNames: [] };
+    
+    let matched = 0;
+    let unmatched = 0;
+    const unmatchedNames: string[] = [];
+    
+    for (const suc of parsedOrder.sucursales) {
+      if (suc.sucursal_id) {
+        matched++;
+      } else {
+        unmatched++;
+        unmatchedNames.push(suc.nombre_sucursal);
+      }
+    }
+    
+    return { 
+      matchedSucursales: matched, 
+      unmatchedSucursales: unmatched, 
+      unmatchedSucursalNames: unmatchedNames 
+    };
+  }, [parsedOrder]);
+
+  const hasUnmatchedSucursales = unmatchedSucursales > 0;
+
   const hasUnmatchedProducts = unmatchedCount > 0;
   const totalProducts = matchedCount;
   const canCreateOrders = !hasUnmatchedProducts && totalProducts > 0;
@@ -1485,6 +1513,40 @@ export default function ProcesarPedidoDialog({
             </div>
           )}
 
+          {/* Alerta de sucursales NO registradas */}
+          {parsedOrder && hasUnmatchedSucursales && (
+            <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-500 rounded-lg space-y-3">
+              <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300 font-semibold">
+                <AlertTriangle className="h-5 w-5" />
+                <span>⚠️ {unmatchedSucursales} sucursal(es) NO están registradas</span>
+              </div>
+              
+              <p className="text-sm text-amber-700 dark:text-amber-400">
+                Las siguientes sucursales no existen en tu catálogo. Puedes vincularlas manualmente abajo o ir a <strong>Clientes → Sucursales</strong> para agregarlas permanentemente.
+              </p>
+              
+              <Collapsible>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30">
+                    <ChevronDown className="h-4 w-4 mr-2" />
+                    Ver lista de sucursales ({unmatchedSucursales})
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="max-h-[150px] overflow-y-auto bg-amber-100/50 dark:bg-amber-900/20 rounded p-2 mt-2">
+                    <ul className="text-xs space-y-1">
+                      {unmatchedSucursalNames.map((name, idx) => (
+                        <li key={idx} className="text-amber-800 dark:text-amber-300">
+                          • {name}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            </div>
+          )}
+
           {/* Parse button */}
           {/* Alerta de correo ya procesado */}
           {emailAlreadyProcessed && (
@@ -1567,6 +1629,12 @@ export default function ProcesarPedidoDialog({
                       <Badge variant="destructive">
                         <AlertCircle className="h-3 w-3 mr-1" />
                         {unmatchedCount} requieren selección manual
+                      </Badge>
+                    )}
+                    {unmatchedSucursales > 0 && (
+                      <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-400">
+                        <Building2 className="h-3 w-3 mr-1" />
+                        {unmatchedSucursales} sucursales sin registrar
                       </Badge>
                     )}
                   </div>

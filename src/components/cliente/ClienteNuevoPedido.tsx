@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Table,
   TableBody,
@@ -14,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Trash2, ShoppingCart, Search, MapPin } from "lucide-react";
+import { Plus, Trash2, ShoppingCart, Search, MapPin, Calendar, Star, ChevronDown, Package } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -24,6 +26,8 @@ import {
 } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/utils";
 import { calcularDesgloseImpuestos, redondear, validarAntesDeGuardar, LineaPedido } from "@/lib/calculos";
+import { format, addDays, isWeekend } from "date-fns";
+import { es } from "date-fns/locale";
 
 interface ClienteNuevoPedidoProps {
   clienteId: string;
@@ -51,18 +55,52 @@ interface Sucursal {
   telefono: string | null;
 }
 
+interface ProductoFrecuente {
+  id: string;
+  producto_id: string;
+  es_especial: boolean;
+  producto: {
+    id: string;
+    nombre: string;
+    codigo: string;
+    unidad: string;
+    precio_venta: number;
+    stock_actual: number;
+    aplica_iva: boolean;
+    aplica_ieps: boolean;
+  };
+}
+
 const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: ClienteNuevoPedidoProps) => {
   const [productos, setProductos] = useState<any[]>([]);
+  const [productosFrecuentes, setProductosFrecuentes] = useState<ProductoFrecuente[]>([]);
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [selectedSucursalId, setSelectedSucursalId] = useState<string>("");
   const [detalles, setDetalles] = useState<DetalleProducto[]>([]);
   const [notas, setNotas] = useState("");
+  const [fechaEntrega, setFechaEntrega] = useState("");
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [especialesOpen, setEspecialesOpen] = useState(false);
+  const [otrosOpen, setOtrosOpen] = useState(false);
   const { toast } = useToast();
+
+  // Generate available delivery dates (next 7 business days)
+  const fechasDisponibles = () => {
+    const fechas: string[] = [];
+    let date = addDays(new Date(), 1); // Start from tomorrow
+    while (fechas.length < 7) {
+      if (!isWeekend(date) || date.getDay() === 6) { // Monday-Saturday
+        fechas.push(format(date, "yyyy-MM-dd"));
+      }
+      date = addDays(date, 1);
+    }
+    return fechas;
+  };
 
   useEffect(() => {
     loadProductos();
+    loadProductosFrecuentes();
     loadSucursales();
   }, [clienteId]);
 
@@ -86,6 +124,30 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
     }
   };
 
+  const loadProductosFrecuentes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("cliente_productos_frecuentes")
+        .select(`
+          id,
+          producto_id,
+          es_especial,
+          producto:productos(id, nombre, codigo, unidad, precio_venta, stock_actual, aplica_iva, aplica_ieps)
+        `)
+        .eq("cliente_id", clienteId)
+        .eq("activo", true)
+        .order("orden_display");
+
+      if (error) throw error;
+      setProductosFrecuentes((data || []).map(d => ({
+        ...d,
+        producto: d.producto as unknown as ProductoFrecuente['producto']
+      })));
+    } catch (error: any) {
+      console.error("Error loading frequent products:", error);
+    }
+  };
+
   const loadSucursales = async () => {
     try {
       const { data, error } = await supabase
@@ -100,7 +162,6 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
       const sucursalesData = data || [];
       setSucursales(sucursalesData);
       
-      // Si solo hay una sucursal, seleccionarla automáticamente
       if (sucursalesData.length === 1) {
         setSelectedSucursalId(sucursalesData[0].id);
       }
@@ -115,9 +176,35 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
 
   const productosFiltrados = productos.filter(
     (p) =>
-      p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.codigo.toLowerCase().includes(searchTerm.toLowerCase())
+      (p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.codigo.toLowerCase().includes(searchTerm.toLowerCase())) &&
+      !productosFrecuentes.some(pf => pf.producto_id === p.id)
   );
+
+  const agregarProductoDesdeGrid = (producto: ProductoFrecuente['producto'], cantidad: number) => {
+    if (cantidad <= 0) return;
+    
+    const existe = detalles.find((d) => d.productoId === producto.id);
+    
+    if (existe) {
+      actualizarCantidad(producto.id, cantidad);
+      return;
+    }
+
+    const nuevoDetalle: DetalleProducto = {
+      productoId: producto.id,
+      nombre: producto.nombre,
+      codigo: producto.codigo,
+      unidad: producto.unidad,
+      precioUnitario: producto.precio_venta,
+      cantidad,
+      subtotal: producto.precio_venta * cantidad,
+      aplica_iva: producto.aplica_iva || false,
+      aplica_ieps: producto.aplica_ieps || false,
+    };
+
+    setDetalles([...detalles, nuevoDetalle]);
+  };
 
   const agregarProducto = (producto: any) => {
     const existe = detalles.find((d) => d.productoId === producto.id);
@@ -148,22 +235,27 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
   };
 
   const actualizarCantidad = (productoId: string, cantidad: number) => {
-    if (cantidad <= 0) return;
+    if (cantidad <= 0) {
+      eliminarProducto(productoId);
+      return;
+    }
 
-    setDetalles(
-      detalles.map((d) =>
-        d.productoId === productoId
-          ? { ...d, cantidad, subtotal: d.precioUnitario * cantidad }
-          : d
-      )
-    );
+    const existe = detalles.find(d => d.productoId === productoId);
+    if (existe) {
+      setDetalles(
+        detalles.map((d) =>
+          d.productoId === productoId
+            ? { ...d, cantidad, subtotal: d.precioUnitario * cantidad }
+            : d
+        )
+      );
+    }
   };
 
   const eliminarProducto = (productoId: string) => {
     setDetalles(detalles.filter((d) => d.productoId !== productoId));
   };
 
-  // Convertir a formato LineaPedido para validación
   const getLineasPedido = (): LineaPedido[] => {
     return detalles.map(d => ({
       producto_id: d.productoId,
@@ -236,7 +328,15 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
       return;
     }
 
-    // VALIDACIÓN OBLIGATORIA antes de guardar
+    if (!fechaEntrega) {
+      toast({
+        title: "Selecciona fecha de entrega",
+        description: "Debes seleccionar una fecha de entrega",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const validacion = validarAntesDeGuardar(getLineasPedido());
     if (!validacion.puede_guardar) {
       toast({ 
@@ -256,11 +356,9 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
 
       const totalesGuardar = calcularTotales();
       
-      // Generar folio único
       const timestamp = Date.now().toString().slice(-6);
       const folio = `PED-CLI-${timestamp}`;
 
-      // Crear pedido con status por_autorizar para revisión de precios
       const { data: pedido, error: pedidoError } = await supabase
         .from("pedidos")
         .insert({
@@ -269,6 +367,7 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
           vendedor_id: user.user.id,
           sucursal_id: selectedSucursalId || null,
           fecha_pedido: new Date().toISOString(),
+          fecha_entrega_estimada: fechaEntrega,
           subtotal: totalesGuardar.subtotal,
           impuestos: totalesGuardar.impuestos,
           total: totalesGuardar.total,
@@ -280,7 +379,6 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
 
       if (pedidoError) throw pedidoError;
 
-      // Crear detalles
       const detallesInsert = detalles.map((d) => ({
         pedido_id: pedido.id,
         producto_id: d.productoId,
@@ -297,12 +395,12 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
 
       toast({
         title: "Pedido enviado",
-        description: `Tu pedido ${folio} ha sido enviado para autorización de precios. Te notificaremos cuando sea confirmado.`,
+        description: `Tu pedido ${folio} ha sido enviado para autorización. Fecha de entrega: ${format(new Date(fechaEntrega), "EEEE d 'de' MMMM", { locale: es })}`,
       });
 
-      // Limpiar formulario
       setDetalles([]);
       setNotas("");
+      setFechaEntrega("");
     } catch (error: any) {
       toast({
         title: "Error",
@@ -319,38 +417,37 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
   const creditoDisponible = limiteCredito - saldoPendiente;
   const selectedSucursal = sucursales.find(s => s.id === selectedSucursalId);
 
+  const productosRegulares = productosFrecuentes.filter(p => !p.es_especial);
+  const productosEspeciales = productosFrecuentes.filter(p => p.es_especial);
+  const tieneProductosFrecuentes = productosFrecuentes.length > 0;
+
+  const getCantidadEnPedido = (productoId: string) => {
+    const detalle = detalles.find(d => d.productoId === productoId);
+    return detalle?.cantidad || 0;
+  };
+
   return (
     <div className="space-y-6">
-      {/* Selector de Sucursal */}
-      {sucursales.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MapPin className="h-5 w-5" />
-              Dirección de Entrega
-            </CardTitle>
-            <CardDescription>
-              {sucursales.length === 1 
-                ? "Tu dirección de entrega configurada"
-                : "Selecciona la sucursal donde recibirás el pedido"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {sucursales.length === 1 ? (
-              <div className="p-4 bg-muted rounded-lg">
-                <p className="font-medium">{sucursales[0].nombre}</p>
-                <p className="text-sm text-muted-foreground">{sucursales[0].direccion}</p>
-                {sucursales[0].contacto && (
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Contacto: {sucursales[0].contacto} {sucursales[0].telefono && `- ${sucursales[0].telefono}`}
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-4">
+      {/* Selector de Sucursal y Fecha */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {sucursales.length > 0 && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <MapPin className="h-4 w-4" />
+                Dirección de Entrega
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {sucursales.length === 1 ? (
+                <div className="p-3 bg-muted rounded-lg text-sm">
+                  <p className="font-medium">{sucursales[0].nombre}</p>
+                  <p className="text-muted-foreground">{sucursales[0].direccion}</p>
+                </div>
+              ) : (
                 <Select value={selectedSucursalId} onValueChange={setSelectedSucursalId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecciona una sucursal" />
+                    <SelectValue placeholder="Selecciona sucursal" />
                   </SelectTrigger>
                   <SelectContent>
                     {sucursales.map((sucursal) => (
@@ -360,23 +457,34 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
                     ))}
                   </SelectContent>
                 </Select>
-                
-                {selectedSucursal && (
-                  <div className="p-4 bg-muted rounded-lg">
-                    <p className="font-medium">{selectedSucursal.nombre}</p>
-                    <p className="text-sm text-muted-foreground">{selectedSucursal.direccion}</p>
-                    {selectedSucursal.contacto && (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Contacto: {selectedSucursal.contacto} {selectedSucursal.telefono && `- ${selectedSucursal.telefono}`}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Calendar className="h-4 w-4" />
+              Fecha de Entrega
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Select value={fechaEntrega} onValueChange={setFechaEntrega}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona fecha" />
+              </SelectTrigger>
+              <SelectContent>
+                {fechasDisponibles().map((fecha) => (
+                  <SelectItem key={fecha} value={fecha}>
+                    {format(new Date(fecha + "T12:00:00"), "EEEE d 'de' MMMM", { locale: es })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </CardContent>
         </Card>
-      )}
+      </div>
 
       {sucursales.length === 0 && (
         <Card className="border-amber-500 bg-amber-50 dark:bg-amber-950/20">
@@ -394,152 +502,293 @@ const ClienteNuevoPedido = ({ clienteId, limiteCredito, saldoPendiente }: Client
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Nuevo Pedido</CardTitle>
-          <CardDescription>
-            Crédito disponible: ${creditoDisponible.toFixed(2)}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <Label>Buscar Producto</Label>
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por nombre o código..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            {searchTerm && productosFiltrados.length > 0 && (
-              <div className="border rounded-lg max-h-60 overflow-y-auto">
-                {productosFiltrados.map((producto) => (
-                  <div
-                    key={producto.id}
-                    className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center"
-                    onClick={() => agregarProducto(producto)}
-                  >
-                    <div>
-                      <p className="font-medium">{producto.nombre}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {producto.codigo} - Stock: {producto.stock_actual} {producto.unidad}
-                      </p>
+      {/* Productos Frecuentes Grid */}
+      {tieneProductosFrecuentes && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Tus Productos
+            </CardTitle>
+            <CardDescription>
+              Ingresa las cantidades y se agregarán a tu pedido
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Productos Regulares */}
+            {productosRegulares.length > 0 && (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {productosRegulares.map((item) => {
+                  const cantidadActual = getCantidadEnPedido(item.producto.id);
+                  return (
+                    <div 
+                      key={item.id} 
+                      className={`p-3 border rounded-lg transition-colors ${
+                        cantidadActual > 0 ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{item.producto.nombre}</p>
+                          <p className="text-xs text-muted-foreground">{item.producto.codigo}</p>
+                        </div>
+                        <Badge variant="secondary" className="ml-2 shrink-0">
+                          ${item.producto.precio_venta.toFixed(2)}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          value={cantidadActual || ""}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value) || 0;
+                            agregarProductoDesdeGrid(item.producto, val);
+                          }}
+                          className="h-8 text-center"
+                        />
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                          {item.producto.unidad}
+                        </span>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-medium">${producto.precio_venta.toFixed(2)}</p>
-                      <Button size="sm" variant="ghost">
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
-          </div>
 
-          {detalles.length > 0 && (
-            <>
-              <div className="border rounded-lg">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Producto</TableHead>
-                      <TableHead>Código</TableHead>
-                      <TableHead>Precio Unit.</TableHead>
-                      <TableHead>Cantidad</TableHead>
-                      <TableHead className="text-right">Subtotal</TableHead>
-                      <TableHead></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {detalles.map((detalle) => (
-                      <TableRow key={detalle.productoId}>
-                        <TableCell>{detalle.nombre}</TableCell>
-                        <TableCell>{detalle.codigo}</TableCell>
-                        <TableCell>${formatCurrency(detalle.precioUnitario)}</TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            min="1"
-                            value={detalle.cantidad}
-                            onChange={(e) =>
-                              actualizarCantidad(
-                                detalle.productoId,
-                                parseInt(e.target.value) || 1
-                              )
-                            }
-                            className="w-20"
-                          />
-                        </TableCell>
-                        <TableCell className="text-right font-medium font-mono">
-                          ${formatCurrency(detalle.subtotal)}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => eliminarProducto(detalle.productoId)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+            {/* Productos Especiales Collapsible */}
+            {productosEspeciales.length > 0 && (
+              <Collapsible open={especialesOpen} onOpenChange={setEspecialesOpen}>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" className="w-full justify-between">
+                    <div className="flex items-center gap-2">
+                      <Star className="h-4 w-4 text-amber-500" />
+                      <span>Productos Especiales</span>
+                      <Badge variant="outline" className="border-amber-500 text-amber-600">
+                        {productosEspeciales.length}
+                      </Badge>
+                    </div>
+                    <ChevronDown className={`h-4 w-4 transition-transform ${especialesOpen ? 'rotate-180' : ''}`} />
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-2">
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {productosEspeciales.map((item) => {
+                      const cantidadActual = getCantidadEnPedido(item.producto.id);
+                      return (
+                        <div 
+                          key={item.id} 
+                          className={`p-3 border rounded-lg border-amber-200 dark:border-amber-800 transition-colors ${
+                            cantidadActual > 0 ? 'bg-amber-50 dark:bg-amber-950/30' : 'hover:bg-amber-50/50 dark:hover:bg-amber-950/20'
+                          }`}
+                        >
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm truncate">{item.producto.nombre}</p>
+                              <p className="text-xs text-muted-foreground">{item.producto.codigo}</p>
+                            </div>
+                            <Badge variant="secondary" className="ml-2 shrink-0">
+                              ${item.producto.precio_venta.toFixed(2)}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              min="0"
+                              placeholder="0"
+                              value={cantidadActual || ""}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value) || 0;
+                                agregarProductoDesdeGrid(item.producto, val);
+                              }}
+                              className="h-8 text-center"
+                            />
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">
+                              {item.producto.unidad}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
-              <div className="space-y-2">
-                <Label>Notas (opcional)</Label>
-                <Textarea
-                  placeholder="Agregar notas o instrucciones especiales..."
-                  value={notas}
-                  onChange={(e) => setNotas(e.target.value)}
+      {/* Buscador de Otros Productos */}
+      <Collapsible open={otrosOpen || !tieneProductosFrecuentes} onOpenChange={setOtrosOpen}>
+        <Card>
+          <CardHeader>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" className="w-full justify-between p-0 h-auto hover:bg-transparent">
+                <CardTitle className="flex items-center gap-2">
+                  <Search className="h-5 w-5" />
+                  {tieneProductosFrecuentes ? "Buscar Otros Productos" : "Buscar Productos"}
+                </CardTitle>
+                {tieneProductosFrecuentes && (
+                  <ChevronDown className={`h-4 w-4 transition-transform ${otrosOpen ? 'rotate-180' : ''}`} />
+                )}
+              </Button>
+            </CollapsibleTrigger>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent className="pt-0 space-y-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por nombre o código..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
                 />
               </div>
+              {searchTerm && productosFiltrados.length > 0 && (
+                <div className="border rounded-lg max-h-60 overflow-y-auto">
+                  {productosFiltrados.slice(0, 15).map((producto) => (
+                    <div
+                      key={producto.id}
+                      className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center border-b last:border-b-0"
+                      onClick={() => agregarProducto(producto)}
+                    >
+                      <div>
+                        <p className="font-medium">{producto.nombre}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {producto.codigo} - Stock: {producto.stock_actual} {producto.unidad}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium">${producto.precio_venta.toFixed(2)}</p>
+                        <Button size="sm" variant="ghost">
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
-              <div className="space-y-2 pt-4 border-t">
-                <div className="flex justify-between text-sm">
-                  <span>Subtotal:</span>
-                  <span className="font-mono">${formatCurrency(subtotal)}</span>
-                </div>
-                {iva > 0 && (
-                  <div className="flex justify-between text-sm text-blue-600">
-                    <span>IVA (16%):</span>
-                    <span className="font-mono">${formatCurrency(iva)}</span>
-                  </div>
-                )}
-                {ieps > 0 && (
-                  <div className="flex justify-between text-sm text-orange-600">
-                    <span>IEPS (8%):</span>
-                    <span className="font-mono">${formatCurrency(ieps)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-lg font-bold">
-                  <span>Total:</span>
-                  <span className="font-mono">${formatCurrency(total)}</span>
-                </div>
-                {total > creditoDisponible && (
-                  <p className="text-sm text-destructive">
-                    ⚠️ El total excede tu crédito disponible
-                  </p>
-                )}
+      {/* Resumen del Pedido */}
+      {detalles.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5" />
+              Tu Pedido
+              <Badge>{detalles.length} productos</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="border rounded-lg">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Producto</TableHead>
+                    <TableHead>Precio</TableHead>
+                    <TableHead>Cantidad</TableHead>
+                    <TableHead className="text-right">Subtotal</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {detalles.map((detalle) => (
+                    <TableRow key={detalle.productoId}>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">{detalle.nombre}</p>
+                          <p className="text-xs text-muted-foreground">{detalle.codigo}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>${formatCurrency(detalle.precioUnitario)}</TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={detalle.cantidad}
+                          onChange={(e) =>
+                            actualizarCantidad(
+                              detalle.productoId,
+                              parseInt(e.target.value) || 0
+                            )
+                          }
+                          className="w-20 h-8"
+                        />
+                      </TableCell>
+                      <TableCell className="text-right font-medium font-mono">
+                        ${formatCurrency(detalle.subtotal)}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => eliminarProducto(detalle.productoId)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Notas (opcional)</Label>
+              <Textarea
+                placeholder="Agregar notas o instrucciones especiales..."
+                value={notas}
+                onChange={(e) => setNotas(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2 pt-4 border-t">
+              <div className="flex justify-between text-sm">
+                <span>Subtotal:</span>
+                <span className="font-mono">${formatCurrency(subtotal)}</span>
               </div>
+              {iva > 0 && (
+                <div className="flex justify-between text-sm text-blue-600">
+                  <span>IVA (16%):</span>
+                  <span className="font-mono">${formatCurrency(iva)}</span>
+                </div>
+              )}
+              {ieps > 0 && (
+                <div className="flex justify-between text-sm text-orange-600">
+                  <span>IEPS (8%):</span>
+                  <span className="font-mono">${formatCurrency(ieps)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-lg font-bold">
+                <span>Total:</span>
+                <span className="font-mono">${formatCurrency(total)}</span>
+              </div>
+              {total > creditoDisponible && (
+                <p className="text-sm text-destructive">
+                  ⚠️ El total excede tu crédito disponible
+                </p>
+              )}
+            </div>
 
-              <Button
-                className="w-full"
-                onClick={crearPedido}
-                disabled={loading || total > creditoDisponible || (sucursales.length > 0 && !selectedSucursalId)}
-              >
-                <ShoppingCart className="h-4 w-4 mr-2" />
-                {loading ? "Procesando..." : "Crear Pedido"}
-              </Button>
-            </>
-          )}
-        </CardContent>
-      </Card>
+            <Button
+              className="w-full"
+              onClick={crearPedido}
+              disabled={loading || total > creditoDisponible || (sucursales.length > 0 && !selectedSucursalId) || !fechaEntrega}
+            >
+              <ShoppingCart className="h-4 w-4 mr-2" />
+              {loading ? "Procesando..." : "Enviar Pedido"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

@@ -452,10 +452,21 @@ const Pedidos = () => {
           unidadComercial = 'caja';
         }
         
-        // Mostrar cantidad con su unidad original - SIN REDONDEAR
+        // *** REGLA ESPECIAL LINAZA: Redondear kg a múltiplos de 10 ***
+        // Residuo 1-5 kg redondea abajo, residuo 6-9 kg redondea arriba
+        // Ejemplo: 21-25kg → 20kg (2 bultos), 26-29kg → 30kg (3 bultos)
+        let cantidadParaCalculo = cantidadNum;
+        if (nombreLower.includes('linaza')) {
+          cantidadParaCalculo = Math.floor((cantidadNum + 4) / 10) * 10;
+        }
+        
+        // Mostrar cantidad con su unidad original - SIN REDONDEAR (excepto Linaza)
         let cantidadDisplay = "";
         if (producto.precio_por_kilo) {
-          cantidadDisplay = `${formatearCantidad(cantidadNum)} kg`;
+          // Para Linaza, mostrar kg redondeados
+          cantidadDisplay = nombreLower.includes('linaza') 
+            ? `${formatearCantidad(cantidadParaCalculo)} kg`
+            : `${formatearCantidad(cantidadNum)} kg`;
         } else {
           cantidadDisplay = `${formatearCantidad(cantidadNum)} ${pluralizar(unidadComercial, cantidadNum)}`;
         }
@@ -463,6 +474,11 @@ const Pedidos = () => {
         // *** PRIORIDAD MÁXIMA: Si tiene unidades_manual guardadas, usarlas directamente ***
         if (detalle.unidades_manual && detalle.unidades_manual > 0) {
           presentacion = `${detalle.unidades_manual} ${pluralizar(unidadComercial, detalle.unidades_manual)}`;
+        }
+        // *** REGLA ESPECIAL LINAZA: 10 kg por bulto ***
+        else if (nombreLower.includes('linaza')) {
+          const numBultos = cantidadParaCalculo / 10;
+          presentacion = `${numBultos} ${pluralizar('bulto', numBultos)}`;
         }
         // Calcular presentación para bodegueros - SIEMPRE unidades comerciales, SIN "de X kg"
         // Regla especial para ALMENDRA FILETEADA (11.34 kg/caja) - PRIORIDAD ALTA

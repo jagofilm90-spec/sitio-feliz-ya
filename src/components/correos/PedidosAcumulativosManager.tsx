@@ -153,7 +153,7 @@ export function PedidosAcumulativosManager() {
           pedido_acumulativo_id,
           cantidad,
           verificado,
-          productos:producto_id(nombre)
+          productos:producto_id(nombre, precio_por_kilo, kg_por_unidad)
         `)
         .in("pedido_acumulativo_id", pedidoIds);
 
@@ -212,6 +212,35 @@ export function PedidosAcumulativosManager() {
     
     return status;
   }, [allDetallesForVerificacion, verificaciones, pedidosAcumulativos]);
+
+  // Calcular peso total por pedido acumulativo
+  const pesosPorPedido = useMemo(() => {
+    const pesos: Record<string, number> = {};
+    
+    if (!allDetallesForVerificacion) return pesos;
+    
+    pedidosAcumulativos?.forEach((pedido: any) => {
+      const detallesDelPedido = allDetallesForVerificacion.filter(
+        (det: any) => det.pedido_acumulativo_id === pedido.id
+      );
+      
+      let pesoTotal = 0;
+      for (const det of detallesDelPedido) {
+        const precioPorKilo = det.productos?.precio_por_kilo ?? false;
+        const kgPorUnidad = det.productos?.kg_por_unidad ?? 1;
+        
+        if (precioPorKilo) {
+          pesoTotal += det.cantidad;
+        } else {
+          pesoTotal += det.cantidad * kgPorUnidad;
+        }
+      }
+      
+      pesos[pedido.id] = redondear(pesoTotal);
+    });
+    
+    return pesos;
+  }, [allDetallesForVerificacion, pedidosAcumulativos]);
 
   // Contar pedidos que requieren verificación
   const pedidosConVerificacionCount = useMemo(() => {
@@ -962,8 +991,19 @@ export function PedidosAcumulativosManager() {
                 </CardHeader>
                 <CardContent>
                   <div className="flex justify-between items-center">
-                    <div className="text-2xl font-bold">
-                      {formatCurrency(pedido.total || 0)}
+                    <div className="flex items-center gap-6">
+                      <div>
+                        <div className="text-xs text-muted-foreground">Total</div>
+                        <div className="text-2xl font-bold">
+                          {formatCurrency(pedido.total || 0)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground">Peso</div>
+                        <div className="text-2xl font-bold text-blue-600">
+                          {(pesosPorPedido[pedido.id] || 0).toLocaleString()} kg
+                        </div>
+                      </div>
                     </div>
                     <div className="flex gap-2">
                       <Button

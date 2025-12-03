@@ -29,7 +29,8 @@ interface DatosCotizacion {
   };
   productos: ProductoCotizacion[];
   subtotal: number;
-  impuestos: number;
+  iva: number;
+  ieps: number;
   total: number;
   notas?: string;
   soloPrecios?: boolean;
@@ -204,11 +205,19 @@ export const CotizacionPrintTemplate = ({ datos }: CotizacionPrintTemplateProps)
                 </td>
               </tr>
               <tr>
-                <td className="p-2 font-semibold text-right">Impuestos:</td>
+                <td className="p-2 font-semibold text-right">IVA (16%):</td>
                 <td className="p-2 text-right border">
-                  ${datos.impuestos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  ${datos.iva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                 </td>
               </tr>
+              {datos.ieps > 0 && (
+                <tr>
+                  <td className="p-2 font-semibold text-right">IEPS (8%):</td>
+                  <td className="p-2 text-right border">
+                    ${datos.ieps.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  </td>
+                </tr>
+              )}
               <tr className="bg-gray-800 text-white">
                 <td className="p-2 font-bold text-right">Total:</td>
                 <td className="p-2 text-right font-bold">

@@ -29,7 +29,8 @@ interface DatosCotizacion {
   } | null;
   productos: ProductoCotizacion[];
   subtotal: number;
-  impuestos: number;
+  iva: number;
+  ieps: number;
   total: number;
   notas?: string | null;
   soloPrecios?: boolean;
@@ -359,9 +360,17 @@ export const generarCotizacionPDF = async (datos: DatosCotizacion): Promise<stri
     doc.text(`$${datos.subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, pageWidth - margin, y, { align: "right" });
     y += 5;
 
-    doc.text("Impuestos:", totalsX, y);
-    doc.text(`$${datos.impuestos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, pageWidth - margin, y, { align: "right" });
-    y += 6;
+    doc.text("IVA (16%):", totalsX, y);
+    doc.text(`$${datos.iva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, pageWidth - margin, y, { align: "right" });
+    y += 5;
+
+    if (datos.ieps > 0) {
+      doc.text("IEPS (8%):", totalsX, y);
+      doc.text(`$${datos.ieps.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, pageWidth - margin, y, { align: "right" });
+      y += 5;
+    }
+
+    y += 1;
 
     // Total box
     doc.setFillColor(...brandRed);

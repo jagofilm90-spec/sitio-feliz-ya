@@ -243,7 +243,7 @@ Tel: (55) 56-00-77-81`);
         sucursal:cliente_sucursales(nombre, direccion),
         detalles:cotizaciones_detalles(
           id, producto_id, cantidad, precio_unitario, subtotal, cantidad_maxima, nota_linea,
-          producto:productos(nombre, codigo, unidad)
+          producto:productos(nombre, codigo, unidad, aplica_iva, aplica_ieps)
         )
       `)
       .eq("id", cotizacionId)
@@ -262,6 +262,30 @@ Tel: (55) 56-00-77-81`);
       nota_linea: d.nota_linea,
     }));
 
+    // Calcular IVA e IEPS desglosados
+    let subtotalConIvaYIeps = 0;
+    let subtotalConIva = 0;
+    let subtotalSinImpuestos = 0;
+    
+    (cotizacion.detalles || []).forEach((d: any) => {
+      const prod = d.producto;
+      if (prod?.aplica_iva && prod?.aplica_ieps) {
+        subtotalConIvaYIeps += d.subtotal || 0;
+      } else if (prod?.aplica_iva) {
+        subtotalConIva += d.subtotal || 0;
+      } else {
+        subtotalSinImpuestos += d.subtotal || 0;
+      }
+    });
+
+    const baseConIvaYIeps = subtotalConIvaYIeps / 1.24;
+    const iepsCalculado = baseConIvaYIeps * 0.08;
+    const ivaDeIeps = baseConIvaYIeps * 0.16;
+    const baseConIva = subtotalConIva / 1.16;
+    const ivaSolo = subtotalConIva - baseConIva;
+    const subtotalReal = baseConIvaYIeps + baseConIva + subtotalSinImpuestos;
+    const ivaTotal = ivaSolo + ivaDeIeps;
+
     return await generarCotizacionPDF({
       folio: cotizacion.folio,
       nombre: cotizacion.nombre,
@@ -276,8 +300,9 @@ Tel: (55) 56-00-77-81`);
         direccion: cotizacion.sucursal.direccion,
       } : null,
       productos,
-      subtotal: cotizacion.subtotal || 0,
-      impuestos: cotizacion.impuestos || 0,
+      subtotal: subtotalReal,
+      iva: ivaTotal,
+      ieps: iepsCalculado,
       total: cotizacion.total || 0,
       notas: cotizacion.notas,
     });

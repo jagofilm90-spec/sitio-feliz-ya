@@ -1762,6 +1762,7 @@ export type Database = {
           precio_unitario: number
           producto_id: string
           subtotal: number
+          unidades_manual: number | null
           verificado: boolean | null
         }
         Insert: {
@@ -1772,6 +1773,7 @@ export type Database = {
           precio_unitario: number
           producto_id: string
           subtotal: number
+          unidades_manual?: number | null
           verificado?: boolean | null
         }
         Update: {
@@ -1782,6 +1784,7 @@ export type Database = {
           precio_unitario?: number
           producto_id?: string
           subtotal?: number
+          unidades_manual?: number | null
           verificado?: boolean | null
         }
         Relationships: [
@@ -1810,6 +1813,7 @@ export type Database = {
           precio_unitario: number
           producto_id: string
           subtotal: number
+          unidades_manual: number | null
         }
         Insert: {
           cantidad: number
@@ -1819,6 +1823,7 @@ export type Database = {
           precio_unitario: number
           producto_id: string
           subtotal: number
+          unidades_manual?: number | null
         }
         Update: {
           cantidad?: number
@@ -1828,6 +1833,7 @@ export type Database = {
           precio_unitario?: number
           producto_id?: string
           subtotal?: number
+          unidades_manual?: number | null
         }
         Relationships: [
           {

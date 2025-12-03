@@ -103,6 +103,7 @@ export function VerificacionRapidaLecaroz({ onClose }: VerificacionRapidaLecaroz
           precio_unitario,
           subtotal,
           verificado,
+          unidades_manual,
           productos:producto_id(nombre, codigo)
         `)
         .in("pedido_acumulativo_id", pedidoIds);
@@ -127,7 +128,7 @@ export function VerificacionRapidaLecaroz({ onClose }: VerificacionRapidaLecaroz
             tipoUnidad: getTipoUnidad(det.productos?.nombre),
             cantidadOriginal: det.cantidad,
             cantidadKg: det.cantidad,
-            cantidadUnidades: 1,
+            cantidadUnidades: det.unidades_manual || 1,
             precioUnitario: det.precio_unitario,
             verificado: det.verificado || false,
           });
@@ -232,7 +233,8 @@ export function VerificacionRapidaLecaroz({ onClose }: VerificacionRapidaLecaroz
           .update({ 
             cantidad: producto.cantidadKg, 
             subtotal: nuevoSubtotal,
-            verificado: producto.verificado
+            verificado: producto.verificado,
+            unidades_manual: producto.cantidadUnidades
           })
           .eq("id", producto.detalleId);
 

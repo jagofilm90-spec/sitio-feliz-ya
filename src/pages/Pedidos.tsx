@@ -396,7 +396,7 @@ const Pedidos = () => {
             full_name
           ),
           pedidos_detalles (
-            id, cantidad, precio_unitario, subtotal,
+            id, cantidad, precio_unitario, subtotal, unidades_manual,
             productos (
               id, codigo, nombre, marca, presentacion, unidad, aplica_iva, kg_por_unidad, precio_por_kilo
             )
@@ -460,9 +460,13 @@ const Pedidos = () => {
           cantidadDisplay = `${formatearCantidad(cantidadNum)} ${pluralizar(unidadComercial, cantidadNum)}`;
         }
         
+        // *** PRIORIDAD MÁXIMA: Si tiene unidades_manual guardadas, usarlas directamente ***
+        if (detalle.unidades_manual && detalle.unidades_manual > 0) {
+          presentacion = `${detalle.unidades_manual} ${pluralizar(unidadComercial, detalle.unidades_manual)}`;
+        }
         // Calcular presentación para bodegueros - SIEMPRE unidades comerciales, SIN "de X kg"
         // Regla especial para ALMENDRA FILETEADA (11.34 kg/caja) - PRIORIDAD ALTA
-        if (nombreLower.includes('almendra fileteada')) {
+        else if (nombreLower.includes('almendra fileteada')) {
           const kgPorCaja = producto.kg_por_unidad || 11.34;
           const numCajas = Math.ceil(cantidadNum / kgPorCaja);
           presentacion = `${numCajas} ${pluralizar('caja', numCajas)}`;

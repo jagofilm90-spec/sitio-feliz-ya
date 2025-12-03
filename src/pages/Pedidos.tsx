@@ -30,7 +30,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Eye, ShoppingCart, FileText, Link2, Printer, Receipt, Send, CheckCircle2, Clock, BarChart3, Trash2, AlertCircle } from "lucide-react";
+import { Plus, Search, Eye, ShoppingCart, FileText, Link2, Printer, Receipt, Send, CheckCircle2, Clock, BarChart3, Trash2, AlertCircle, RefreshCw, Package } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 import CotizacionesTab from "@/components/cotizaciones/CotizacionesTab";
@@ -75,8 +75,65 @@ const Pedidos = () => {
   const [selectedPedidos, setSelectedPedidos] = useState<Set<string>>(new Set());
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [recalculando, setRecalculando] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  const recalcularPesos = async () => {
+    setRecalculando(true);
+    try {
+      // Get pedidos sin peso o con peso 0
+      const { data: pedidosSinPeso, error: fetchError } = await supabase
+        .from("pedidos")
+        .select("id")
+        .or("peso_total_kg.eq.0,peso_total_kg.is.null");
+
+      if (fetchError) throw fetchError;
+
+      let actualizados = 0;
+      for (const pedido of (pedidosSinPeso || [])) {
+        const { data: detalles } = await supabase
+          .from("pedidos_detalles")
+          .select(`
+            cantidad,
+            productos (precio_por_kilo, kg_por_unidad)
+          `)
+          .eq("pedido_id", pedido.id);
+
+        let pesoTotal = 0;
+        for (const det of (detalles || [])) {
+          const prod = det.productos as any;
+          if (prod?.precio_por_kilo) {
+            pesoTotal += det.cantidad;
+          } else {
+            pesoTotal += det.cantidad * (prod?.kg_por_unidad || 1);
+          }
+        }
+
+        if (pesoTotal > 0) {
+          await supabase
+            .from("pedidos")
+            .update({ peso_total_kg: pesoTotal })
+            .eq("id", pedido.id);
+          actualizados++;
+        }
+      }
+
+      toast({
+        title: "Pesos recalculados",
+        description: `Se actualizaron ${actualizados} pedidos`,
+      });
+      loadPedidos();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "No se pudieron recalcular los pesos",
+        variant: "destructive",
+      });
+    } finally {
+      setRecalculando(false);
+    }
+  };
 
   useEffect(() => {
     loadPedidos();
@@ -647,10 +704,24 @@ const Pedidos = () => {
                   </Button>
                 )}
               </div>
-              <Button onClick={() => setNuevoPedidoDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Nuevo Pedido
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={recalcularPesos}
+                  disabled={recalculando}
+                >
+                  {recalculando ? (
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Package className="h-4 w-4 mr-2" />
+                  )}
+                  Recalcular Pesos
+                </Button>
+                <Button onClick={() => setNuevoPedidoDialogOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Nuevo Pedido
+                </Button>
+              </div>
             </div>
 
             <div className="border rounded-lg">

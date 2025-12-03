@@ -461,15 +461,21 @@ const Pedidos = () => {
         }
         
         // Calcular presentación para bodegueros - SIEMPRE unidades comerciales, SIN "de X kg"
-        // Regla especial Lecaroz: Arándano y Avellana
-        if (esLecaroz && (nombreLower.includes('arándano') || nombreLower.includes('arandano') || nombreLower.includes('avellana'))) {
+        // Regla especial para ALMENDRA FILETEADA (11.34 kg/caja) - PRIORIDAD ALTA
+        if (nombreLower.includes('almendra fileteada')) {
           const kgPorCaja = producto.kg_por_unidad || 11.34;
           const numCajas = Math.ceil(cantidadNum / kgPorCaja);
           presentacion = `${numCajas} ${pluralizar('caja', numCajas)}`;
-        } 
-        // Regla especial para Coco (20 kg/caja)
-        else if (nombreLower.includes('coco')) {
+        }
+        // Regla especial para COCO RALLADO LAS PALMAS (20 kg/caja)
+        else if (nombreLower.includes('coco rallado') || nombreLower.includes('coco')) {
           const kgPorCaja = producto.kg_por_unidad || 20;
+          const numCajas = Math.ceil(cantidadNum / kgPorCaja);
+          presentacion = `${numCajas} ${pluralizar('caja', numCajas)}`;
+        }
+        // Regla especial Lecaroz: Arándano y Avellana
+        else if (esLecaroz && (nombreLower.includes('arándano') || nombreLower.includes('arandano') || nombreLower.includes('avellana'))) {
+          const kgPorCaja = producto.kg_por_unidad || 11.34;
           const numCajas = Math.ceil(cantidadNum / kgPorCaja);
           presentacion = `${numCajas} ${pluralizar('caja', numCajas)}`;
         }
